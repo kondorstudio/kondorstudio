@@ -36,7 +36,6 @@ services:
         fromService:
           type: redis
           name: kondor-redis
-          property: connectionString
 
       # ==== JWT ====
       - key: JWT_SECRET
@@ -140,7 +139,6 @@ services:
         fromService:
           type: redis
           name: kondor-redis
-          property: connectionString
 
       # ==== WORKER SETTINGS ====
       - key: WORKER_POLL_INTERVAL
@@ -189,7 +187,7 @@ services:
     name: kondor-redis
     plan: starter
     region: oregon
-    ipAllowList: []   # REQUIRED!
+    ipAllowList: []  # allow all
 
 # -----------------------------
 # 🗄️ DATABASE (POSTGRES)
