@@ -1,0 +1,49 @@
+{
+  "name": "kondor-api",
+  "version": "1.0.0",
+  "description": "Kondor Studio API (Express + Prisma + Multi-tenant)",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "worker": "node src/worker.js",
+
+    "build": "npm run prisma:generate",
+    "postinstall": "npm run prisma:generate",
+
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+
+    "deploy:migrate": "npm run prisma:migrate:deploy",
+
+    "prisma:studio": "prisma studio",
+    "seed": "node prisma/seed.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.7.0",
+    "axios": "^1.6.7",
+    "aws-sdk": "^2.1488.0",
+    "bcryptjs": "^2.4.3",
+    "body-parser": "^1.20.2",
+    "bullmq": "^5.7.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.0",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.1.5",
+    "helmet": "^7.1.0",
+    "ioredis": "^5.4.1",
+    "jsonwebtoken": "^9.0.2",
+    "mime-types": "^2.1.35",
+    "morgan": "^1.10.0",
+    "multer": "^1.4.5-lts.1",
+    "nanoid": "^5.0.3",
+    "node-fetch": "^3.3.2",
+    "pg": "^8.11.3",
+    "sharp": "^0.33.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0",
+    "prisma": "^5.7.0"
+  }
+}

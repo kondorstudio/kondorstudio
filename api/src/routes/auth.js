@@ -1,0 +1,314 @@
+// api/src/routes/auth.js
+const express = require('express');
+const router = express.Router();
+
+const { prisma } = require('../prisma');
+const { hashPassword, comparePassword } = require('../utils/hash');
+const {
+  createAccessToken,
+  createRefreshToken,
+  verifyAccessToken,
+  REFRESH_TOKEN_EXPIRES_IN,
+} = require('../utils/jwt');
+const authMiddleware = require('../middleware/auth');
+
+const rateLimit = require('express-rate-limit');
+const { loginSchema } = require('../validators/authValidator');
+
+/**
+ * Helper: parse expires strings like "30d", "7d", "24h" into a Date
+ * Falls back to 30d if invalid.
+ */
+function computeExpiryDateFromString(expiresIn) {
+  try {
+    const lower = String(expiresIn || '').toLowerCase().trim();
+    if (!lower) {
+      const d = new Date();
+      d.setDate(d.getDate() + 30);
+      return d;
+    }
+
+    if (lower.endsWith('d')) {
+      const days = parseInt(lower.slice(0, -1), 10);
+      const d = new Date();
+      d.setDate(d.getDate() + (Number.isFinite(days) ? days : 30));
+      return d;
+    }
+    if (lower.endsWith('h')) {
+      const hours = parseInt(lower.slice(0, -1), 10);
+      const d = new Date();
+      d.setHours(d.getHours() + (Number.isFinite(hours) ? hours : 24));
+      return d;
+    }
+    if (lower.endsWith('m')) {
+      const mins = parseInt(lower.slice(0, -1), 10);
+      const d = new Date();
+      d.setMinutes(d.getMinutes() + (Number.isFinite(mins) ? mins : 60));
+      return d;
+    }
+  } catch (err) {
+    // fallback
+  }
+  // fallback 30 days
+  const d = new Date();
+  d.setDate(d.getDate() + 30);
+  return d;
+}
+
+const loginRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 10, // limite de tentativas de login por IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    return res
+      .status(429)
+      .json({ error: 'Muitas tentativas de login. Tente novamente mais tarde.' });
+  },
+});
+
+/**
+ * POST /auth/login
+ * Body: { email, password, deviceName? }
+ *
+ * Returns:
+ * { accessToken, refreshToken, tokenId, user: { id, email, name, role, tenantId } }
+ */
+router.post('/login', loginRateLimiter, async (req, res) => {
+  try {
+    const parseResult = loginSchema.safeParse(req.body || {});
+    if (!parseResult.success) {
+      const details = parseResult.error.issues.map((issue) => ({
+        path: issue.path.join('.'),
+        message: issue.message,
+      }));
+      return res.status(400).json({ error: 'Dados inválidos', details });
+    }
+
+    const { email, password, deviceName } = parseResult.data;
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        passwordHash: true,
+        role: true,
+        tenantId: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(401).json({ error: 'Credenciais inválidas' });
+    }
+
+    const passwordOk = await comparePassword(password, user.passwordHash);
+    if (!passwordOk) {
+      // opcional: registrar tentativa falha
+      return res.status(401).json({ error: 'Credenciais inválidas' });
+    }
+
+    // Payload mínimo para o access token
+    const payload = {
+      userId: user.id,
+      role: user.role,
+      tenantId: user.tenantId,
+    };
+
+    const accessToken = createAccessToken(payload);
+
+    // Refresh token: geramos random e guardamos hash no banco
+    const rawRefreshToken = createRefreshToken();
+    const hashed = await hashPassword(rawRefreshToken);
+    const expiresAt = computeExpiryDateFromString(REFRESH_TOKEN_EXPIRES_IN);
+
+    const tokenRecord = await prisma.refreshToken.create({
+      data: {
+        userId: user.id,
+        tokenHash: hashed,
+        revoked: false,
+        expiresAt,
+        deviceName: deviceName || (req.body && req.body.deviceName) || null,
+        ip: req.ip || req.headers['x-forwarded-for'] || null,
+        userAgent: req.headers['user-agent'] || null,
+        tenantId: user.tenantId || null,
+      },
+    });
+
+    return res.json({
+      accessToken,
+      refreshToken: rawRefreshToken,
+      tokenId: tokenRecord.id,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        tenantId: user.tenantId,
+      },
+      expiresAt: expiresAt.toISOString(),
+    });
+  } catch (err) {
+    console.error('POST /auth/login error', err);
+    return res.status(500).json({ error: 'Erro interno no login' });
+  }
+});
+
+/**
+ * POST /auth/refresh
+ * Body: { tokenId, refreshToken }
+ *
+ * TokenId é o id do registro de refreshToken (retornado no login). Isso evita buscas globais.
+ * Se você usa cookies, pode enviar tokenId em cookie ou tokenId no body.
+ */
+router.post('/refresh', async (req, res) => {
+  try {
+    const { tokenId, refreshToken } = req.body || {};
+
+    if (!tokenId || !refreshToken) {
+      return res.status(400).json({ error: 'tokenId e refreshToken são obrigatórios' });
+    }
+
+    const record = await prisma.refreshToken.findUnique({
+      where: { id: tokenId },
+      include: {
+        user: true,
+      },
+    });
+
+    if (!record) {
+      return res.status(401).json({ error: 'Refresh token inválido' });
+    }
+
+    if (record.revoked) {
+      return res.status(401).json({ error: 'Refresh token revogado' });
+    }
+
+    if (record.expiresAt && new Date(record.expiresAt) < new Date()) {
+      return res.status(401).json({ error: 'Refresh token expirado' });
+    }
+
+    // Compare hashed token
+    const isValid = await comparePassword(refreshToken, record.tokenHash);
+    if (!isValid) {
+      // possível tentativa de replay — revogar o token
+      await prisma.refreshToken.update({
+        where: { id: record.id },
+        data: { revoked: true },
+      });
+      return res.status(401).json({ error: 'Refresh token inválido' });
+    }
+
+    const user = record.user;
+    if (!user) {
+      return res.status(401).json({ error: 'Usuário não encontrado' });
+    }
+
+    // revoke old token
+    await prisma.refreshToken.update({
+      where: { id: record.id },
+      data: { revoked: true, replacedByTokenId: null },
+    });
+
+    // create new refresh token
+    const newRawRefresh = createRefreshToken();
+    const newHashed = await hashPassword(newRawRefresh);
+    const newExpiresAt = computeExpiryDateFromString(REFRESH_TOKEN_EXPIRES_IN);
+
+    const newRecord = await prisma.refreshToken.create({
+      data: {
+        userId: user.id,
+        tokenHash: newHashed,
+        revoked: false,
+        expiresAt: newExpiresAt,
+        deviceName: record.deviceName || null,
+        ip: req.ip || req.headers['x-forwarded-for'] || null,
+        userAgent: req.headers['user-agent'] || null,
+        tenantId: user.tenantId || null,
+        // replacedByTokenId: null
+      },
+    });
+
+    const payload = {
+      userId: user.id,
+      role: user.role,
+      tenantId: user.tenantId,
+    };
+    const accessToken = createAccessToken(payload);
+
+    return res.json({
+      accessToken,
+      refreshToken: newRawRefresh,
+      tokenId: newRecord.id,
+      expiresAt: newExpiresAt.toISOString(),
+    });
+  } catch (err) {
+    console.error('POST /auth/refresh error', err);
+    return res.status(500).json({ error: 'Erro interno no refresh' });
+  }
+});
+
+/**
+ * POST /auth/logout
+ * Body: { tokenId? , revokeAll? }
+ *
+ * If tokenId provided -> revoke only that token
+ * If revokeAll true -> revoke all tokens for that user (requires auth)
+ */
+router.post('/logout', authMiddleware, async (req, res) => {
+  try {
+    const { tokenId, revokeAll } = req.body || {};
+    const userId = req.user && req.user.id;
+    if (!userId) return res.status(401).json({ error: 'Usuário não autenticado' });
+
+    if (revokeAll) {
+      await prisma.refreshToken.updateMany({
+        where: { userId },
+        data: { revoked: true },
+      });
+      return res.json({ ok: true, revokedAll: true });
+    }
+
+    if (tokenId) {
+      await prisma.refreshToken.updateMany({
+        where: { id: tokenId, userId },
+        data: { revoked: true },
+      });
+      return res.json({ ok: true, tokenId });
+    }
+
+    // If no tokenId and not revokeAll: try to revoke by reading tokenId from body.cookie or header (best-effort)
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('POST /auth/logout error', err);
+    return res.status(500).json({ error: 'Erro interno no logout' });
+  }
+});
+
+/**
+ * GET /auth/me
+ * Retorna os dados básicos do usuário autenticado
+ */
+router.get('/me', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user && req.user.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'Usuário não autenticado' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, name: true, role: true, tenantId: true },
+    });
+
+    if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
+
+    return res.json({ user });
+  } catch (err) {
+    console.error('GET /auth/me error', err);
+    return res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+module.exports = router;

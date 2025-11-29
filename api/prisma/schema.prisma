@@ -1,0 +1,660 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// KONDOR STUDIO - Schema final proposto
+// - Multi-tenant real
+// - Billing (Plans model + Subscription + Invoice + Payment)
+// - Uploads (S3) via Upload / Creative
+// - Workers / Jobs persistence (IntegrationJob / JobQueue)
+// - Audit log
+// - Reports with relation to Upload
+// - Consistent referential actions (onDelete)
+
+// ===== ENUMS =====
+
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+  CLIENT
+  GUEST
+}
+
+enum PostStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  FAILED
+  CANCELLED
+  IDEA
+  APPROVED
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum IntegrationProvider {
+  META
+  GOOGLE
+  TIKTOK
+  YOUTUBE
+  WHATSAPP
+  OTHER
+}
+
+enum IntegrationStatus {
+  ACTIVE
+  INACTIVE
+  ERROR
+}
+
+enum BillingInterval {
+  MONTHLY
+  YEARLY
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  BLOCKED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// ===== MODELS =====
+
+model Tenant {
+  id                String         @id @default(uuid())
+  name              String
+  slug              String         @unique
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  settings          Json?          // branding, theme vars, tenant-specific settings
+  planId            String?        // default plan reference (optional)
+  plan              Plan?          @relation(fields: [planId], references: [id], onDelete: SetNull)
+  billingCustomerId String?        // external billing customer id (Stripe/others)
+
+  // Relações 1:N
+  users             User[]         @relation("TenantUsers")
+  teams             Team[]
+  teamMembers       TeamMember[]
+  clients           Client[]
+  projects          Project[]
+  posts             Post[]
+  integrations      Integration[]
+  uploads           Upload[]
+  reports           Report[]
+  auditLogs         AuditLog[]
+  subscriptions     Subscription[]
+  financialRecords  FinancialRecord[]
+  jobQueues         JobQueue[]
+  approvals         Approval[]
+  tasks             Task[]
+  metrics           Metric[]
+  creatives         Creative[]
+  invoices          Invoice[]
+  payments          Payment[]
+  jobHistory        JobHistory[]
+
+  createdAtIndex    DateTime?      @ignore
+
+  @@map("tenants")
+  @@index([slug])
+}
+
+model User {
+  id              String       @id @default(uuid())
+  tenantId        String
+  tenant          Tenant       @relation("TenantUsers", fields: [tenantId], references: [id], onDelete: Cascade)
+  email           String
+  emailVerified   Boolean      @default(false)
+  passwordHash    String?
+  name            String?
+  role            Role         @default(MEMBER)
+  avatarUrl       String?
+  isActive        Boolean      @default(true)
+
+  refreshTokens   RefreshToken[]
+  sessionTokens   SessionToken[]
+  teamMemberships TeamMember[]
+  createdPosts    Post[]       @relation("AuthorPosts")
+  assignedTasks   Task[]       @relation("AssigneeTasks")
+  tasksCreated    Task[]       @relation("TasksCreated")
+  requestedApprovals Approval[] @relation("ApprovalRequester")
+  approvalsToReview  Approval[] @relation("ApprovalApprover")
+  uploads         Upload[]
+  auditLogs       AuditLog[]
+
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@map("users")
+  @@index([email])
+  @@index([tenantId])
+}
+
+model RefreshToken {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime
+  @@map("refresh_tokens")
+  @@index([userId])
+}
+
+model SessionToken {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime
+  @@map("session_tokens")
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Team {
+  id         String       @id @default(uuid())
+  tenantId   String
+  tenant     Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name       String
+  handle     String?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  members    TeamMember[]
+  tasks      Task[]
+
+  @@map("teams")
+  @@index([tenantId])
+}
+
+model TeamMember {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @default(MEMBER)
+  createdAt DateTime @default(now())
+
+  @@map("team_members")
+  @@unique([teamId, userId])
+  @@index([tenantId])
+}
+
+model Client {
+  id             String    @id @default(uuid())
+  tenantId       String
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name           String
+  email          String?
+  phone          String?
+  metadata       Json?
+  contacts       Json?
+  whatsappOptIn  Boolean   @default(false) // Cliente autorizou receber mensagens via WhatsApp
+
+  projects       Project[]
+  posts          Post[]
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@map("clients")
+  @@index([tenantId])
+}
+
+model Project {
+  id          String    @id @default(uuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clientId    String?
+  client      Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  name        String
+  description String?
+
+  posts       Post[]
+  tasks       Task[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("projects")
+  @@index([tenantId])
+}
+
+model Post {
+  id             String       @id @default(uuid())
+  tenantId       String
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  projectId      String?
+  project        Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  authorId       String?
+  author         User?        @relation("AuthorPosts", fields: [authorId], references: [id], onDelete: SetNull)
+
+  clientId       String?
+  client         Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  title          String
+  content        String?      // structured content (HTML/JSON)
+  caption        String?
+
+  mediaUrl       String?
+  mediaType      String?      @default("image")
+  cta            String?
+  tags           String[]     @default([])
+
+  metadata       Json?
+
+  scheduledDate  DateTime?
+  publishedDate  DateTime?
+
+  status         PostStatus   @default(IDEA)
+  platform       String?      // e.g., "instagram", "facebook"
+  externalId     String?      @unique // id on platform, unique when present
+
+  clientFeedback String?
+  version        Int          @default(1)
+  history        Json?
+
+  createdBy      String?
+
+  metrics        Metric[]
+  approvals      Approval[]
+  attachments    Upload[]     @relation("PostUploads")
+  creatives      Creative[]   @relation("PostCreatives")
+  tasks          Task[]
+
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@map("posts")
+  @@index([tenantId])
+  @@index([status])
+  @@index([scheduledDate])
+}
+
+model Approval {
+  id                   String         @id @default(uuid())
+  tenantId             String
+  tenant               Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  postId               String
+  post                 Post           @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  requesterId          String?
+  requester            User?          @relation("ApprovalRequester", fields: [requesterId], references: [id], onDelete: SetNull)
+
+  approverId           String?
+  approver             User?          @relation("ApprovalApprover", fields: [approverId], references: [id], onDelete: SetNull)
+
+  status               ApprovalStatus @default(PENDING)
+  notes                String?
+
+  // Token público para acesso externo (link /public/approvals/:token)
+  publicToken          String?        @unique
+  publicTokenExpiresAt DateTime?
+
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  @@map("approvals")
+  @@index([tenantId])
+  @@index([status])
+}
+
+model Task {
+  id          String       @id @default(uuid())
+  tenantId    String
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  projectId   String?
+  project     Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  postId      String?
+  post        Post?        @relation(fields: [postId], references: [id], onDelete: SetNull)
+
+  teamId      String?
+  team        Team?        @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  title       String
+  description String?
+  status      TaskStatus   @default(TODO)
+  priority    TaskPriority @default(MEDIUM)
+  dueDate     DateTime?
+
+  assigneeId  String?
+  assignee    User?        @relation("AssigneeTasks", fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  createdById String?
+  createdBy   User?        @relation("TasksCreated", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@map("tasks")
+  @@index([tenantId])
+  @@index([status])
+}
+
+model Metric {
+  id          String   @id @default(uuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  postId      String
+  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  name        String
+  value       Float
+  meta        Json?
+  collectedAt DateTime @default(now())
+
+  @@map("metrics")
+  @@index([tenantId])
+  @@index([postId])
+}
+
+model Creative {
+  id         String   @id @default(uuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  postId     String?
+  post       Post?    @relation("PostCreatives", fields: [postId], references: [id], onDelete: SetNull)
+
+  uploadId   String?
+  upload     Upload?  @relation(fields: [uploadId], references: [id], onDelete: SetNull)
+
+  key        String   // S3 key
+  url        String
+  filename   String
+  size       Int
+  mimeType   String
+  metadata   Json?
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("creatives")
+  @@index([tenantId])
+}
+
+model Upload {
+  id         String   @id @default(uuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  uploaderId String?
+  uploader   User?    @relation(fields: [uploaderId], references: [id], onDelete: SetNull)
+
+  key        String   @unique // S3 key unique
+  url        String
+  filename   String
+  size       Int
+  mimeType   String
+  metadata   Json?
+  versions   Json?    // optional versions / processing info
+
+  posts      Post[]   @relation("PostUploads")
+  creatives  Creative[]
+  reports    Report[] @relation("ReportFiles")
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("uploads")
+  @@index([tenantId])
+}
+
+model Report {
+  id          String   @id @default(uuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  type        String   // e.g., monthly_metrics, campaign_performance
+  params      Json?
+  status      String   @default("pending")
+
+  fileId      String?
+  file        Upload?  @relation("ReportFiles", fields: [fileId], references: [id], onDelete: SetNull)
+
+  generatedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("reports")
+  @@index([tenantId])
+  @@index([status])
+}
+
+model Plan {
+  id          String          @id @default(uuid())
+  key         String          @unique // internal key e.g. "pro_monthly"
+  name        String
+  description String?
+  priceCents  Int             @default(0)
+  currency    String          @default("BRL")
+  interval    BillingInterval @default(MONTHLY)
+  features    Json?
+  active      Boolean         @default(true)
+
+  tenants     Tenant[]
+  subscriptions Subscription[]
+
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@map("plans")
+  @@index([key])
+}
+
+model Subscription {
+  id                     String        @id @default(uuid())
+  tenantId               String
+  tenant                 Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  planId                 String
+  plan                   Plan          @relation(fields: [planId], references: [id], onDelete: Restrict)
+  externalSubscriptionId String?
+  status                 PaymentStatus @default(PENDING)
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  cancelAtPeriodEnd      Boolean       @default(false)
+
+  invoices               Invoice[]
+
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+
+  @@map("subscriptions")
+  @@index([tenantId])
+  @@index([status])
+}
+
+model Invoice {
+  id                String        @id @default(uuid())
+  subscriptionId    String
+  subscription      Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  tenantId          String
+  tenant            Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  externalInvoiceId String?
+  amountCents       Int
+  currency          String        @default("BRL")
+  status            PaymentStatus @default(PENDING)
+  metadata          Json?
+  issuedAt          DateTime?
+  paidAt            DateTime?
+
+  payments          Payment[]
+
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@map("invoices")
+  @@index([tenantId])
+  @@index([status])
+}
+
+model Payment {
+  id                String        @id @default(uuid())
+  invoiceId         String?
+  invoice           Invoice?      @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  tenantId          String
+  tenant            Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  amountCents       Int
+  currency          String        @default("BRL")
+  status            PaymentStatus @default(PENDING)
+  provider          String?       // e.g., stripe
+  providerPaymentId String?
+  metadata          Json?
+
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@map("payments")
+  @@index([tenantId])
+  @@index([status])
+}
+
+model FinancialRecord {
+  id          String   @id @default(uuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  type        String   // e.g., "charge", "refund", "expense"
+  amountCents Int
+  currency    String   @default("BRL")
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@map("financial_records")
+  @@index([tenantId])
+}
+
+model Integration {
+  id             String              @id @default(uuid())
+  tenantId       String
+  tenant         Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  provider       IntegrationProvider
+  providerName   String?
+  accessToken    String?             // encrypted at application level
+  refreshToken   String?
+  scopes         String[]
+  settings       Json?
+  status         IntegrationStatus   @default(ACTIVE)
+  lastSyncedAt   DateTime?
+
+  integrationJobs IntegrationJob[]
+
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@map("integrations")
+  @@index([tenantId])
+  @@index([provider])
+}
+
+model IntegrationJob {
+  id            String      @id @default(uuid())
+  integrationId String
+  integration   Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  type          String      // e.g., "sync_posts", "fetch_metrics"
+  status        String      @default("pending")
+  payload       Json?
+  result        Json?
+  attempt       Int         @default(0)
+  runAt         DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  @@map("integration_jobs")
+  @@index([integrationId])
+  @@index([status])
+}
+
+model JobQueue {
+  id        String   @id @default(uuid())
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  name      String   // queue name
+  type      String   // job type
+  payload   Json?
+  status    String   @default("pending")
+  attempts  Int      @default(0)
+  runAt     DateTime?
+  result    Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@map("job_queue")
+  @@index([tenantId])
+  @@index([status])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String
+  resource   String?
+  resourceId String?
+  ip         String?
+  meta       Json?
+  createdAt  DateTime @default(now())
+  @@map("audit_logs")
+  @@index([tenantId])
+  @@index([userId])
+}
+
+model JobHistory {
+  id        String   @id @default(uuid())
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  jobId     String
+  jobType   String
+  payload   Json?
+  result    Json?
+  status    String
+  attempts  Int      @default(0)
+  ranAt     DateTime?
+  createdAt DateTime @default(now())
+  @@map("job_history")
+  @@index([tenantId])
+}
+
+// Index & map conventions applied consistentemente acima.
+//
+// Notes:
+// - Use `prisma migrate dev --name init` localmente para gerar migrations baseadas neste schema.
+// - Confirme seeds e services com estes nomes de modelos/campos antes de aplicar em produção.
+// - Referential actions (Cascade / SetNull / Restrict) alinhadas com política de cleanup multi-tenant.
+// - Se preferir Plan como enum em vez de model, é possível alterar depois; hoje Plan como model permite pricing/features dinâmicos.

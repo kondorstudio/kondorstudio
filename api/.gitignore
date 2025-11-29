@@ -1,0 +1,40 @@
+# ============================
+# KONDOR STUDIO — API .gitignore
+# ============================
+
+# Node modules
+node_modules/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# Env files (NÃO commitar segredos)
+.env
+.env.*
+!.env.example
+
+# Prisma client build cache
+prisma/generated/
+*.tsbuildinfo
+
+# Temporary files
+.tmp/
+temp/
+*.pid
+
+# Build artefacts
+dist/
+build/
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Docker
+docker-data/

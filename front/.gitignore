@@ -1,0 +1,36 @@
+# ============================
+# KONDOR STUDIO — FRONT .gitignore
+# ============================
+
+# Node modules
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Env files (NUNCA commitar segredos)
+.env
+.env.*
+!.env.example
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# Vite / cache
+.cache/
+vite-temp/
+*.tsbuildinfo
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Misc
+*.pid

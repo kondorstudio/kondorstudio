@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: kondor-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: kond
+      POSTGRES_PASSWORD: kondpass
+      POSTGRES_DB: konddb
+    ports:
+      - "5432:5432"
+    volumes:
+      - kondor_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kond -d konddb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: kondor-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - kondor_redis:/data
+    command: ["redis-server", "--save", "900", "1", "--appendonly", "yes"]
+
+# optional: an api service build can be defined later for convenience
+# when you want to run the API inside docker, uncomment & adapt.
+#
+#  api:
+#    build: .
+#    container_name: kondor-api
+#    depends_on:
+#      - postgres
+#      - redis
+#    environment:
+#      DATABASE_URL: postgres://kond:kondpass@postgres:5432/konddb
+#      JWT_SECRET: changeme
+#      JWT_REFRESH_SECRET: changeme2
+#    ports:
+#      - "4000:4000"
+#    volumes:
+#      - ./:/usr/src/app
+
+volumes:
+  kondor_pgdata:
+  kondor_redis:
