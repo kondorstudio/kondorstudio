@@ -119,7 +119,7 @@ services:
   # -----------------------------
   # 🟩 SPA FRONTEND (VITE → DIST)
   # -----------------------------
-  - type: static
+  - type: static_site
     name: kondor-front
     rootDir: ./front
 
@@ -129,12 +129,18 @@ services:
 
     staticPublishPath: ./dist
 
-    # SPA fallback (Render recomenda configurar via dashboard,
-    # mas deixamos aqui como documentação explícita)
     routes:
       - type: rewrite
         source: /*
         destination: /index.html
+
+  # -----------------------------
+  # 🔥 REDIS (BULLMQ)
+  # -----------------------------
+  - type: redis
+    name: kondor-redis
+    plan: starter
+    region: oregon
 
 # -----------------------------
 # 🗄️ DATABASE (POSTGRES)
@@ -142,14 +148,4 @@ services:
 databases:
   - name: kondor-db
     region: oregon
-
-# -----------------------------
-# 🔥 REDIS (RATE LIMIT / BULLMQ)
-# -----------------------------
-# Pode ser Redis Standard ou Redis Lite.
-# BullMQ funciona nas duas versões.
-# -----------------------------
-services:
-  - name: kondor-redis
-    type: redis
     plan: starter
