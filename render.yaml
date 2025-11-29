@@ -108,7 +108,7 @@ services:
       - key: CHECK_SUBSCRIPTION_ENABLED
         sync: false
 
-      # ---- WORKERS / JOBS CONFIG ----
+      # ---- WORKERS / JOBS CONFIG (compartilhadas) ----
       - key: WORKER_POLL_INTERVAL
         sync: false
 
@@ -192,20 +192,24 @@ services:
   # -----------------------------
   # 🟩 SPA FRONTEND (VITE → DIST)
   # -----------------------------
-  - type: static_site
+  - type: web
     name: kondor-front
+    env: node
     rootDir: ./front
+    plan: starter
+    region: oregon
 
     buildCommand: |
       npm install
       npm run build
 
-    staticPublishPath: ./dist
+    startCommand: |
+      npm install -g serve
+      serve -s dist -l 3000
 
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
+    envVars:
+      - key: NODE_ENV
+        value: production
 
   # -----------------------------
   # 🔥 REDIS (BULLMQ)
