@@ -4,6 +4,7 @@ import React, {
   useState
 } from "react";
 
+// Contexto para colapsar/expandir o sidebar
 const SidebarContext = createContext({
   collapsed: false,
   toggleCollapsed: () => {}
@@ -26,6 +27,8 @@ export function SidebarProvider({ children }) {
 export function useSidebar() {
   return useContext(SidebarContext);
 }
+
+// ===== COMPONENTES BÁSICOS =====
 
 export function Sidebar({ className = "", children }) {
   const { collapsed } = useSidebar();
@@ -65,35 +68,47 @@ export function SidebarFooter({ className = "", children }) {
   );
 }
 
-export function SidebarMenu({ className = "", children }) {
-  return (
-    <nav className={className}>
-      {children}
-    </nav>
-  );
+// ===== GROUPS =====
+
+export function SidebarGroup({ className = "", children }) {
+  return <div className={className}>{children}</div>;
 }
 
-export function SidebarMenuItem({ className = "", children }) {
+export function SidebarGroupContent({ className = "", children }) {
+  return <div className={className}>{children}</div>;
+}
+
+export function SidebarGroupLabel({ className = "", children }) {
   return (
-    <div className={className}>
+    <div className={`px-3 pb-1 pt-3 text-xs font-semibold text-gray-500 ${className}`}>
       {children}
     </div>
   );
+}
+
+// ===== MENU =====
+
+export function SidebarMenu({ className = "", children }) {
+  return <nav className={className}>{children}</nav>;
+}
+
+export function SidebarMenuItem({ className = "", children }) {
+  return <div className={className}>{children}</div>;
 }
 
 export function SidebarMenuButton({ className = "", children, ...props }) {
   return (
     <button
       type="button"
-      className={`flex w-full items-center gap-2 px-3 py-2.5 text-left hover:bg-gray-100 text-sm ${
-        className || ""
-      }`}
+      className={`flex w-full items-center gap-2 px-3 py-2.5 text-left hover:bg-gray-100 text-sm ${className}`}
       {...props}
     >
       {children}
     </button>
   );
 }
+
+// ===== TRIGGER / RAIL (mesmo se não usar, não quebra) =====
 
 export function SidebarTrigger({ className = "", children, ...props }) {
   const { toggleCollapsed } = useSidebar();
@@ -108,4 +123,9 @@ export function SidebarTrigger({ className = "", children, ...props }) {
       {children}
     </button>
   );
+}
+
+export function SidebarRail({ className = "" }) {
+  // componente "decorativo" opcional
+  return <div className={className} />;
 }
