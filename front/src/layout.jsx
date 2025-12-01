@@ -15,7 +15,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar.jsx";
 
-import { Outlet, NavLink } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 
 // Rotas principais do app
 const navItems = [
@@ -31,7 +31,7 @@ const navItems = [
   { to: "/settings", label: "Configurações" },
 ];
 
-export default function Layout() {
+export default function Layout({ children }) {
   return (
     <SidebarProvider>
       <div className="flex h-screen">
@@ -88,7 +88,7 @@ export default function Layout() {
 
         {/* CONTEÚDO */}
         <main className="flex-1 bg-gray-100 p-6 overflow-auto">
-          <Outlet />
+          {children}
         </main>
       </div>
     </SidebarProvider>
