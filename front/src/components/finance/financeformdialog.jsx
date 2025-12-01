@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "../../apiClient/base44Client";
+import { base44 } from "@/apiClient/base44Client";
 import {
   Dialog,
   DialogContent,

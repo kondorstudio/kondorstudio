@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { base44 } from "@/apiClient/base44Client";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -46,7 +46,6 @@ export default function Postapprovalcard({ post, approval, primaryColor }) {
         throw new Error("Approval não encontrada para este post.");
       }
       return base44.entities.Approval.approve(approval.id, {
-        // backend aceita clientFeedback / client_feedback
         clientFeedback:
           feedback && feedback.trim().length > 0
             ? feedback
@@ -86,7 +85,6 @@ export default function Postapprovalcard({ post, approval, primaryColor }) {
     }
 
     if (!isPending) {
-      // Já aprovado/reprovado: apenas mostra mensagem
       alert("Este post já foi processado (aprovado ou reprovado).");
       return;
     }
@@ -123,7 +121,7 @@ export default function Postapprovalcard({ post, approval, primaryColor }) {
   return (
     <Card className="overflow-hidden hover:shadow-lg transition-shadow">
       <div className="grid md:grid-cols-2 gap-6 p-6">
-        {/* Preview do Post */}
+
         <div>
           {post.media_url ? (
             <div className="relative rounded-lg overflow-hidden bg-gray-100">
@@ -146,14 +144,12 @@ export default function Postapprovalcard({ post, approval, primaryColor }) {
           )}
         </div>
 
-        {/* Detalhes e Ações */}
         <div className="space-y-4">
           <div>
             <h3 className="text-2xl font-bold text-gray-900 mb-2">
               {post.title}
             </h3>
 
-            {/* Badge de status de aprovação */}
             <Badge
               className={
                 isApproved
@@ -201,7 +197,6 @@ export default function Postapprovalcard({ post, approval, primaryColor }) {
             </div>
           )}
 
-          {/* Feedback opcional */}
           {showFeedback && (
             <div className="space-y-2">
               <Textarea
@@ -213,7 +208,6 @@ export default function Postapprovalcard({ post, approval, primaryColor }) {
             </div>
           )}
 
-          {/* Botões de Ação */}
           <div className="flex gap-3 pt-4">
             <Button
               onClick={handleApproveClick}
