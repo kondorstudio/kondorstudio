@@ -34,11 +34,11 @@ const navItems = [
 export default function Layout({ children }) {
   return (
     <SidebarProvider>
-      {/* Em mobile: coluna (sidebar em cima, conteúdo embaixo)
-          Em desktop: linha (sidebar à esquerda, conteúdo à direita) */}
-      <div className="flex h-screen flex-col md:flex-row">
-        {/* SIDEBAR WRAPPER RESPONSIVO */}
-        <div className="w-full md:w-64 md:flex-shrink-0 md:h-full border-b md:border-b-0 md:border-r border-gray-200 bg-white">
+      {/* Em mobile: elementos empilhados (coluna).
+          Em desktop: sidebar à esquerda, conteúdo à direita. */}
+      <div className="flex min-h-screen flex-col md:flex-row">
+        {/* SIDEBAR */}
+        <div className="w-full md:w-64 md:flex-shrink-0 border-b md:border-b-0 md:border-r border-gray-200 bg-white">
           <Sidebar>
             <SidebarHeader>
               <div className="flex items-center justify-between gap-2 px-4 py-3">
@@ -88,6 +88,7 @@ export default function Layout({ children }) {
               </SidebarGroup>
             </SidebarContent>
 
+            {/* Footer só em desktop pra não roubar espaço no mobile */}
             <SidebarFooter className="hidden md:block">
               <div className="flex items-center justify-between px-4 py-3 text-xs text-gray-500">
                 <span>Usuário</span>
