@@ -5,8 +5,7 @@ const authMiddleware = require("../middleware/auth");
 const tenantMiddleware = require("../middleware/tenant");
 const postsService = require("../services/postsService");
 const { prisma } = require("../prisma");
-const { whatsappQueue } = require("../queues/whatsappQueue"); // opcional, se estiver ativo
-
+//const { whatsappQueue } = require("../queues/whatsappQueue"); //TODO: Reativar automações WhatsApp quando a fila estiver configurada.
 router.use(authMiddleware);
 router.use(tenantMiddleware);
 
