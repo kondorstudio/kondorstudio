@@ -3,7 +3,7 @@ import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 
 import Layout from "./layout.jsx";
-import PrivateRoute from "./components/PrivateRoute.jsx";
+import PrivateRoute from "./components/privateRoute.jsx";
 
 import Dashboard from "./pages/dashboard.jsx";
 import Clients from "./pages/clients.jsx";
@@ -53,7 +53,9 @@ export default function App() {
         element={
           <div className="min-h-screen flex items-center justify-center">
             <div className="text-center">
-              <h1 className="text-2xl font-bold mb-2">404 - Página não encontrada</h1>
+              <h1 className="text-2xl font-bold mb-2">
+                404 - Página não encontrada
+              </h1>
               <p className="text-sm text-gray-600 mb-4">
                 Verifique a URL ou volte para o dashboard.
               </p>
