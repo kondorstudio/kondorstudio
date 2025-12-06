@@ -584,10 +584,15 @@ model FinancialRecord {
   amountCents Int
   currency    String   @default("BRL")
   metadata    Json?
+  clientId    String?
+  client      Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  note        String?
+  occurredAt  DateTime @default(now())
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   @@map("financial_records")
   @@index([tenantId])
+  @@index([clientId])
 }
 
 model Integration {
