@@ -20,7 +20,28 @@ export default function Taskboard({
   onDelete,
   onStatusChange,
 }) {
-  const getClient = (id) => clients.find((c) => c.id === id) || null;
+  const clientMap = React.useMemo(() => {
+    const map = new Map();
+    (clients || []).forEach((client) => {
+      if (client?.id) map.set(client.id, client);
+    });
+    return map;
+  }, [clients]);
+
+  const tasksByStatus = React.useMemo(() => {
+    const grouped = new Map();
+    (tasks || []).forEach((task) => {
+      const bucket = grouped.get(task.status) || [];
+      bucket.push(task);
+      grouped.set(task.status, bucket);
+    });
+    return grouped;
+  }, [tasks]);
+
+  const getClient = (id) => {
+    if (!id) return null;
+    return clientMap.get(id) || null;
+  };
 
   const allStatuses = Array.from(new Set(tasks.map((t) => t.status).filter(Boolean)));
   const columnsFromData = allStatuses
@@ -58,7 +79,7 @@ export default function Taskboard({
   return (
     <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
       {columns.map((col) => {
-        const columnTasks = tasks.filter((t) => t.status === col.status);
+        const columnTasks = tasksByStatus.get(col.status) || [];
 
         return (
           <Card key={col.status} className="bg-slate-50/60">

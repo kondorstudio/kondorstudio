@@ -141,6 +141,7 @@ safeMount("/api/tenants", require("./routes/tenants"));
 safeMount("/api/clients", require("./routes/clients"));
 safeMount("/api/posts", require("./routes/posts"));
 safeMount("/api/tasks", require("./routes/tasks"));
+safeMount("/api/finance", require("./routes/financialRecords"));
 safeMount("/api/metrics", require("./routes/metrics"));
 safeMount("/api/approvals", require("./routes/approvals"));
 safeMount("/api/integrations", require("./routes/integrations"));

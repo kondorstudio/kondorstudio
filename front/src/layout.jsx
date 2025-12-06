@@ -1,18 +1,68 @@
 // front/src/layout.jsx
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { Menu, X } from "lucide-react";
 import { base44 } from "@/apiClient/base44Client";
 
 const navItems = [
-  { to: "/dashboard", label: "Dashboard" },
-  { to: "/clients", label: "Clientes" },
-  { to: "/posts", label: "posts" },
-  { to: "/tasks", label: "Tarefas" },
+  {
+    to: "/dashboard",
+    label: "Dashboard",
+    prefetch: {
+      key: ["dashboard-overview"],
+      fn: () => base44.entities.Dashboard.overview(),
+    },
+  },
+  {
+    to: "/clients",
+    label: "Clientes",
+    prefetch: {
+      key: ["clients"],
+      fn: () => base44.entities.Clients?.list?.(),
+    },
+  },
+  {
+    to: "/posts",
+    label: "posts",
+    prefetch: {
+      key: ["posts"],
+      fn: () => base44.entities.Posts?.list?.(),
+    },
+  },
+  {
+    to: "/tasks",
+    label: "Tarefas",
+    prefetch: {
+      key: ["tasks"],
+      fn: () => base44.entities.Tasks?.list?.(),
+    },
+  },
   { to: "/biblioteca", label: "Biblioteca" },
-  { to: "/financeiro", label: "Financeiro" },
-  { to: "/team", label: "Equipe" },
-  { to: "/metrics", label: "Métricas" },
+  {
+    to: "/financeiro",
+    label: "Financeiro",
+    prefetch: {
+      key: ["finance"],
+      fn: () => base44.entities.FinancialRecord?.list?.(),
+    },
+  },
+  {
+    to: "/team",
+    label: "Equipe",
+    prefetch: {
+      key: ["team"],
+      fn: () => base44.entities.TeamMember?.list?.(),
+    },
+  },
+  {
+    to: "/metrics",
+    label: "Métricas",
+    prefetch: {
+      key: ["metrics-overview"],
+      fn: () => base44.entities.Metrics?.overview?.(),
+    },
+  },
   { to: "/integrations", label: "Integrações" },
   { to: "/settings", label: "Configurações" },
 ];
@@ -20,6 +70,7 @@ const navItems = [
 export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const toggleMobile = () => setMobileOpen((prev) => !prev);
   const closeMobile = () => setMobileOpen(false);
@@ -30,6 +81,17 @@ export default function Layout() {
       navigate("/login", { replace: true });
     }
   };
+  const handlePrefetch = useCallback(
+    (prefetchConfig) => {
+      if (!prefetchConfig || typeof prefetchConfig.fn !== "function") return;
+      queryClient.prefetchQuery({
+        queryKey: prefetchConfig.key,
+        queryFn: prefetchConfig.fn,
+        staleTime: 60 * 1000,
+      });
+    },
+    [queryClient],
+  );
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col md:flex-row">
@@ -77,6 +139,8 @@ export default function Layout() {
                       }
                     : {}
                 }
+                onMouseEnter={() => handlePrefetch(item.prefetch)}
+                onFocus={() => handlePrefetch(item.prefetch)}
               >
                 {item.label}
               </NavLink>
@@ -136,7 +200,11 @@ export default function Layout() {
               <NavLink
                 key={item.to}
                 to={item.to}
-                onClick={closeMobile}
+                onClick={() => {
+                  closeMobile();
+                  handlePrefetch(item.prefetch);
+                }}
+                onMouseEnter={() => handlePrefetch(item.prefetch)}
                 className={({ isActive }) =>
                   [
                     "block px-3 py-2 rounded-lg text-sm transition-colors",

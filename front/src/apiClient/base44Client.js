@@ -301,7 +301,7 @@ async function tryRefreshToken() {
 // --------------------
 
 function createEntityClient(basePath) {
-  return {
+  const client = {
     async list(params) {
       const qs = buildQuery(params);
       return jsonFetch(`${basePath}${qs}`, { method: "GET" });
@@ -329,6 +329,9 @@ function createEntityClient(basePath) {
       return jsonFetch(`${basePath}/${id}`, { method: "DELETE" });
     },
   };
+
+  client.remove = client.delete;
+  return client;
 }
 
 // --------------------
@@ -336,6 +339,7 @@ function createEntityClient(basePath) {
 // --------------------
 
 const Clients = createEntityClient("/clients");
+const Client = Clients;
 
 // --------------------
 // Posts
@@ -348,6 +352,7 @@ const Posts = {
     return jsonFetch(`/posts/${id}/send-to-approval`, { method: "POST" });
   },
 };
+const Post = Posts;
 
 // --------------------
 // Approvals
@@ -377,6 +382,7 @@ const Approvals = {
     });
   },
 };
+const Approval = Approvals;
 
 // --------------------
 // Metrics
@@ -399,6 +405,47 @@ const Metrics = {
 // --------------------
 
 const Tasks = createEntityClient("/tasks");
+const Task = Tasks;
+
+// --------------------
+// Financial Records
+// --------------------
+
+const FinancialRecord = createEntityClient("/finance");
+
+// --------------------
+// Creatives / Biblioteca
+// --------------------
+
+const Creative = createEntityClient("/creatives");
+
+// --------------------
+// Integrations
+// --------------------
+
+const Integration = createEntityClient("/integrations");
+
+// --------------------
+// Metrics (CRUD + filtros customizados)
+// --------------------
+
+const Metric = {
+  ...createEntityClient("/metrics"),
+  async filter(filters = {}, order, limit) {
+    const params =
+      filters && typeof filters === "object" && !Array.isArray(filters)
+        ? { ...filters }
+        : {};
+    if (order) params.order = order;
+    if (typeof limit !== "undefined") params.perPage = limit;
+    const qs = buildQuery(params);
+    const response = await jsonFetch(`/metrics${qs}`, { method: "GET" });
+    if (response && Array.isArray(response.items)) {
+      return response.items;
+    }
+    return Array.isArray(response) ? response : [];
+  },
+};
 
 // --------------------
 // Tenant (tema / branding)
@@ -516,16 +563,24 @@ export const base44 = {
     tryRefreshToken,
   },
   entities: {
+    Client,
     Clients,
+    Post,
     Posts,
+    Task,
     Tasks,
     Metrics,
+    Metric,
     Approvals,
+    Approval,
     PublicApprovals,
     Billing,
     Tenant,
     TeamMember,
     Dashboard,
+    FinancialRecord,
+    Creative,
+    Integration,
   },
   storage: {
     loadAuthFromStorage,

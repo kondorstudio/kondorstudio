@@ -23,9 +23,27 @@ export default function Postkanban({
   onStatusChange,
   isLoading,
 }) {
+  const clientMap = React.useMemo(() => {
+    const map = new Map();
+    (clients || []).forEach((client) => {
+      if (client?.id) map.set(client.id, client);
+    });
+    return map;
+  }, [clients]);
+
+  const postsByStatus = React.useMemo(() => {
+    const map = new Map();
+    (posts || []).forEach((post) => {
+      const bucket = map.get(post.status) || [];
+      bucket.push(post);
+      map.set(post.status, bucket);
+    });
+    return map;
+  }, [posts]);
+
   const getClientById = (clientId) => {
-    if (!clientId || !Array.isArray(clients)) return null;
-    return clients.find((c) => c.id === clientId) || null;
+    if (!clientId) return null;
+    return clientMap.get(clientId) || null;
   };
 
   const renderSkeletonColumn = () => {
@@ -50,7 +68,7 @@ export default function Postkanban({
   return (
     <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
       {COLUMNS.map((col) => {
-        const columnPosts = posts.filter((p) => p.status === col.status);
+        const columnPosts = postsByStatus.get(col.status) || [];
 
         return (
           <Card key={col.status} className="bg-slate-50/60 flex flex-col">
