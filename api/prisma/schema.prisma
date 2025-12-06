@@ -226,10 +226,24 @@ model Client {
   tenantId           String
   tenant             Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name               String
+  company            String?
   email              String?
   phone              String?
+  sector             String?
+  briefing           String?
   metadata           Json?
   contacts           Json?
+  monthlyFeeCents    Int?
+  renewalDate        DateTime?
+  website            String?
+  instagram          String?
+  facebook           String?
+  tiktok             String?
+  tags               String[]  @default([])
+  notes              String?
+  logoUrl            String?
+  billingContactName  String?
+  billingContactEmail String?
   whatsappOptIn      Boolean   @default(false) // Cliente autorizou receber mensagens via WhatsApp
 
   // Login específico do portal do cliente

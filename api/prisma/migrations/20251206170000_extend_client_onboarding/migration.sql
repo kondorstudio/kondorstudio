@@ -1,0 +1,16 @@
+-- Extend clients table with richer onboarding fields
+ALTER TABLE "clients"
+  ADD COLUMN IF NOT EXISTS "company" TEXT,
+  ADD COLUMN IF NOT EXISTS "sector" TEXT,
+  ADD COLUMN IF NOT EXISTS "briefing" TEXT,
+  ADD COLUMN IF NOT EXISTS "monthlyFeeCents" INTEGER,
+  ADD COLUMN IF NOT EXISTS "renewalDate" TIMESTAMP(3),
+  ADD COLUMN IF NOT EXISTS "website" TEXT,
+  ADD COLUMN IF NOT EXISTS "instagram" TEXT,
+  ADD COLUMN IF NOT EXISTS "facebook" TEXT,
+  ADD COLUMN IF NOT EXISTS "tiktok" TEXT,
+  ADD COLUMN IF NOT EXISTS "tags" TEXT[] DEFAULT ARRAY[]::TEXT[],
+  ADD COLUMN IF NOT EXISTS "notes" TEXT,
+  ADD COLUMN IF NOT EXISTS "logoUrl" TEXT,
+  ADD COLUMN IF NOT EXISTS "billingContactName" TEXT,
+  ADD COLUMN IF NOT EXISTS "billingContactEmail" TEXT;

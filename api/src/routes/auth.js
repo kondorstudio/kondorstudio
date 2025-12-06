@@ -163,26 +163,48 @@ router.post('/client-login', loginRateLimiter, async (req, res) => {
         name: true,
         email: true,
         metadata: true,
+        portalPasswordHash: true,
       },
     });
 
     if (!client) return res.status(401).json({ error: 'Credenciais inválidas' });
 
     let metadata = client.metadata || {};
-    const existingHash = metadata.portalPasswordHash || null;
+    const columnHash = client.portalPasswordHash || null;
+    const metadataHash = metadata.portalPasswordHash || null;
+    let hashToUse = columnHash || metadataHash || null;
 
-    if (!existingHash) {
+    if (!hashToUse) {
       const newHash = await hashPassword(password);
-      metadata = {
-        ...metadata,
-        portalPasswordHash: newHash,
-      };
+      const sanitizedMetadata = { ...metadata };
+      if (sanitizedMetadata.portalPasswordHash) {
+        delete sanitizedMetadata.portalPasswordHash;
+      }
       await prisma.client.update({
         where: { id: client.id },
-        data: { metadata },
+        data: {
+          portalPasswordHash: newHash,
+          metadata: sanitizedMetadata,
+        },
       });
+      metadata = sanitizedMetadata;
+      hashToUse = newHash;
     } else {
-      const ok = await comparePassword(password, existingHash);
+      if (!columnHash && metadataHash) {
+        const sanitizedMetadata = { ...metadata };
+        delete sanitizedMetadata.portalPasswordHash;
+        await prisma.client.update({
+          where: { id: client.id },
+          data: {
+            portalPasswordHash: metadataHash,
+            metadata: sanitizedMetadata,
+          },
+        });
+        metadata = sanitizedMetadata;
+        hashToUse = metadataHash;
+      }
+
+      const ok = await comparePassword(password, hashToUse);
       if (!ok) return res.status(401).json({ error: 'Credenciais inválidas' });
     }
 

@@ -22,6 +22,25 @@ export default function Clients() {
     queryFn: () => base44.entities.Client.list(),
   });
 
+  const saveMutation = useMutation({
+    mutationFn: ({ id, data }) => {
+      if (id) {
+        return base44.entities.Client.update(id, data);
+      }
+      return base44.entities.Client.create(data);
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      if (result?.portalCredentials?.password) {
+        const { email, password } = result.portalCredentials;
+        alert(
+          `Acesso do cliente gerado:\nEmail: ${email}\nSenha provisória: ${password}`
+        );
+      }
+      handleDialogClose();
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id) => base44.entities.Client.remove(id),
     onSuccess: () => {
@@ -43,6 +62,18 @@ export default function Clients() {
   const handleDialogClose = () => {
     setDialogOpen(false);
     setEditingClient(null);
+  };
+
+  const handleFormSubmit = async (data) => {
+    try {
+      await saveMutation.mutateAsync({
+        id: editingClient?.id ?? null,
+        data,
+      });
+    } catch (err) {
+      console.error("Erro ao salvar cliente:", err);
+      alert(err?.message || "Não foi possível salvar o cliente.");
+    }
   };
 
   return (
@@ -118,6 +149,8 @@ export default function Clients() {
           open={dialogOpen}
           onClose={handleDialogClose}
           client={editingClient}
+          onSubmit={handleFormSubmit}
+          submitting={saveMutation.isLoading}
         />
       </div>
     </div>
