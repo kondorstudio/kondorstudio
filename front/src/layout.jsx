@@ -1,7 +1,8 @@
 // front/src/layout.jsx
 import React, { useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { Menu, X } from "lucide-react";
+import { base44 } from "@/apiClient/base44Client";
 
 const navItems = [
   { to: "/dashboard", label: "Dashboard" },
@@ -18,9 +19,17 @@ const navItems = [
 
 export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const navigate = useNavigate();
 
   const toggleMobile = () => setMobileOpen((prev) => !prev);
   const closeMobile = () => setMobileOpen(false);
+  const handleLogout = async () => {
+    try {
+      await base44.auth.logout();
+    } finally {
+      navigate("/login", { replace: true });
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col md:flex-row">
@@ -77,7 +86,14 @@ export default function Layout() {
 
         {/* Footer / usuário */}
         <div className="px-4 py-3 border-t border-gray-200 text-xs text-gray-500">
-          Usuário
+          <span className="block mb-2 text-gray-500">Usuário</span>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 active:bg-gray-100 transition"
+          >
+            Sair
+          </button>
         </div>
       </aside>
 
@@ -141,6 +157,18 @@ export default function Layout() {
                 {item.label}
               </NavLink>
             ))}
+            <div className="pt-4 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => {
+                  closeMobile();
+                  handleLogout();
+                }}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 active:bg-gray-100 transition"
+              >
+                Sair
+              </button>
+            </div>
           </nav>
         )}
 
