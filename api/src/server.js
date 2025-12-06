@@ -188,6 +188,7 @@ safeMount("/api/finance", require("./routes/financialRecords"));
 safeMount("/api/metrics", require("./routes/metrics"));
 safeMount("/api/approvals", require("./routes/approvals"));
 safeMount("/api/integrations", require("./routes/integrations"));
+safeMount("/api/uploads", require("./routes/uploads"));
 safeMount("/api/reports", require("./routes/reports"));
 safeMount("/api/billing", require("./routes/billing"));
 safeMount("/api/team", require("./routes/team"));
