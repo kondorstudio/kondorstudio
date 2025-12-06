@@ -9,13 +9,6 @@ import { Button } from "@/components/ui/button.jsx";
 import { Input } from "@/components/ui/input.jsx";
 import { Label } from "@/components/ui/label.jsx";
 import { Textarea } from "@/components/ui/textarea.jsx";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "@/components/ui/select.jsx";
 import { base44 } from "@/apiClient/base44Client";
 import { Upload, Image as ImageIcon, Video } from "lucide-react";
 
@@ -71,8 +64,8 @@ export default function Postformdialog({
     if (!file) return;
 
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
-      setFormData((prev) => ({ ...prev, media_url: file_url }));
+      const { url } = await base44.uploads.uploadFile(file, { folder: "posts" });
+      setFormData((prev) => ({ ...prev, media_url: url }));
     } catch (error) {
       console.error("Upload error:", error);
       alert("Falha ao enviar arquivo. Tente novamente.");
@@ -122,44 +115,36 @@ export default function Postformdialog({
           {/* Cliente */}
           <div className="space-y-2">
             <Label>Cliente</Label>
-            <Select
+            <select
               value={formData.clientId}
-              onValueChange={handleChange("clientId")}
+              onChange={handleChange("clientId")}
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
             >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione um cliente" />
-              </SelectTrigger>
-              <SelectContent>
-                {clients.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              <option value="">Selecione um cliente</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Status */}
           <div className="space-y-2">
             <Label>Status</Label>
-            <Select
+            <select
               value={formData.status}
-              onValueChange={handleChange("status")}
+              onChange={handleChange("status")}
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
             >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione o status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="DRAFT">Rascunho</SelectItem>
-                <SelectItem value="PENDING_APPROVAL">
-                  Aguardando aprovação
-                </SelectItem>
-                <SelectItem value="APPROVED">Aprovado</SelectItem>
-                <SelectItem value="SCHEDULED">Programado</SelectItem>
-                <SelectItem value="PUBLISHED">Publicado</SelectItem>
-                <SelectItem value="ARCHIVED">Arquivado</SelectItem>
-              </SelectContent>
-            </Select>
+              <option value="">Selecione o status</option>
+              <option value="DRAFT">Rascunho</option>
+              <option value="PENDING_APPROVAL">Aguardando aprovação</option>
+              <option value="APPROVED">Aprovado</option>
+              <option value="SCHEDULED">Programado</option>
+              <option value="PUBLISHED">Publicado</option>
+              <option value="ARCHIVED">Arquivado</option>
+            </select>
           </div>
 
           {/* Upload de mídia */}
@@ -187,18 +172,14 @@ export default function Postformdialog({
                 onChange={handleUpload}
               />
 
-              <Select
+              <select
                 value={formData.media_type}
-                onValueChange={handleChange("media_type")}
+                onChange={handleChange("media_type")}
+                className="w-[140px] rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
               >
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="image">Imagem</SelectItem>
-                  <SelectItem value="video">Vídeo</SelectItem>
-                </SelectContent>
-              </Select>
+                <option value="image">Imagem</option>
+                <option value="video">Vídeo</option>
+              </select>
             </div>
           </div>
 

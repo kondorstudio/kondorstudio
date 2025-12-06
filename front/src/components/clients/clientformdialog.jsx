@@ -98,14 +98,8 @@ export default function ClientFormDialog({
     if (!file) return;
 
     try {
-      const result =
-        (base44.integrations &&
-          base44.integrations.Core &&
-          (await base44.integrations.Core.UploadFile({ file }))) ||
-        null;
-      if (result?.file_url) {
-        setFormData((prev) => ({ ...prev, logoUrl: result.file_url }));
-      }
+      const { url } = await base44.uploads.uploadFile(file, { folder: "clients" });
+      setFormData((prev) => ({ ...prev, logoUrl: url }));
     } catch (error) {
       console.error("Erro no upload do logo:", error);
       alert("Falha ao enviar o logo. Tente novamente.");

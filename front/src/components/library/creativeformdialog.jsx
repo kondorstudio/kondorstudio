@@ -66,10 +66,10 @@ export default function Creativeformdialog({ open, onClose, clients }) {
 
     setUploading(true);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      const { url } = await base44.uploads.uploadFile(file, { folder: "creatives" });
       setFormData(prev => ({
         ...prev,
-        file_url,
+        file_url: url,
         file_type: file.type.startsWith('video') ? 'video' : 'image',
         name: prev.name || file.name
       }));

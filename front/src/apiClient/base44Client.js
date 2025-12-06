@@ -134,6 +134,12 @@ async function rawFetch(path, options = {}) {
   return res;
 }
 
+function buildApiUrl(path) {
+  const base = API_BASE_URL.replace(/\/+$/, "");
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${base}/api${normalizedPath}`;
+}
+
 function buildQuery(params) {
   if (!params || typeof params !== "object") return "";
   const search = new URLSearchParams();
@@ -199,6 +205,48 @@ async function _jsonFetchInternal(path, options = {}) {
     }
 
     const error = new Error(data?.error || "Request failed");
+    error.status = res.status;
+    error.data = data;
+    throw error;
+  }
+
+  return data;
+}
+
+// --------------------
+// Uploads
+// --------------------
+
+async function uploadFile(file, { folder, isPublic } = {}) {
+  if (!file) throw new Error("Arquivo obrigatório para upload");
+  if (typeof FormData === "undefined") {
+    throw new Error("FormData não disponível neste ambiente");
+  }
+
+  const formData = new FormData();
+  formData.append("file", file);
+  if (folder) formData.append("folder", folder);
+  if (typeof isPublic !== "undefined") {
+    formData.append("public", isPublic ? "true" : "false");
+  }
+
+  const headers = {};
+  const token = getAccessToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(buildApiUrl("/uploads"), {
+    method: "POST",
+    body: formData,
+    headers,
+  });
+
+  let data = null;
+  try {
+    data = await res.json();
+  } catch (err) {}
+
+  if (!res.ok) {
+    const error = new Error(data?.error || "Falha ao enviar arquivo");
     error.status = res.status;
     error.data = data;
     throw error;
@@ -589,6 +637,9 @@ export const base44 = {
     FinancialRecord,
     Creative,
     Integration,
+  },
+  uploads: {
+    uploadFile,
   },
   storage: {
     loadAuthFromStorage,

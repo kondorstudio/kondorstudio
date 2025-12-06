@@ -53,8 +53,8 @@ export default function Settings() {
 
     setUploading(true);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
-      setFormData(prev => ({ ...prev, logo_url: file_url }));
+      const { url } = await base44.uploads.uploadFile(file, { folder: "branding" });
+      setFormData(prev => ({ ...prev, logo_url: url }));
     } catch (error) {
       console.error('Upload error:', error);
     }
