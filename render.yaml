@@ -16,6 +16,7 @@ services:
     buildCommand: |
       npm install
       npm run deploy:migrate
+      npm run prisma:generate
 
     startCommand: npm start
 
@@ -128,7 +129,9 @@ services:
     plan: starter
     region: oregon
 
-    buildCommand: npm install
+    buildCommand: |
+      npm install
+      npm run prisma:generate
     startCommand: npm run worker
 
     envVars:
