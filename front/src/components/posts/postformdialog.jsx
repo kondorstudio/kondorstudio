@@ -22,6 +22,12 @@ function normalizeMediaUrl(url) {
   return base ? `${base}${suffix}` : suffix;
 }
 
+function resolvePreview(url) {
+  if (!url) return "";
+  if (url.startsWith("blob:")) return url;
+  return normalizeMediaUrl(url);
+}
+
 export default function Postformdialog({
   open,
   onClose,
@@ -65,11 +71,8 @@ export default function Postformdialog({
           media_type: "image",
         };
 
-    const initialMedia = normalizeMediaUrl(payload.media_url || "");
-    setFormData((prev) => ({
-      ...payload,
-      media_url: initialMedia || payload.media_url,
-    }));
+    const initialMedia = resolvePreview(payload.media_url || "");
+    setFormData(payload);
     setStoredMediaUrl(initialMedia);
     setPreviewUrl(initialMedia);
   }, [post, open]);
@@ -132,7 +135,7 @@ export default function Postformdialog({
     }
   };
 
-  const effectivePreview = normalizeMediaUrl(previewUrl || storedMediaUrl);
+  const effectivePreview = resolvePreview(previewUrl || storedMediaUrl);
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
