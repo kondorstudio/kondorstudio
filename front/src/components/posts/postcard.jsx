@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import {
   Card,
   CardHeader,
@@ -37,8 +37,14 @@ function formatDate(dt) {
 }
 
 export default function Postcard({ post, client, onEdit, onStatusChange }) {
-  const [statusMenuOpen, setStatusMenuOpen] = React.useState(false);
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  const [localStatus, setLocalStatus] = React.useState(post.status);
   const statusMenuRef = React.useRef(null);
+
+  useEffect(() => {
+    setLocalStatus(post.status);
+  }, [post.status]);
+
   const handleStatusChange = (newStatus) => {
     if (!onStatusChange) return;
     onStatusChange(post.id, newStatus);
@@ -55,7 +61,7 @@ export default function Postcard({ post, client, onEdit, onStatusChange }) {
         statusMenuRef.current &&
         !statusMenuRef.current.contains(event.target)
       ) {
-        setStatusMenuOpen(false);
+        setMenuOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -64,13 +70,15 @@ export default function Postcard({ post, client, onEdit, onStatusChange }) {
 
   const triggerStatusMenu = (event) => {
     event.stopPropagation();
-    setStatusMenuOpen((prev) => !prev);
+    setMenuOpen((prev) => !prev);
   };
 
   const selectStatus = (event, value) => {
     event.stopPropagation();
+    setMenuOpen(false);
+    if (value === localStatus) return;
+    setLocalStatus(value);
     handleStatusChange(value);
-    setStatusMenuOpen(false);
   };
 
   return (
@@ -94,7 +102,7 @@ export default function Postcard({ post, client, onEdit, onStatusChange }) {
             )}
           </div>
           <Badge className="text-[10px] bg-purple-50 text-purple-700 border border-purple-100">
-            {formatStatusLabel(post.status)}
+            {formatStatusLabel(localStatus)}
           </Badge>
         </div>
       </CardHeader>
@@ -124,11 +132,11 @@ export default function Postcard({ post, client, onEdit, onStatusChange }) {
               onClick={triggerStatusMenu}
               className="w-full sm:w-[170px] inline-flex items-center justify-between rounded-full border border-purple-200 bg-white px-3 py-2 text-xs font-medium text-purple-700 transition hover:border-purple-300 hover:bg-purple-50"
             >
-              <span>{formatStatusLabel(post.status)}</span>
+              <span>{formatStatusLabel(localStatus)}</span>
               <ChevronDown className="h-3.5 w-3.5" />
             </button>
 
-            {statusMenuOpen && (
+            {menuOpen && (
               <div className="absolute right-0 z-20 mt-2 w-48 rounded-2xl border border-slate-100 bg-white p-1 shadow-2xl shadow-purple-200/70">
                 {STATUS_OPTIONS.map((opt) => (
                   <button
@@ -136,7 +144,7 @@ export default function Postcard({ post, client, onEdit, onStatusChange }) {
                     key={opt.value}
                     onClick={(event) => selectStatus(event, opt.value)}
                     className={`w-full rounded-xl px-3 py-2 text-left text-xs transition ${
-                      opt.value === post.status
+                      opt.value === localStatus
                         ? "bg-purple-50 text-purple-700 font-semibold"
                         : "text-slate-600 hover:bg-slate-50"
                     }`}
@@ -150,9 +158,8 @@ export default function Postcard({ post, client, onEdit, onStatusChange }) {
 
           <Button
             type="button"
-            variant="ghost"
             size="sm"
-            className="w-full sm:w-auto border border-slate-200 text-slate-600 hover:border-purple-200 hover:text-purple-700"
+            className="w-full sm:w-auto border border-transparent bg-purple-500 text-white hover:bg-purple-600 focus-visible:ring-2 focus-visible:ring-purple-400"
             onClick={(event) => {
               event.stopPropagation();
               onEdit && onEdit(post);

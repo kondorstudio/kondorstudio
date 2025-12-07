@@ -29,9 +29,13 @@ export default function Postformdialog({
     media_type: "image",
   });
   const [previewUrl, setPreviewUrl] = useState("");
+  const [storedMediaUrl, setStoredMediaUrl] = useState("");
   const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
+    if (!open && !post) {
+      return;
+    }
     const payload = post
       ? {
           title: post.title || "",
@@ -50,8 +54,10 @@ export default function Postformdialog({
           media_type: "image",
         };
 
+    const initialMedia = payload.media_url || "";
     setFormData(payload);
-    setPreviewUrl(payload.media_url || "");
+    setStoredMediaUrl(initialMedia);
+    setPreviewUrl(initialMedia);
   }, [post, open]);
 
   useEffect(() => {
@@ -82,11 +88,12 @@ export default function Postformdialog({
         folder: "posts",
       });
       setFormData((prev) => ({ ...prev, media_url: url }));
+      setStoredMediaUrl(url);
       // Mantém o preview local até o usuário reabrir o modal (evita flicker)
     } catch (error) {
       console.error("Upload error:", error);
       alert("Falha ao enviar arquivo. Tente novamente.");
-      setPreviewUrl("");
+      setPreviewUrl(storedMediaUrl);
     }
     setIsUploading(false);
   };
@@ -182,16 +189,15 @@ export default function Postformdialog({
           <div className="space-y-2">
             <Label>Mídia</Label>
 
-            {(previewUrl || formData.media_url) && (
+            {(previewUrl || storedMediaUrl) && (
               <div className="w-full aspect-square bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center">
                 {formData.media_type === "video" ? (
                   <Video className="w-16 h-16 text-gray-400" />
                 ) : (
                   <img
-                    src={previewUrl || formData.media_url}
+                    src={previewUrl || storedMediaUrl}
                     alt="Preview"
                     className="w-full h-full object-cover"
-                    onError={() => setPreviewUrl("")}
                   />
                 )}
               </div>
