@@ -58,18 +58,15 @@ export default function Postkanban({
   );
 
   return (
-    <div className="pb-6">
-      <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2 md:grid md:grid-cols-2 md:gap-6 lg:grid-cols-3 xl:grid-cols-6">
+    <div className="pb-8">
+      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
         {COLUMNS.map((col) => {
           const columnPosts = postsByStatus.get(col.status) || [];
 
           return (
-            <div
-              key={col.status}
-              className="snap-center min-w-[320px] flex-shrink-0 md:min-w-0"
-            >
-              <div className="flex h-full flex-col rounded-3xl border border-slate-200 bg-white/90 p-4 shadow-sm shadow-slate-100 backdrop-blur-md">
-                <div className="mb-4 flex items-center justify-between">
+            <div key={col.status}>
+              <div className="flex h-full flex-col rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-sm shadow-slate-100 backdrop-blur-md">
+                <div className="mb-4 flex items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-slate-900">
                       {col.title}
@@ -83,7 +80,7 @@ export default function Postkanban({
                   </span>
                 </div>
 
-                <div className="flex-1 space-y-3 overflow-y-auto pr-0.5">
+                <div className="flex-1 space-y-4 overflow-y-auto pr-1">
                   {isLoading
                     ? renderSkeletonColumn()
                     : columnPosts.length === 0
