@@ -10,22 +10,24 @@ import { Input } from "@/components/ui/input.jsx";
 import { Label } from "@/components/ui/label.jsx";
 import { Textarea } from "@/components/ui/textarea.jsx";
 import { base44 } from "@/apiClient/base44Client";
-import { Upload, Image as ImageIcon, Video } from "lucide-react";
+import { Video } from "lucide-react";
 
-function normalizeMediaUrl(url) {
-  if (!url) return "";
-  if (/^https?:\/\//i.test(url)) {
-    return url;
+function resolvePreview(raw) {
+  if (!raw) return "";
+  if (raw.startsWith("blob:") || /^https?:\/\//i.test(raw)) {
+    return raw;
   }
-  const base = (base44.API_BASE_URL || "").replace(/\/$/, "");
-  const suffix = url.startsWith("/") ? url : `/${url}`;
-  return base ? `${base}${suffix}` : suffix;
-}
 
-function resolvePreview(url) {
-  if (!url) return "";
-  if (url.startsWith("blob:")) return url;
-  return normalizeMediaUrl(url);
+  const envBase =
+    (typeof import.meta !== "undefined" &&
+      import.meta.env &&
+      import.meta.env.VITE_API_URL) ||
+    (base44.API_BASE_URL || "");
+
+  const normalizedBase = envBase.replace(/\/$/, "");
+  const suffix = raw.startsWith("/") ? raw : `/${raw}`;
+
+  return normalizedBase ? `${normalizedBase}${suffix}` : raw;
 }
 
 export default function Postformdialog({
@@ -44,15 +46,11 @@ export default function Postformdialog({
     media_url: "",
     media_type: "image",
   });
-  const [previewUrl, setPreviewUrl] = useState("");
-  const [storedMediaUrl, setStoredMediaUrl] = useState("");
+  const [file, setFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  useEffect(() => {
-    // Sempre que abrir o modal para edição, pré-carrega a mídia existente para o preview.
-    if (!open && !post) {
-      return;
-    }
+  const resetState = () => {
     const payload = post
       ? {
           title: post.title || "",
@@ -71,10 +69,17 @@ export default function Postformdialog({
           media_type: "image",
         };
 
-    const initialMedia = resolvePreview(payload.media_url || "");
     setFormData(payload);
-    setStoredMediaUrl(initialMedia);
+    setFile(null);
+    const initialMedia = payload.media_url
+      ? resolvePreview(payload.media_url)
+      : null;
     setPreviewUrl(initialMedia);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    resetState();
   }, [post, open]);
 
   useEffect(() => {
@@ -93,30 +98,16 @@ export default function Postformdialog({
     }));
   };
 
-  const handleUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleFileChange = (e) => {
+    const selected = e.target.files?.[0];
+    if (!selected) return;
 
-    try {
-      setIsUploading(true);
-      const objectUrl = URL.createObjectURL(file);
-      setPreviewUrl(objectUrl);
-      const { url } = await base44.uploads.uploadFile(file, {
-        folder: "posts",
-      });
-      const normalized = normalizeMediaUrl(url);
-      setFormData((prev) => ({ ...prev, media_url: normalized }));
-      setStoredMediaUrl(normalized);
-      // Mantém o preview local até o usuário reabrir o modal (evita flicker)
-    } catch (error) {
-      console.error("Upload error:", error);
-      alert("Falha ao enviar arquivo. Tente novamente.");
-      setPreviewUrl(storedMediaUrl);
-    }
-    setIsUploading(false);
+    setFile(selected);
+    const objectUrl = URL.createObjectURL(selected);
+    setPreviewUrl(objectUrl);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.clientId) {
       alert("Selecione um cliente antes de salvar o post.");
@@ -126,16 +117,39 @@ export default function Postformdialog({
       alert("Informe um título para o post.");
       return;
     }
-    if (!formData.media_url) {
+    if (!file && !formData.media_url) {
       alert("Envie um arquivo de mídia antes de salvar.");
       return;
     }
-    if (onSubmit) {
-      onSubmit(formData);
+
+    try {
+      setIsUploading(true);
+      let mediaUrlToSave = formData.media_url || null;
+
+      if (file) {
+        const { url } = await base44.uploads.uploadFile(file, {
+          folder: "posts",
+        });
+        mediaUrlToSave = url;
+      }
+
+      const payload = {
+        ...formData,
+        media_url: mediaUrlToSave,
+      };
+
+      if (onSubmit) {
+        await onSubmit(payload);
+      }
+    } catch (error) {
+      console.error("Erro ao salvar post:", error);
+      alert("Erro ao salvar post. Tente novamente.");
+    } finally {
+      setIsUploading(false);
     }
   };
 
-  const effectivePreview = resolvePreview(previewUrl || storedMediaUrl);
+  const effectivePreview = previewUrl;
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -209,8 +223,7 @@ export default function Postformdialog({
           <div className="space-y-2">
             <Label>Mídia</Label>
 
-            {effectivePreview && (
-              // Preview usa a URL persistida ou o blob recém-enviado para evitar imagem quebrada ao editar.
+            {effectivePreview ? (
               <div className="w-full aspect-square bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center">
                 {formData.media_type === "video" ? (
                   <Video className="w-16 h-16 text-gray-400" />
@@ -222,13 +235,17 @@ export default function Postformdialog({
                   />
                 )}
               </div>
+            ) : (
+              <div className="w-full aspect-square bg-gray-100 rounded-lg border border-dashed border-gray-300 flex items-center justify-center text-xs text-gray-500">
+                Nenhuma mídia selecionada
+              </div>
             )}
 
             <div className="flex items-center gap-4">
               <Input
                 type="file"
                 accept="image/*,video/*"
-                onChange={handleUpload}
+                onChange={handleFileChange}
                 disabled={isUploading || isSaving}
               />
 
