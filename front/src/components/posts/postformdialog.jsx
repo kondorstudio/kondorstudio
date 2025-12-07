@@ -33,6 +33,7 @@ export default function Postformdialog({
   const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
+    // Sempre que abrir o modal para edição, pré-carrega a mídia existente para o preview.
     if (!open && !post) {
       return;
     }
@@ -117,6 +118,8 @@ export default function Postformdialog({
     }
   };
 
+  const effectivePreview = previewUrl || storedMediaUrl;
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
@@ -189,13 +192,14 @@ export default function Postformdialog({
           <div className="space-y-2">
             <Label>Mídia</Label>
 
-            {(previewUrl || storedMediaUrl) && (
+            {effectivePreview && (
+              // Preview usa a URL persistida ou o blob recém-enviado para evitar imagem quebrada ao editar.
               <div className="w-full aspect-square bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center">
                 {formData.media_type === "video" ? (
                   <Video className="w-16 h-16 text-gray-400" />
                 ) : (
                   <img
-                    src={previewUrl || storedMediaUrl}
+                    src={effectivePreview}
                     alt="Preview"
                     className="w-full h-full object-cover"
                   />
