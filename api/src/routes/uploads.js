@@ -39,9 +39,21 @@ router.post('/', upload.single('file'), async (req, res) => {
       metadata: { uploadedBy: req.user?.id || null },
     });
 
+    const baseUrl =
+      process.env.UPLOADS_BASE_URL ||
+      process.env.API_PUBLIC_URL ||
+      process.env.API_BASE_URL ||
+      process.env.RENDER_EXTERNAL_URL ||
+      `${req.protocol}://${req.get('host')}`;
+    const normalizedBase = baseUrl.replace(/\/$/, '');
+    const finalUrl =
+      result.url && /^https?:\/\//i.test(result.url)
+        ? result.url
+        : `${normalizedBase}${result.url && result.url.startsWith('/') ? '' : '/'}${result.url || ''}`;
+
     // You may want to persist the key/url into DB (e.g. media table) — not done here
 
-    return res.status(201).json({ ok: true, key: result.key, url: result.url });
+    return res.status(201).json({ ok: true, key: result.key, url: finalUrl });
   } catch (err) {
     console.error('POST /uploads error:', err);
     return res.status(500).json({ error: 'Erro ao enviar arquivo', detail: err.message });
