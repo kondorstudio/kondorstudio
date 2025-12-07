@@ -29,12 +29,21 @@ export default function Posts() {
   const invalidatePosts = () =>
     queryClient.invalidateQueries({ queryKey: ["posts"] });
 
+  const showError = (error) => {
+    const message =
+      error?.data?.error ||
+      error?.message ||
+      "Erro ao salvar o post. Tente novamente.";
+    alert(message);
+  };
+
   const createMutation = useMutation({
     mutationFn: (data) => base44.entities.Post.create(data),
     onSuccess: () => {
       invalidatePosts();
       handleDialogClose();
     },
+    onError: showError,
   });
 
   const updateMutation = useMutation({
@@ -43,6 +52,7 @@ export default function Posts() {
       invalidatePosts();
       handleDialogClose();
     },
+    onError: showError,
   });
 
   const handleEdit = (post) => {

@@ -28,28 +28,39 @@ export default function Postformdialog({
     media_url: "",
     media_type: "image",
   });
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
-    if (post) {
-      setFormData({
-        title: post.title || "",
-        body: post.body || "",
-        clientId: post.clientId || "",
-        status: post.status || "DRAFT",
-        media_url: post.media_url || "",
-        media_type: post.media_type || "image",
-      });
-    } else {
-      setFormData({
-        title: "",
-        body: "",
-        clientId: "",
-        status: "DRAFT",
-        media_url: "",
-        media_type: "image",
-      });
-    }
-  }, [post]);
+    const payload = post
+      ? {
+          title: post.title || "",
+          body: post.body || post.caption || "",
+          clientId: post.clientId || "",
+          status: post.status || "DRAFT",
+          media_url: post.media_url || post.mediaUrl || "",
+          media_type: post.media_type || post.mediaType || "image",
+        }
+      : {
+          title: "",
+          body: "",
+          clientId: "",
+          status: "DRAFT",
+          media_url: "",
+          media_type: "image",
+        };
+
+    setFormData(payload);
+    setPreviewUrl(payload.media_url || "");
+  }, [post, open]);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl && previewUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
 
   const handleChange = (field) => (e) => {
     const value = e?.target ? e.target.value : e;
@@ -64,16 +75,34 @@ export default function Postformdialog({
     if (!file) return;
 
     try {
+      setIsUploading(true);
+      const objectUrl = URL.createObjectURL(file);
+      setPreviewUrl(objectUrl);
       const { url } = await base44.uploads.uploadFile(file, { folder: "posts" });
       setFormData((prev) => ({ ...prev, media_url: url }));
+      setPreviewUrl(url || objectUrl);
     } catch (error) {
       console.error("Upload error:", error);
       alert("Falha ao enviar arquivo. Tente novamente.");
+      setPreviewUrl("");
     }
+    setIsUploading(false);
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!formData.clientId) {
+      alert("Selecione um cliente antes de salvar o post.");
+      return;
+    }
+    if (!formData.title.trim()) {
+      alert("Informe um título para o post.");
+      return;
+    }
+    if (!formData.media_url) {
+      alert("Envie um arquivo de mídia antes de salvar.");
+      return;
+    }
     if (onSubmit) {
       onSubmit(formData);
     }
@@ -151,15 +180,16 @@ export default function Postformdialog({
           <div className="space-y-2">
             <Label>Mídia</Label>
 
-            {formData.media_url && (
+            {(previewUrl || formData.media_url) && (
               <div className="w-full aspect-square bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center">
                 {formData.media_type === "video" ? (
                   <Video className="w-16 h-16 text-gray-400" />
                 ) : (
                   <img
-                    src={formData.media_url}
+                    src={previewUrl || formData.media_url}
                     alt="Preview"
                     className="w-full h-full object-cover"
+                    onError={() => setPreviewUrl("")}
                   />
                 )}
               </div>
@@ -170,12 +200,14 @@ export default function Postformdialog({
                 type="file"
                 accept="image/*,video/*"
                 onChange={handleUpload}
+                disabled={isUploading || isSaving}
               />
 
               <select
                 value={formData.media_type}
                 onChange={handleChange("media_type")}
                 className="w-[140px] rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                disabled={isSaving}
               >
                 <option value="image">Imagem</option>
                 <option value="video">Vídeo</option>
@@ -196,7 +228,7 @@ export default function Postformdialog({
             <Button
               type="submit"
               className="bg-purple-600 hover:bg-purple-700"
-              disabled={isSaving}
+              disabled={isSaving || isUploading}
             >
               {isSaving
                 ? "Salvando..."
