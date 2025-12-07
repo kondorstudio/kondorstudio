@@ -24,13 +24,24 @@ router.use(tenantMiddleware);
  * multipart form upload: field name = "file"
  * optional body: folder (prefix), public (true/false)
  */
+function sanitizeFileName(name = "file") {
+  return name
+    .normalize("NFKD")
+    .replace(/[^\w.\-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 80) || "file";
+}
+
 router.post('/', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Arquivo não enviado' });
 
     const folder = req.body.folder ? `${req.body.folder.replace(/\/+$/,'')}/` : '';
     const originalName = req.file.originalname || 'file';
-    const key = `${req.tenantId}/${folder}${originalName}`;
+    const safeName = sanitizeFileName(originalName);
+    const uniqueName = `${Date.now()}-${safeName}`;
+    const key = `${req.tenantId}/${folder}${uniqueName}`;
 
     // prefer service to generate unique key
     const result = await uploadsService.uploadBuffer(req.file.buffer, originalName, req.file.mimetype, {
