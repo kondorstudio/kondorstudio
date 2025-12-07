@@ -1,19 +1,13 @@
 import React from "react";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-} from "@/components/ui/card.jsx";
 import Postcard from "./postcard.jsx";
 
 const COLUMNS = [
-  { status: "DRAFT", title: "Rascunho" },
-  { status: "PENDING_APPROVAL", title: "Aguardando aprovação" },
-  { status: "APPROVED", title: "Aprovado" },
-  { status: "SCHEDULED", title: "Programado" },
-  { status: "PUBLISHED", title: "Publicado" },
-  { status: "ARCHIVED", title: "Arquivado" },
+  { status: "DRAFT", title: "Rascunho", description: "Ideias e conteúdos em rascunho." },
+  { status: "PENDING_APPROVAL", title: "Aguardando aprovação", description: "Posts enviados para o cliente revisar." },
+  { status: "APPROVED", title: "Aprovado", description: "Pronto para programar ou publicar." },
+  { status: "SCHEDULED", title: "Programado", description: "Agendado nas plataformas." },
+  { status: "PUBLISHED", title: "Publicado", description: "Entrou no ar recentemente." },
+  { status: "ARCHIVED", title: "Arquivado", description: "Itens antigos ou pausados." },
 ];
 
 export default function Postkanban({
@@ -46,60 +40,69 @@ export default function Postkanban({
     return clientMap.get(clientId) || null;
   };
 
-  const renderSkeletonColumn = () => {
-    return (
-      <div className="space-y-3">
-        {[1, 2, 3].map((i) => (
-          <div
-            key={i}
-            className="h-20 rounded-md bg-slate-100 animate-pulse"
-          />
-        ))}
-      </div>
-    );
-  };
+  const renderSkeletonColumn = () => (
+    <div className="space-y-3">
+      {[1, 2, 3].map((i) => (
+        <div
+          key={i}
+          className="h-24 rounded-2xl bg-slate-100/80 animate-pulse"
+        />
+      ))}
+    </div>
+  );
 
   const renderEmptyColumn = () => (
-    <div className="text-xs text-gray-400 italic">
+    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-6 text-center text-xs text-slate-400">
       Nenhum post nesta coluna.
     </div>
   );
 
   return (
-    <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-      {COLUMNS.map((col) => {
-        const columnPosts = postsByStatus.get(col.status) || [];
+    <div className="overflow-x-auto pb-6">
+      <div className="flex gap-4 snap-x snap-mandatory md:grid md:grid-cols-2 md:gap-6 lg:grid-cols-3 xl:grid-cols-6">
+        {COLUMNS.map((col) => {
+          const columnPosts = postsByStatus.get(col.status) || [];
 
-        return (
-          <Card key={col.status} className="bg-slate-50/60 flex flex-col">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-semibold text-gray-800">
-                  {col.title}
-                </CardTitle>
-                <span className="text-xs px-2 py-1 rounded-full bg-white text-gray-600 border border-slate-200">
-                  {columnPosts.length}
-                </span>
+          return (
+            <div
+              key={col.status}
+              className="snap-center min-w-[260px] flex-shrink-0 md:min-w-0"
+            >
+              <div className="flex h-full flex-col rounded-3xl border border-slate-200 bg-white/80 p-4 shadow-sm shadow-slate-100 backdrop-blur-md">
+                <div className="mb-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">
+                      {col.title}
+                    </p>
+                    <p className="text-[11px] text-slate-500">
+                      {col.description}
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+                    {columnPosts.length}
+                  </span>
+                </div>
+
+                <div className="flex-1 space-y-3 overflow-y-auto pr-1">
+                  {isLoading
+                    ? renderSkeletonColumn()
+                    : columnPosts.length === 0
+                    ? renderEmptyColumn()
+                    : columnPosts.map((post) => (
+                        <Postcard
+                          key={post.id}
+                          post={post}
+                          client={getClientById(post.clientId)}
+                          onEdit={onEdit}
+                          onStatusChange={onStatusChange}
+                        />
+                      ))}
+                </div>
               </div>
-            </CardHeader>
-            <CardContent className="pt-0 flex-1 overflow-y-auto space-y-3">
-              {isLoading
-                ? renderSkeletonColumn()
-                : columnPosts.length === 0
-                ? renderEmptyColumn()
-                : columnPosts.map((post) => (
-                    <Postcard
-                      key={post.id}
-                      post={post}
-                      client={getClientById(post.clientId)}
-                      onEdit={onEdit}
-                      onStatusChange={onStatusChange}
-                    />
-                  ))}
-            </CardContent>
-          </Card>
-        );
-      })}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
