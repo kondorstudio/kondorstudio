@@ -57,10 +57,17 @@ router.post('/', upload.single('file'), async (req, res) => {
       process.env.RENDER_EXTERNAL_URL ||
       `${req.protocol}://${req.get('host')}`;
     const normalizedBase = baseUrl.replace(/\/$/, '');
-    const finalUrl =
-      result.url && /^https?:\/\//i.test(result.url)
-        ? result.url
-        : `${normalizedBase}${result.url && result.url.startsWith('/') ? '' : '/'}${result.url || ''}`;
+    const isSignedS3 =
+      result.url && /^https?:\/\//i.test(result.url) && /X-Amz/i.test(result.url);
+
+    let finalUrl;
+    if (result.url && /^https?:\/\//i.test(result.url) && !isSignedS3) {
+      finalUrl = result.url;
+    } else if (isSignedS3) {
+      finalUrl = `${normalizedBase}/uploads/public/${encodeURIComponent(result.key)}`;
+    } else {
+      finalUrl = `${normalizedBase}${result.url && result.url.startsWith('/') ? '' : '/'}${result.url || ''}`;
+    }
 
     // You may want to persist the key/url into DB (e.g. media table) — not done here
 

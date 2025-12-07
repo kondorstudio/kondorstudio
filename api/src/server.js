@@ -159,6 +159,7 @@ app.get("/healthz", async (req, res) => {
 // Rotas públicas
 const authRoutes = require("./routes/auth");
 const clientPortalRoutes = require("./routes/clientPortal");
+const uploadsPublicRoutes = require("./routes/uploadsPublic");
 
 let publicRoutes;
 try {
@@ -174,6 +175,7 @@ try {
 
 safeMount("/api/auth", authRoutes);
 safeMount("/api/client-portal", clientPortalRoutes);
+safeMount("/uploads/public", uploadsPublicRoutes);
 if (publicRoutes) safeMount("/api/public", publicRoutes);
 
 // === ROTAS INTERNAS ===
