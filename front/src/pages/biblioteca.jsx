@@ -1,16 +1,12 @@
 import React, { useMemo, useState } from "react";
 import { base44 } from "@/apiClient/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button.jsx";
-import { Plus } from "lucide-react";
-import Creativeformdialog from "@/components/library/creativeformdialog.jsx";
 import FiltersBar from "@/components/creatives/filtersBar.jsx";
 import CreativeGrid from "@/components/creatives/creativeGrid.jsx";
 import CreativeEmptyState from "@/components/creatives/creativeEmptyState.jsx";
 import CreativeDetailsDrawer from "@/components/creatives/creativeDetailsDrawer.jsx";
 
 export default function Biblioteca() {
-  const [dialogOpen, setDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterClient, setFilterClient] = useState("all");
   const [filterType, setFilterType] = useState("all");
@@ -113,13 +109,6 @@ export default function Biblioteca() {
               Gerencie seus assets e encontre o criativo ideal para cada post.
             </p>
           </div>
-          <Button
-            onClick={() => setDialogOpen(true)}
-            className="self-start rounded-full bg-gradient-to-r from-purple-500 to-purple-600 px-6"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Novo Criativo
-          </Button>
         </div>
 
         <FiltersBar
@@ -136,7 +125,7 @@ export default function Biblioteca() {
         />
 
         {filteredCreatives.length === 0 ? (
-          <CreativeEmptyState onAddCreative={() => setDialogOpen(true)} />
+          <CreativeEmptyState />
         ) : (
           <CreativeGrid
             creatives={filteredCreatives}
@@ -160,12 +149,6 @@ export default function Biblioteca() {
           onDownload={handleDownloadCreative}
           onDelete={handleDeleteCreative}
           onArchive={handleArchiveCreative}
-        />
-
-        <Creativeformdialog
-          open={dialogOpen}
-          onClose={() => setDialogOpen(false)}
-          clients={clients}
         />
       </div>
     </div>
