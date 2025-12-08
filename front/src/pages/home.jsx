@@ -1,114 +1,225 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button.jsx";
-import { Card, CardContent } from "@/components/ui/card.jsx";
 import {
   ArrowRight,
   BarChart3,
-  Check,
+  Building2,
+  CheckCircle2,
   DollarSign,
-  LayoutDashboard,
+  Menu,
   PlayCircle,
   Shield,
   Sparkles,
+  Target,
   Users,
+  X,
 } from "lucide-react";
-import { pricingPlans } from "@/data/pricingPlans.js";
 
 const navLinks = [
-  { href: "#features", label: "Funcionalidades" },
-  { href: "#modules", label: "Módulos" },
-  { href: "#video", label: "Demo" },
-  { href: "#pricing", label: "Planos" },
+  { label: "Home", href: "#hero" },
+  { label: "Módulos", href: "#modules" },
+  { label: "Demo", href: "#demo" },
+  { label: "Planos", href: "#plans" },
 ];
 
-const featureHighlights = [
+const quickBenefits = [
+  "+45% de redução de tempo em tarefas financeiras",
+  "Compliance integrado e atualizado automaticamente",
+  "Relatórios em tempo real para decisões estratégicas",
+  "Implantação em dias com suporte dedicado",
+];
+
+const functionalityBlocks = [
   {
-    icon: LayoutDashboard,
-    title: "Operação completa",
-    description:
-      "Kanban de posts, tarefas, biblioteca de criativos, aprovações e métricas em um único lugar.",
+    title: "Relatórios Inteligentes",
+    description: "Analise KPIs financeiros e operacionais em tempo real.",
   },
   {
-    icon: Users,
-    title: "Onboarding guiado",
-    description:
-      "Cadastre clientes com briefing completo, contratos, acessos e fluxo financeiro automático.",
+    title: "Gestão Integrada",
+    description: "Centralize financeiro, estoque e vendas em um só fluxo.",
   },
   {
-    icon: Shield,
-    title: "Portal para o cliente",
-    description:
-      "Envie posts para aprovação, compartilhe relatórios e reduza o número de reuniões e mensagens.",
+    title: "Alertas Automatizados",
+    description: "Evite atrasos e inconsistências com monitoramento ativo.",
   },
   {
-    icon: BarChart3,
-    title: "Insights acionáveis",
-    description:
-      "Dashboards e relatórios que mostram o que realmente importa para a sua agência e seus clientes.",
+    title: "Integração com ERP/CRM",
+    description: "Elimine retrabalho conectando sistemas legados e APIs.",
+  },
+];
+
+const testimonials = [
+  {
+    quote:
+      "Reduzimos 60% dos erros manuais em apenas três meses com a Kondor.",
+    author: "Laura Mendes",
+    role: "CFO • Luma Group",
+  },
+  {
+    quote:
+      "Os alertas automáticos salvaram nosso fechamento mensal diversas vezes.",
+    author: "Eduardo Pinheiro",
+    role: "Head de Operações • Vortex Digital",
   },
 ];
 
 const modules = [
   {
-    title: "Clientes & Briefings",
-    description:
-      "Centralize informações estratégicas, contatos, acessos e contratos. Gere logins para o portal do cliente com um clique.",
-  },
-  {
-    title: "Posts & Aprovações",
-    description:
-      "Planeje calendários, acompanhe status e mande aprovações por link ou WhatsApp.",
-  },
-  {
-    title: "Tarefas & Projetos",
-    description:
-      "Quadros visuais para organizar o fluxo do time e garantir entregas dentro do prazo.",
-  },
-  {
-    title: "Biblioteca de Criativos",
-    description:
-      "Tagueie imagens, vídeos e documentos para reutilizar assets rapidamente em novas campanhas.",
-  },
-  {
-    title: "Métricas",
-    description:
-      "Conecte integrações e visualize performance por campanha, cliente e período.",
-  },
-  {
     title: "Financeiro",
     description:
-      "Controle receitas recorrentes, despesas por cliente e tenha previsibilidade de caixa.",
+      "Controle total de contas a pagar, fluxo de caixa e conciliação bancária.",
+    bullets: [
+      "Automatize vencimentos e aprovações",
+      "Conciliação automática com bancos e cartões",
+      "Dashboards personalizáveis em tempo real",
+      "Alertas inteligentes para divergências",
+      "Integração com ERP e contabilidade",
+    ],
+  },
+  {
+    title: "Relatórios",
+    description: "Insights visuais para decisões estratégicas.",
+    bullets: [
+      "KPIs financeiros e operacionais ao vivo",
+      "Exportações em PDF, Excel e compartilhamento seguro",
+      "Filtros por cliente, unidade e projeto",
+      "Dashboards executivos customizados",
+      "Integração com BI externo",
+    ],
+  },
+  {
+    title: "Operacional",
+    description: "Planeje e monitore toda a execução da operação.",
+    bullets: [
+      "Workflows configuráveis por área",
+      "Controle de SLAs e automatização de tarefas",
+      "Kanban, timeline e visão de capacidade",
+      "Checklist inteligente e templates reutilizáveis",
+      "Alertas proativos para gargalos",
+    ],
+  },
+  {
+    title: "Compliance",
+    description: "Governança fiscal e regulatória sem fricção.",
+    bullets: [
+      "Monitoramento de obrigações fiscais",
+      "Logs completos para auditoria",
+      "Políticas e controles configuráveis",
+      "Alertas de compliance nativos",
+      "Integração com escritórios contábeis",
+    ],
+  },
+  {
+    title: "CRM/Clientes",
+    description: "Relacionamento ativo com clientes e parceiros.",
+    bullets: [
+      "Funil completo com follow-ups automáticos",
+      "Portal seguro para clientes e aprovadores",
+      "Histórico centralizado de contatos e contratos",
+      "Integração com e-mail e WhatsApp",
+      "Dashboards de saúde da carteira",
+    ],
+  },
+  {
+    title: "Automação Fiscal",
+    description: "Conecte notas, impostos e validações.",
+    bullets: [
+      "Integração com SEFAZ, bancos e provedores",
+      "Regras de tributação configuráveis",
+      "Alertas de divergência e multas",
+      "Robôs de conferência e arquivamento",
+      "Exportação automática para contabilidade",
+    ],
+  },
+  {
+    title: "Painel Executivo",
+    description: "Visão consolidada para diretoria e investidores.",
+    bullets: [
+      "KPIs de receita, margem e churn em um só lugar",
+      "Simuladores de cenário e previsões",
+      "Resumo diário por e-mail ou WhatsApp",
+      "Gráficos compartilháveis em um clique",
+      "Acesso seguro por perfil e função",
+    ],
   },
 ];
 
-const iconMap = {
-  sparkles: Sparkles,
-};
+const plans = [
+  {
+    name: "Essencial",
+    tag: "Pequenos negócios",
+    monthly: 790,
+    yearly: 690,
+    users: "Até 5 usuários",
+    modules: ["Financeiro", "Relatórios", "CRM/Clientes"],
+    support: "Suporte em horário comercial",
+    integrations: "Integrações básicas",
+    cta: "Começar agora",
+  },
+  {
+    name: "Profissional",
+    tag: "Mais popular",
+    monthly: 1590,
+    yearly: 1390,
+    users: "Até 20 usuários",
+    modules: [
+      "Financeiro",
+      "Relatórios",
+      "Operacional",
+      "Compliance",
+      "Painel Executivo",
+    ],
+    support: "Suporte 24/7 com CS dedicado",
+    integrations: "Integrações completas + API",
+    highlight: true,
+    cta: "Explorar plano",
+  },
+  {
+    name: "Enterprise",
+    tag: "Personalizável",
+    monthly: 0,
+    yearly: 0,
+    users: "Usuários ilimitados",
+    modules: ["Todos os módulos + automações customizadas"],
+    support: "CSM dedicado e SLA contratado",
+    integrations: "Integrações avançadas e sob demanda",
+    cta: "Solicitar contato",
+  },
+];
 
-function formatCurrency(value) {
-  return new Intl.NumberFormat("pt-BR", {
+const comparison = [
+  { feature: "Financeiro completo", essential: true, pro: true, enterprise: true },
+  { feature: "Automação fiscal", essential: false, pro: true, enterprise: true },
+  { feature: "Portal do cliente", essential: true, pro: true, enterprise: true },
+  { feature: "APIs e integrações ilimitadas", essential: false, pro: true, enterprise: true },
+  { feature: "Automação customizada", essential: false, pro: false, enterprise: true },
+];
+
+const formatCurrency = (value) =>
+  new Intl.NumberFormat("pt-BR", {
     style: "currency",
     currency: "BRL",
     maximumFractionDigits: 0,
   }).format(value);
-}
 
 export default function Home() {
   const navigate = useNavigate();
+  const [mobileMenu, setMobileMenu] = useState(false);
+  const [isAnnual, setIsAnnual] = useState(false);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-white via-purple-50/40 to-white text-gray-900">
-      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-purple-100">
+    <div className="min-h-screen bg-slate-50 text-slate-900">
+      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-slate-100">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-purple-500 to-purple-700 text-white flex items-center justify-center font-semibold">
+            <div className="w-11 h-11 rounded-2xl bg-purple-600 text-white flex items-center justify-center font-semibold">
               K
             </div>
             <div>
-              <p className="text-sm font-semibold leading-tight">KONDOR</p>
-              <p className="text-xs text-purple-500 tracking-[0.2em]">
-                STUDIO
+              <p className="text-sm font-bold tracking-wide">KONDOR</p>
+              <p className="text-[10px] text-purple-500 uppercase tracking-[0.4em]">
+                Platform
               </p>
             </div>
           </Link>
@@ -118,195 +229,313 @@ export default function Home() {
               <a
                 key={link.href}
                 href={link.href}
-                className="text-gray-600 hover:text-gray-900 transition-colors"
+                className="text-slate-600 hover:text-slate-900 transition"
               >
                 {link.label}
               </a>
             ))}
-            <Link to="/pricing" className="text-gray-600 hover:text-gray-900">
-              Preços
-            </Link>
-          </nav>
-
-          <div className="flex items-center gap-3">
             <Button
               variant="ghost"
-              className="text-sm"
+              className="text-sm text-slate-600 hover:text-slate-900"
               onClick={() => navigate("/login")}
             >
               Entrar
             </Button>
             <Button
+              className="bg-gradient-to-r from-purple-500 to-purple-700 text-white text-sm"
               onClick={() => navigate("/register")}
-              className="bg-gradient-to-r from-purple-500 to-purple-700"
             >
-              Começar teste
+              Comece Agora
             </Button>
-          </div>
+          </nav>
+
+          <button
+            className="md:hidden text-slate-700"
+            onClick={() => setMobileMenu(true)}
+          >
+            <Menu className="w-6 h-6" />
+          </button>
         </div>
+
+        {mobileMenu && (
+          <div className="md:hidden fixed inset-0 z-50 bg-black/50">
+            <div className="ml-auto w-72 h-full bg-white shadow-xl p-6 flex flex-col gap-4">
+              <div className="flex items-center justify-between mb-4">
+                <p className="font-semibold text-slate-800">Menu</p>
+                <button onClick={() => setMobileMenu(false)}>
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              {navLinks.map((link) => (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setMobileMenu(false)}
+                  className="text-slate-600 hover:text-slate-900"
+                >
+                  {link.label}
+                </a>
+              ))}
+              <Button
+                variant="outline"
+                onClick={() => navigate("/login")}
+                className="w-full"
+              >
+                Entrar
+              </Button>
+              <Button
+                onClick={() => navigate("/register")}
+                className="bg-gradient-to-r from-purple-500 to-purple-700 w-full"
+              >
+                Comece Agora
+              </Button>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* Hero */}
-      <section className="max-w-6xl mx-auto px-6 py-16 md:py-24">
-        <div className="grid gap-10 lg:grid-cols-2 items-center">
+      <section
+        id="hero"
+        className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-purple-900 text-white"
+      >
+        <div className="absolute inset-0 opacity-20">
+          <div className="w-[120%] h-[120%] bg-[radial-gradient(circle_at_top,_#9966ff,_transparent_60%)]" />
+        </div>
+        <div className="relative max-w-6xl mx-auto px-6 py-20 lg:py-28 grid gap-14 lg:grid-cols-2 items-center">
           <div>
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-purple-100 text-sm font-medium text-purple-700 mb-6">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 text-sm font-medium mb-6">
               <Sparkles className="w-4 h-4" />
-              Plataforma tudo-em-um para agências
+              Gestão financeira com inteligência e eficiência
             </div>
-            <h1 className="text-4xl md:text-5xl font-bold leading-tight mb-6">
-              Organize clientes, posts, tarefas e finanças sem sair do mesmo
-              painel.
+            <h1 className="text-4xl lg:text-5xl font-bold leading-tight mb-6">
+              Automatize sua gestão financeira com inteligência e eficiência
             </h1>
-            <p className="text-lg text-gray-600 mb-8">
-              O Kondor Studio centraliza o que sua agência precisa para vender,
-              produzir e entregar campanhas com previsibilidade.
+            <p className="text-lg text-white/80 mb-8">
+              Kondor é a plataforma completa para otimizar seus fluxos
+              financeiros, relatórios e compliance sem complicação.
             </p>
             <div className="flex flex-wrap gap-4">
               <Button
                 size="lg"
-                className="bg-gradient-to-r from-purple-500 to-purple-700"
+                className="bg-white text-slate-900 hover:bg-white/90"
                 onClick={() => navigate("/register")}
               >
-                Fazer teste gratuito
+                Ver Demonstração
                 <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
               <Button
                 size="lg"
                 variant="outline"
-                onClick={() => navigate("/checkout")}
-                className="border-purple-300 text-purple-600"
+                className="border-white/60 text-white"
+                onClick={() =>
+                  document.getElementById("modules")?.scrollIntoView({
+                    behavior: "smooth",
+                  })
+                }
               >
-                Ir para o checkout
+                Explorar Funcionalidades
               </Button>
             </div>
-            <p className="text-sm text-gray-500 mt-4">
-              3 dias grátis, sem cartão. Cancelamento em 1 clique.
-            </p>
           </div>
-
-          <Card className="bg-white/80 shadow-xl border-purple-100">
-            <CardContent className="p-6 space-y-4">
-              <h2 className="text-xl font-semibold text-gray-900">
-                Visão geral do painel
-              </h2>
-              <ul className="space-y-2 text-sm text-gray-600">
-                <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-green-500" />
-                  Status de clientes, posts e tarefas em tempo real.
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-green-500" />
-                  Alertas de aprovação e renovação financeira.
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-green-500" />
-                  Widgets configuráveis por time e por cliente.
-                </li>
-              </ul>
-              <div className="rounded-lg border border-dashed border-purple-200 p-4 text-sm text-gray-500">
-                Mostramos apenas dados fictícios nesta prévia, mas o dashboard
-                real se conecta às integrações e ao seu CRM em segundos.
+          <div className="bg-white/5 rounded-3xl border border-white/10 p-6 shadow-2xl backdrop-blur">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p classn="text-sm uppercase tracking-[0.3em] text-white/70">
+                  Painel
+                </p>
+                <h3 className="text-xl font-semibold">
+                  Fluxo financeiro em tempo real
+                </h3>
               </div>
-            </CardContent>
-          </Card>
+              <Shield className="w-6 h-6 text-white/60" />
+            </div>
+            <div className="grid gap-4 md:grid-cols-2 text-slate-900">
+              <div className="bg-white rounded-2xl p-4 text-slate-900">
+                <p className="text-xs uppercase text-slate-500">
+                  Caixa projetado
+                </p>
+                <p className="text-2xl font-bold text-slate-900">R$ 4,2 mi</p>
+                <p className="text-sm text-emerald-600 mt-1">
+                  +18% vs. último mês
+                </p>
+              </div>
+              <div className="bg-slate-900/70 rounded-2xl p-4">
+                <p className="text-xs uppercase text-white/60">
+                  Alertas ativos
+                </p>
+                <p className="text-2xl font-bold">12</p>
+                <p className="text-sm text-white/70 mt-1">
+                  3 vencimentos e 9 conciliações
+                </p>
+              </div>
+              <div className="bg-white rounded-2xl p-4 text-slate-900">
+                <p className="text-xs uppercase text-slate-500">ROAS médio</p>
+                <p className="text-2xl font-bold text-slate-900">4,6x</p>
+                <p className="text-sm text-slate-500 mt-1">
+                  Atualizado às 10h15
+                </p>
+              </div>
+              <div className="bg-slate-900/70 rounded-2xl p-4">
+                <p className="text-xs uppercase text-white/60">Compliance</p>
+                <p className="text-2xl font-bold">100%</p>
+                <p className="text-sm text-emerald-400 mt-1">
+                  Todas obrigações entregues
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* Features */}
-      <section
-        id="features"
-        className="max-w-6xl mx-auto px-6 py-16 grid gap-6 md:grid-cols-2"
-      >
-        {featureHighlights.map((feature, index) => {
-          const Icon = feature.icon;
-          return (
-            <Card
-              key={feature.title}
-              className="border border-purple-100 hover:border-purple-200 transition-colors"
+      {/* Quick benefits */}
+      <section className="max-w-6xl mx-auto px-6 -mt-16">
+        <div className="grid md:grid-cols-4 gap-4">
+          {quickBenefits.map((benefit) => (
+            <div
+              key={benefit}
+              className="rounded-2xl bg-white border border-slate-100 p-5 text-sm font-semibold text-slate-700 shadow-sm"
             >
-              <CardContent className="p-6 space-y-3">
-                <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center text-purple-600">
-                  <Icon className="w-5 h-5" />
-                </div>
-                <p className="text-xl font-semibold">{feature.title}</p>
-                <p className="text-sm text-gray-600">{feature.description}</p>
-                <span className="text-xs font-medium uppercase tracking-wide text-purple-500">
-                  {String(index + 1).padStart(2, "0")}
-                </span>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </section>
-
-      {/* Modules */}
-      <section
-        id="modules"
-        className="max-w-6xl mx-auto px-6 py-16 space-y-8"
-      >
-        <div>
-          <p className="text-sm text-purple-600 font-semibold mb-2">
-            Tudo conectado
-          </p>
-          <h2 className="text-3xl font-bold">
-            Modules para cada etapa da operação
-          </h2>
-          <p className="text-gray-600 max-w-3xl mt-2">
-            O Kondor Studio foi pensado para o fluxo de agências: do briefing,
-            passando por produção de conteúdo até a entrega de relatórios e
-            gestão financeira.
-          </p>
-        </div>
-
-        <div className="grid gap-6 md:grid-cols-2">
-          {modules.map((module) => (
-            <Card
-              key={module.title}
-              className="border border-gray-100 shadow-sm"
-            >
-              <CardContent className="p-5 space-y-2">
-                <p className="font-semibold text-lg">{module.title}</p>
-                <p className="text-sm text-gray-600">{module.description}</p>
-              </CardContent>
-            </Card>
+              {benefit}
+            </div>
           ))}
         </div>
       </section>
 
-      {/* Video */}
+      {/* Functionality highlights */}
+      <section className="max-w-6xl mx-auto px-6 py-16 grid gap-6 md:grid-cols-2">
+        {functionalityBlocks.map((block) => (
+          <div
+            key={block.title}
+            className="rounded-3xl bg-white border border-slate-100 p-6 shadow-sm"
+          >
+            <h3 className="text-xl font-semibold mb-2">{block.title}</h3>
+            <p className="text-sm text-slate-600">{block.description}</p>
+            <Button
+              variant="link"
+              className="px-0 mt-3 text-purple-600"
+              onClick={() =>
+                document.getElementById("modules")?.scrollIntoView({
+                  behavior: "smooth",
+                })
+              }
+            >
+              Ver detalhes no módulo →
+            </Button>
+          </div>
+        ))}
+      </section>
+
+      {/* Testimonials */}
+      <section className="max-w-6xl mx-auto px-6 py-16 grid md:grid-cols-2 gap-6">
+        {testimonials.map((item) => (
+          <div
+            key={item.author}
+            className="rounded-3xl bg-white border border-slate-100 p-6 shadow-sm"
+          >
+            <p className="text-lg text-slate-800 font-medium mb-4">
+              “{item.quote}”
+            </p>
+            <p className="text-sm text-slate-500">
+              {item.author} — {item.role}
+            </p>
+          </div>
+        ))}
+      </section>
+
+      <section className="max-w-6xl mx-auto px-6 py-10 rounded-3xl bg-gradient-to-r from-purple-600 to-purple-700 text-white text-center">
+        <p className="text-sm uppercase tracking-[0.4em] text-white/70 mb-3">
+          Transforme seu financeiro
+        </p>
+        <h2 className="text-3xl font-bold mb-4">
+          Veja como podemos transformar sua operação
+        </h2>
+        <Button
+          size="lg"
+          className="bg-white text-purple-700 hover:bg-white/90"
+          onClick={() => navigate("/register")}
+        >
+          Assista à Demo Completa
+        </Button>
+      </section>
+
+      {/* Modules detail */}
+      <section id="modules" className="max-w-6xl mx-auto px-6 py-20 space-y-10">
+        <div>
+          <p className="text-sm text-purple-600 font-semibold">
+            Módulos estratégicos
+          </p>
+          <h2 className="text-3xl font-bold mt-2">
+            Produto dentro do produto
+          </h2>
+          <p className="text-slate-600 mt-2 max-w-3xl">
+            Cada módulo foi desenhado para resolver uma dor crítica da operação.
+            Ative apenas o que faz sentido ou adote o ecossistema completo.
+          </p>
+        </div>
+        <div className="space-y-6">
+          {modules.map((module) => (
+            <div
+              key={module.title}
+              className="rounded-3xl bg-white border border-slate-100 p-6 shadow-sm"
+            >
+              <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                <div>
+                  <h3 className="text-2xl font-semibold flex items-center gap-2">
+                    {module.title}
+                  </h3>
+                  <p className="text-sm text-slate-600 mt-1">
+                    {module.description}
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  className="border-purple-200 text-purple-700"
+                >
+                  Quero este módulo na minha operação
+                </Button>
+              </div>
+              <ul className="grid md:grid-cols-2 gap-3 mt-4 text-sm text-slate-600">
+                {module.bullets.map((bullet) => (
+                  <li key={bullet} className="flex items-start gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-purple-600 mt-1" />
+                    {bullet}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Demo section */}
       <section
-        id="video"
-        className="max-w-5xl mx-auto px-6 py-16 grid gap-8 md:grid-cols-2 items-center"
+        id="demo"
+        className="max-w-5xl mx-auto px-6 py-20 grid gap-8 lg:grid-cols-2 items-center"
       >
         <div>
           <p className="text-sm text-purple-600 font-semibold mb-2">
-            Veja como funciona
+            Apresentação
           </p>
           <h2 className="text-3xl font-bold mb-4">
-            Um tour rápido pelo Kondor Studio
+            Assista à plataforma Kondor em ação
           </h2>
-          <p className="text-gray-600 mb-4">
-            Assista ao walkthrough de 2 minutos mostrando como incluir um
-            cliente, planejar posts e enviar aprovações.
+          <p className="text-slate-600 mb-6">
+            Em menos de 4 minutos você entende a jornada completa: problemas
+            comuns do financeiro, interface em uso, fluxos automatizados e os
+            resultados esperados.
           </p>
           <Button
-            variant="outline"
-            className="border-purple-300 text-purple-700"
-            onClick={() => document.getElementById("pricing")?.scrollIntoView()}
+            onClick={() => navigate("/register")}
+            className="bg-gradient-to-r from-purple-500 to-purple-700"
           >
-            Quero usar agora
-            <ArrowRight className="w-4 h-4 ml-2" />
+            Comece agora com um plano ideal
           </Button>
         </div>
-        <div className="relative rounded-2xl overflow-hidden shadow-xl border border-purple-100">
-          <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white font-semibold text-lg">
-            <PlayCircle className="w-10 h-10 mr-2" />
-            Vídeo explicativo
-          </div>
+        <div className="rounded-3xl overflow-hidden border border-slate-200 shadow-lg bg-black">
           <iframe
-            title="Demonstração Kondor Studio"
-            className="w-full h-64 md:h-80"
+            title="Demo Kondor"
+            className="w-full h-64 md:h-96"
             src="https://www.youtube-nocookie.com/embed/poY7h1dMQUA"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
@@ -314,94 +543,150 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Pricing summary */}
-      <section
-        id="pricing"
-        className="max-w-6xl mx-auto px-6 py-16"
-      >
-        <div className="text-center mb-10 space-y-3">
-          <p className="text-sm text-purple-600 font-semibold">Planos</p>
-          <h2 className="text-3xl font-bold">
-            Escolha o plano ideal e faça upgrade quando quiser
-          </h2>
-          <p className="text-gray-600">
-            Todos os planos incluem portal do cliente, aprovações, biblioteca e
-            suporte humano.
+      {/* Pricing */}
+      <section id="plans" className="max-w-6xl mx-auto px-6 py-20 space-y-10">
+        <div className="text-center space-y-3">
+          <p className="text-sm text-purple-600 font-semibold">
+            Planos e Preços
           </p>
+          <h2 className="text-3xl font-bold">Escolha o plano ideal</h2>
+          <p className="text-slate-600">
+            Ative módulos sob demanda e evolua de acordo com o crescimento da
+            sua operação.
+          </p>
+          <div className="flex items-center justify-center gap-3 text-sm mt-4">
+            <span className={!isAnnual ? "font-semibold" : "text-slate-500"}>
+              Mensal
+            </span>
+            <button
+              onClick={() => setIsAnnual((prev) => !prev)}
+              className={`relative w-12 h-6 rounded-full transition ${
+                isAnnual ? "bg-purple-600" : "bg-slate-200"
+              }`}
+            >
+              <span
+                className={`absolute w-5 h-5 bg-white rounded-full top-0.5 transition ${
+                  isAnnual ? "right-0.5" : "left-0.5"
+                }`}
+              />
+            </button>
+            <span className={isAnnual ? "font-semibold" : "text-slate-500"}>
+              Anual (-15%)
+            </span>
+          </div>
         </div>
+
         <div className="grid gap-6 md:grid-cols-3">
-          {pricingPlans.map((plan) => {
-            const Icon =
-              (plan.icon && iconMap[plan.icon]) || DollarSign;
+          {plans.map((plan) => {
+            const price = isAnnual ? plan.yearly : plan.monthly;
             return (
-              <Card
-                key={plan.id}
-                className={`border ${
-                  plan.popular ? "border-purple-400 shadow-lg" : "border-gray-100"
+              <div
+                key={plan.name}
+                className={`rounded-3xl border p-6 bg-white shadow-sm ${
+                  plan.highlight
+                    ? "border-purple-400 shadow-xl relative"
+                    : "border-slate-100"
                 }`}
               >
-                <CardContent className="p-6 space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`w-10 h-10 rounded-xl bg-gradient-to-br ${
-                        plan.color
-                      } text-white flex items-center justify-center`}
-                    >
-                      <Icon className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <p className="font-semibold">{plan.name}</p>
-                      <p className="text-xs text-gray-500">
-                        {plan.description}
-                      </p>
-                    </div>
-                  </div>
-                  <p className="text-4xl font-bold">
-                    {formatCurrency(plan.price)}
-                    <span className="text-base text-gray-500">/mês</span>
+                {plan.highlight && (
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-purple-600 text-white text-xs font-semibold px-3 py-1 rounded-full shadow-lg">
+                    Mais popular
+                  </span>
+                )}
+                <p className="text-sm text-purple-600 font-semibold">
+                  {plan.tag}
+                </p>
+                <h3 className="text-2xl font-bold mt-1">{plan.name}</h3>
+                {price > 0 ? (
+                  <p className="text-4xl font-bold mt-4">
+                    {formatCurrency(price)}
+                    <span className="text-base text-slate-500">
+                      /{isAnnual ? "mês (anual)" : "mês"}
+                    </span>
                   </p>
-                  <ul className="space-y-2 text-sm text-gray-600">
-                    {plan.features.slice(0, 4).map((feature) => (
-                      <li key={feature} className="flex items-center gap-2">
-                        <Check className="w-4 h-4 text-green-500" />
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
-                  <Button
-                    className="w-full bg-gradient-to-r from-purple-500 to-purple-700"
-                    onClick={() => navigate("/checkout", { state: { plan: plan.id } })}
-                  >
-                    Assinar {plan.name}
-                  </Button>
-                </CardContent>
-              </Card>
+                ) : (
+                  <p className="text-4xl font-bold mt-4">Custom</p>
+                )}
+                <p className="text-sm text-slate-600 mt-2">{plan.users}</p>
+                <ul className="space-y-2 text-sm text-slate-600 mt-4">
+                  {plan.modules.map((item) => (
+                    <li key={item} className="flex items-start gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-green-600 mt-0.5" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-4 text-sm text-slate-600">
+                  <p className="flex items-start gap-2">
+                    <Target className="w-4 h-4 text-purple-500 mt-1" />
+                    {plan.support}
+                  </p>
+                  <p className="flex items-start gap-2 mt-2">
+                    <BarChart3 className="w-4 h-4 text-purple-500 mt-1" />
+                    {plan.integrations}
+                  </p>
+                </div>
+                <Button className="w-full mt-6" variant={plan.highlight ? "default" : "outline"}>
+                  {plan.cta}
+                </Button>
+              </div>
             );
           })}
         </div>
 
-        <div className="text-center mt-12">
-          <p className="text-gray-600 mb-4">
-            Precisa de um plano personalizado? Fale com a gente.
+        <div className="overflow-auto border border-slate-100 rounded-3xl">
+          <table className="w-full text-sm text-slate-600">
+            <thead>
+              <tr className="bg-slate-50 text-slate-800">
+                <th className="text-left py-4 px-4">Comparativo</th>
+                <th>Essencial</th>
+                <th>Profissional</th>
+                <th>Enterprise</th>
+              </tr>
+            </thead>
+            <tbody>
+              {comparison.map((row) => (
+                <tr key={row.feature} className="border-t border-slate-100">
+                  <td className="py-3 px-4 text-left font-medium">
+                    {row.feature}
+                  </td>
+                  {[row.essential, row.pro, row.enterprise].map((val, idx) => (
+                    <td key={idx} className="text-center">
+                      {val ? "✔️" : "—"}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="text-center space-y-3">
+          <p className="text-slate-600">
+            Ainda com dúvidas? Nossa equipe pode te ajudar a escolher o plano
+            certo.
           </p>
-          <Button variant="outline" onClick={() => navigate("/pricing")}>
-            Ver todos os detalhes dos planos
+          <Button
+            variant="outline"
+            className="border-purple-200 text-purple-700"
+          >
+            Falar com especialista
           </Button>
         </div>
       </section>
 
-      <section className="bg-purple-600 text-white text-center py-16 px-6">
-        <p className="text-sm uppercase tracking-[0.3em] text-purple-200 mb-3">
-          Pronto para começar?
+      <section className="bg-slate-900 text-white text-center py-16 px-6">
+        <p className="text-sm uppercase tracking-[0.4em] text-white/60 mb-3">
+          Pronto para avançar?
         </p>
         <h2 className="text-3xl font-bold mb-4">
-          Ative o teste gratuito e entregue a próxima campanha com confiança.
+          Ganhe controle financeiro e operacional em tempo real
         </h2>
         <div className="flex flex-wrap justify-center gap-4">
           <Button
             size="lg"
             onClick={() => navigate("/register")}
-            className="bg-white text-purple-700 hover:bg-white/90"
+            className="bg-white text-slate-900 hover:bg-white/90"
           >
             Criar minha conta
           </Button>
@@ -416,20 +701,20 @@ export default function Home() {
         </div>
       </section>
 
-      <footer className="bg-gray-950 text-gray-400">
+      <footer className="bg-slate-950 text-slate-400">
         <div className="max-w-6xl mx-auto px-6 py-8 text-sm flex flex-col md:flex-row justify-between items-center gap-3">
-          <span>© {new Date().getFullYear()} Kondor Studio</span>
+          <span>© {new Date().getFullYear()} Kondor Platform</span>
           <div className="flex flex-wrap gap-4">
-            <Link to="/login" className="hover:text-white transition-colors">
-              Login
+            <Link to="/login" className="hover:text-white transition">
+              Entrar
             </Link>
-            <Link to="/register" className="hover:text-white transition-colors">
-              Criar conta
+            <Link to="/register" className="hover:text-white transition">
+              Começar
             </Link>
-            <Link to="/pricing" className="hover:text-white transition-colors">
+            <Link to="/pricing" className="hover:text-white transition">
               Planos
             </Link>
-            <Link to="/checkout" className="hover:text-white transition-colors">
+            <Link to="/checkout" className="hover:text-white transition">
               Checkout
             </Link>
           </div>
