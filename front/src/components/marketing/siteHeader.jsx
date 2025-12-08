@@ -26,7 +26,7 @@ export default function SiteHeader({ variant = "solid" }) {
           <img
             src={logoHeader}
             alt="Kondor Studio"
-            className="h-10 w-auto drop-shadow-sm"
+            className="h-16 w-auto drop-shadow-sm"
           />
         </Link>
 
@@ -64,7 +64,7 @@ export default function SiteHeader({ variant = "solid" }) {
               <img
                 src={logoHeader}
                 alt="Kondor Studio"
-                className="h-9 w-auto drop-shadow-sm"
+                className="h-14 w-auto drop-shadow-sm"
               />
               <button onClick={() => setOpen(false)}>
                 <X className="w-5 h-5 text-slate-600" />

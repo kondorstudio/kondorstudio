@@ -103,7 +103,7 @@ export default function Layout() {
           <img
             src={logoHeader}
             alt="Kondor Studio"
-            className="h-10 w-auto"
+            className="h-16 w-auto"
           />
         </div>
 
@@ -171,7 +171,7 @@ export default function Layout() {
               <img
                 src={logoHeader}
                 alt="Kondor Studio"
-                className="h-9 w-auto"
+                className="h-14 w-auto"
               />
             </div>
           </div>

@@ -70,7 +70,7 @@ export default function Checkout() {
       <header className="border-b border-gray-200 bg-white">
         <div className="max-w-5xl mx-auto px-6 py-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-4">
-            <img src={logoHeader} alt="Kondor Studio" className="h-10 w-auto" />
+            <img src={logoHeader} alt="Kondor Studio" className="h-16 w-auto" />
             <button
               type="button"
               className="text-sm text-gray-500 hover:text-gray-800"

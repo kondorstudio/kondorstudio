@@ -38,7 +38,7 @@ export default function SiteFooter() {
           <img
             src={logoFooter}
             alt="Kondor Studio"
-            className="h-12 w-auto drop-shadow-lg"
+            className="h-16 w-auto drop-shadow-lg"
           />
           <p className="text-sm text-slate-400">
             Plataforma de gestão para agências modernas. Organização, automação

@@ -36,7 +36,7 @@ export default function Navbar() {
             <img
               src={logoHeader}
               alt="Kondor Studio"
-              className="h-9 w-auto"
+              className="h-14 w-auto"
             />
             <span className="text-[11px] text-gray-500 hidden sm:inline">
               Painel da agência
