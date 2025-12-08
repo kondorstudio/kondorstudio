@@ -1,13 +1,6 @@
-import React, { useState } from "react";
-import { Filter, Search } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { ChevronDown, Filter, Search } from "lucide-react";
 import { Input } from "@/components/ui/input.jsx";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select.jsx";
 
 const STATUS_FILTERS = [
   { value: "all", label: "Todos os status" },
@@ -22,6 +15,65 @@ const TYPE_OPTIONS = [
   { value: "video", label: "Vídeos" },
   { value: "gif", label: "GIFs" },
 ];
+
+function FilterChip({ label, value, options, onChange }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (!containerRef.current) return;
+      if (!containerRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    }
+
+    if (open) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  const currentLabel =
+    options.find((option) => option.value === value)?.label || label;
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <button
+        type="button"
+        className={`inline-flex items-center gap-2 px-4 h-11 rounded-full border text-sm font-semibold transition ${
+          open
+            ? "border-purple-300 bg-purple-50 text-purple-700"
+            : "border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300"
+        }`}
+        onClick={() => setOpen((prev) => !prev)}
+      >
+        {currentLabel}
+        <ChevronDown className="w-4 h-4" />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 mt-2 w-52 rounded-2xl border border-slate-100 bg-white shadow-xl py-2 z-30">
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={`w-full text-left px-4 py-2 text-sm font-medium transition hover:bg-purple-50 ${
+                value === option.value ? "text-purple-700" : "text-slate-600"
+              }`}
+              onClick={() => {
+                onChange(option.value);
+                setOpen(false);
+              }}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function FiltersBar({
   searchTerm,
@@ -67,45 +119,32 @@ export default function FiltersBar({
 
       {expanded && (
         <div className="flex flex-wrap gap-3">
-          <Select value={filterClient} onValueChange={onClientChange}>
-            <SelectTrigger className="flex-1 min-w-[180px] h-11 rounded-2xl border-slate-200">
-              <SelectValue placeholder="Todos os clientes" />
-            </SelectTrigger>
-            <SelectContent className="bg-white">
-              <SelectItem value="all">Todos os clientes</SelectItem>
-              {clients.map((client) => (
-                <SelectItem key={client.id} value={client.id}>
-                  {client.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <FilterChip
+            label="Todos os clientes"
+            value={filterClient}
+            options={[
+              { value: "all", label: "Todos os clientes" },
+              ...clients.map((client) => ({
+                value: client.id,
+                label: client.name,
+              })),
+            ]}
+            onChange={onClientChange}
+          />
 
-          <Select value={filterType} onValueChange={onTypeChange}>
-            <SelectTrigger className="flex-1 min-w-[150px] h-11 rounded-2xl border-slate-200">
-              <SelectValue placeholder="Todos os tipos" />
-            </SelectTrigger>
-            <SelectContent className="bg-white">
-              {TYPE_OPTIONS.map((type) => (
-                <SelectItem key={type.value} value={type.value}>
-                  {type.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <FilterChip
+            label="Todos os tipos"
+            value={filterType}
+            options={TYPE_OPTIONS}
+            onChange={onTypeChange}
+          />
 
-          <Select value={filterStatus} onValueChange={onStatusChange}>
-            <SelectTrigger className="flex-1 min-w-[150px] h-11 rounded-2xl border-slate-200">
-              <SelectValue placeholder="Todos os status" />
-            </SelectTrigger>
-            <SelectContent className="bg-white">
-              {STATUS_FILTERS.map((status) => (
-                <SelectItem key={status.value} value={status.value}>
-                  {status.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <FilterChip
+            label="Todos os status"
+            value={filterStatus}
+            options={STATUS_FILTERS}
+            onChange={onStatusChange}
+          />
         </div>
       )}
     </div>
