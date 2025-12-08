@@ -34,6 +34,16 @@ function buildPermissionsFromRole(userRole) {
   };
 }
 
+function parseAmountToCents(value) {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.round(value * 100);
+  }
+  const normalized = parseFloat(String(value).replace(',', '.'));
+  if (Number.isNaN(normalized)) return null;
+  return Math.round(normalized * 100);
+}
+
 function mapTeamMemberToDto(member) {
   if (!member) return null;
   const user = member.user || {};
@@ -46,10 +56,16 @@ function mapTeamMemberToDto(member) {
     user_id: member.userId,
     name: user.name || user.email,
     email: user.email,
+    username: user.username || null,
     role: mapRoleToFrontend(roleEnum),
     status: user.isActive ? 'active' : 'suspended',
     avatar_url: user.avatarUrl || null,
     permissions: member.permissions || buildPermissionsFromRole(roleEnum),
+    salaryCents: member.salaryCents || null,
+    salary:
+      typeof member.salaryCents === 'number'
+        ? member.salaryCents / 100
+        : null,
     _raw: {
       teamMember: {
         id: member.id,
@@ -61,6 +77,7 @@ function mapTeamMemberToDto(member) {
         role: user.role,
         isActive: user.isActive,
         passwordHash: user.passwordHash,
+        username: user.username,
       },
       team: member.team ? { id: member.team.id, name: member.team.name } : null,
     },
@@ -83,7 +100,9 @@ async function getOrCreateDefaultTeam(tenantId) {
 async function findOrCreateUserForTeam(tenantId, data) {
   const email = data.email;
   if (!email) throw new Error('Email é obrigatório para criar membro');
-
+  const passwordHash = data.password
+    ? await hashPassword(data.password)
+    : data.passwordHash || null;
   let user = await prisma.user.findFirst({ where: { tenantId, email } });
   const prismaRole = mapRoleToPrisma(data.role);
 
@@ -92,10 +111,11 @@ async function findOrCreateUserForTeam(tenantId, data) {
       data: {
         tenantId,
         email,
+        username: data.username || null,
         name: data.name || null,
         role: prismaRole,
         isActive: data.status === 'suspended' ? false : true,
-        passwordHash: data.passwordHash || null,
+        passwordHash,
       },
     });
   } else {
@@ -103,6 +123,7 @@ async function findOrCreateUserForTeam(tenantId, data) {
       where: { id: user.id },
       data: {
         name: data.name || user.name,
+        username: data.username || user.username,
         role: prismaRole,
         isActive:
           data.status === 'suspended'
@@ -110,11 +131,86 @@ async function findOrCreateUserForTeam(tenantId, data) {
             : data.status === 'active'
             ? true
             : user.isActive,
+        passwordHash: passwordHash || user.passwordHash,
       },
     });
   }
 
   return user;
+}
+
+async function syncSalaryRecord(tenantId, memberId, salaryCents) {
+  const member = await prisma.teamMember.findFirst({
+    where: { id: memberId, tenantId },
+    include: { user: true, team: true },
+  });
+  if (!member) return null;
+
+  if (!salaryCents || salaryCents <= 0) {
+    if (member.salaryRecordId) {
+      try {
+        await prisma.financialRecord.delete({
+          where: { id: member.salaryRecordId },
+        });
+      } catch (err) {
+        console.warn('Não foi possível remover registro financeiro de salário:', err?.message);
+      }
+    }
+
+    const updated = await prisma.teamMember.update({
+      where: { id: member.id },
+      data: {
+        salaryCents: null,
+        salaryRecordId: null,
+      },
+      include: { user: true, team: true },
+    });
+    return updated;
+  }
+
+  const noteBase = member.user?.name || member.user?.email || 'Membro';
+  const metadata = {
+    kind: 'salary',
+    teamMemberId: member.id,
+    email: member.user?.email || null,
+  };
+
+  let salaryRecordId = member.salaryRecordId;
+  if (salaryRecordId) {
+    await prisma.financialRecord.update({
+      where: { id: salaryRecordId },
+      data: {
+        amountCents: salaryCents,
+        type: 'expense_salary',
+        currency: 'BRL',
+        note: `Salário ${noteBase}`,
+        metadata,
+      },
+    });
+  } else {
+    const record = await prisma.financialRecord.create({
+      data: {
+        tenantId,
+        type: 'expense_salary',
+        amountCents: salaryCents,
+        currency: 'BRL',
+        note: `Salário ${noteBase}`,
+        metadata,
+      },
+    });
+    salaryRecordId = record.id;
+  }
+
+  const updated = await prisma.teamMember.update({
+    where: { id: member.id },
+    data: {
+      salaryCents,
+      salaryRecordId,
+    },
+    include: { user: true, team: true },
+  });
+
+  return updated;
 }
 
 module.exports = {
@@ -173,6 +269,8 @@ module.exports = {
   },
 
   async create(tenantId, data = {}) {
+    const salaryCents =
+      data.salaryCents ?? parseAmountToCents(data.salary);
     const team = await getOrCreateDefaultTeam(tenantId);
     const user = await findOrCreateUserForTeam(tenantId, data);
 
@@ -192,9 +290,19 @@ module.exports = {
         userId: user.id,
         role: prismaRole,
         permissions,
+        salaryCents: salaryCents || null,
       },
       include: { user: true, team: true },
     });
+
+    if (salaryCents && salaryCents > 0) {
+      const updatedWithSalary = await syncSalaryRecord(
+        tenantId,
+        created.id,
+        salaryCents
+      );
+      return mapTeamMemberToDto(updatedWithSalary);
+    }
 
     return mapTeamMemberToDto(created);
   },
@@ -215,6 +323,8 @@ module.exports = {
     });
     if (!existing) return null;
 
+    const salaryCents =
+      data.salaryCents ?? parseAmountToCents(data.salary);
     const prismaRole = data.role ? mapRoleToPrisma(data.role) : existing.role;
     const permissions = data.permissions || existing.permissions;
 
@@ -222,6 +332,8 @@ module.exports = {
       where: { id: existing.userId },
       data: {
         name: data.name || existing.user.name,
+        username: data.username || existing.user.username,
+        email: data.email || existing.user.email,
         role: prismaRole,
         isActive:
           data.status === 'suspended'
@@ -229,17 +341,31 @@ module.exports = {
             : data.status === 'active'
             ? true
             : existing.user.isActive,
+        ...(data.password
+          ? { passwordHash: await hashPassword(data.password) }
+          : {}),
       },
     });
 
-    const updatedMember = await prisma.teamMember.update({
+    let updatedMember = await prisma.teamMember.update({
       where: { id: existing.id },
       data: {
         role: prismaRole,
         permissions,
+        ...(salaryCents !== undefined
+          ? { salaryCents: salaryCents || null }
+          : {}),
       },
       include: { user: true, team: true },
     });
+
+    if (salaryCents !== undefined) {
+      updatedMember = await syncSalaryRecord(
+        tenantId,
+        updatedMember.id,
+        salaryCents
+      );
+    }
 
     return mapTeamMemberToDto(updatedMember);
   },
@@ -268,6 +394,16 @@ module.exports = {
       include: { user: true },
     });
     if (!existing) return false;
+
+    if (existing.salaryRecordId) {
+      try {
+        await prisma.financialRecord.delete({
+          where: { id: existing.salaryRecordId },
+        });
+      } catch (err) {
+        console.warn('Não foi possível remover registro financeiro vinculado ao salário:', err?.message);
+      }
+    }
 
     if (soft) {
       await prisma.user.update({

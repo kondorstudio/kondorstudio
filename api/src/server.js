@@ -44,6 +44,19 @@ async function ensureRefreshTokenColumns() {
   }
 }
 
+async function ensureUserColumns() {
+  const statements = [
+    `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "username" TEXT;`,
+  ];
+  try {
+    for (const sql of statements) {
+      await prisma.$executeRawUnsafe(sql);
+    }
+  } catch (err) {
+    console.warn("Não foi possível verificar colunas de users:", err?.message || err);
+  }
+}
+
 async function ensureClientOnboardingColumns() {
   const statements = [
     `ALTER TABLE "clients" ADD COLUMN IF NOT EXISTS "company" TEXT;`,
@@ -85,9 +98,25 @@ async function ensureFinancialRecordColumns() {
   }
 }
 
+async function ensureTeamMemberColumns() {
+  const statements = [
+    `ALTER TABLE "team_members" ADD COLUMN IF NOT EXISTS "salaryCents" INTEGER;`,
+    `ALTER TABLE "team_members" ADD COLUMN IF NOT EXISTS "salaryRecordId" TEXT;`,
+  ];
+  try {
+    for (const sql of statements) {
+      await prisma.$executeRawUnsafe(sql);
+    }
+  } catch (err) {
+    console.warn("Não foi possível verificar colunas de team_members:", err?.message || err);
+  }
+}
+
 ensureRefreshTokenColumns();
+ensureUserColumns();
 ensureClientOnboardingColumns();
 ensureFinancialRecordColumns();
+ensureTeamMemberColumns();
 
 // Helpers
 function safeMount(path, router) {

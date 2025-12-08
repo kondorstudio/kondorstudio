@@ -132,6 +132,7 @@ model User {
   tenantId           String
   tenant             Tenant         @relation("TenantUsers", fields: [tenantId], references: [id], onDelete: Cascade)
   email              String
+  username           String?
   emailVerified      Boolean        @default(false)
   passwordHash       String?
   name               String?
@@ -155,6 +156,7 @@ model User {
 
   @@map("users")
   @@index([email])
+  @@index([username])
   @@index([tenantId])
 }
 
@@ -216,6 +218,9 @@ model TeamMember {
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   role        Role     @default(MEMBER)
   permissions Json?    // permissões específicas por membro
+  salaryCents Int?
+  salaryRecordId String?
+  salaryRecord FinancialRecord? @relation(fields: [salaryRecordId], references: [id], onDelete: SetNull)
   createdAt   DateTime @default(now())
 
   @@map("team_members")

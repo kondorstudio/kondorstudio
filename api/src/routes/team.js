@@ -115,7 +115,16 @@ router.post('/', async (req, res) => {
   const tenantId = getTenantIdOrFail(req, res);
   if (!tenantId) return;
 
-  const { name, email, role, status, permissions } = req.body || {};
+  const {
+    name,
+    email,
+    role,
+    status,
+    permissions,
+    username,
+    password,
+    salary,
+  } = req.body || {};
 
   if (!email) {
     return res.status(400).json({ error: 'Email é obrigatório' });
@@ -128,6 +137,9 @@ router.post('/', async (req, res) => {
       role,
       status,
       permissions,
+      username,
+      password,
+      salary,
     });
 
     return res.status(201).json(member);
@@ -151,14 +163,27 @@ router.put('/:id', async (req, res) => {
   if (!tenantId) return;
 
   const { id } = req.params;
-  const { name, role, status, permissions } = req.body || {};
+  const {
+    name,
+    email,
+    role,
+    status,
+    permissions,
+    username,
+    password,
+    salary,
+  } = req.body || {};
 
   try {
     const updated = await teamMembersService.update(tenantId, id, {
       name,
+      email,
       role,
       status,
       permissions,
+      username,
+      password,
+      salary,
     });
 
     if (!updated) {
