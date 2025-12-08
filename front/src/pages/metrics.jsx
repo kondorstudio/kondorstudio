@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { base44 } from "@/apiClient/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -8,19 +8,13 @@ import {
   CardTitle,
 } from "@/components/ui/card.jsx";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select.jsx";
-import {
   TrendingUp,
   TrendingDown,
   DollarSign,
   MousePointerClick,
   Eye,
   Target,
+  ChevronDown,
 } from "lucide-react";
 import {
   LineChart,
@@ -34,6 +28,63 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
+
+function DropdownChip({ value, onChange, options, placeholder, className = "" }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    function handleClick(event) {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    }
+    if (open) document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  const currentLabel =
+    options.find((option) => option.value === value)?.label || placeholder;
+
+  return (
+    <div className={`relative ${className}`} ref={containerRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className={`w-full h-12 px-4 rounded-2xl border text-left text-sm font-semibold flex items-center justify-between transition ${
+          open
+            ? "border-purple-300 bg-purple-50 text-purple-700"
+            : "border-slate-200 bg-white text-slate-700 hover:border-purple-200"
+        }`}
+      >
+        <span>{currentLabel}</span>
+        <ChevronDown className="w-4 h-4" />
+      </button>
+
+      {open && (
+        <div className="absolute z-30 mt-2 w-full max-h-60 overflow-y-auto rounded-2xl border border-slate-100 bg-white shadow-xl py-2">
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={`w-full text-left px-4 py-2 text-sm transition ${
+                option.value === value
+                  ? "text-purple-700 bg-purple-50"
+                  : "text-slate-600 hover:bg-slate-50"
+              }`}
+              onClick={() => {
+                onChange(option.value);
+                setOpen(false);
+              }}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Metrics() {
   const [selectedClient, setSelectedClient] = useState("all");
@@ -130,34 +181,32 @@ export default function Metrics() {
 
         {/* Filtros */}
         <div className="flex flex-wrap gap-4 mb-8">
-          <Select value={selectedClient} onValueChange={setSelectedClient}>
-            <SelectTrigger className="w-64">
-              <SelectValue placeholder="Todos os clientes" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os clientes</SelectItem>
-              {clients.map((client) => (
-                <SelectItem key={client.id} value={client.id}>
-                  {client.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <DropdownChip
+            value={selectedClient}
+            onChange={setSelectedClient}
+            placeholder="Todos os clientes"
+            options={[
+              { value: "all", label: "Todos os clientes" },
+              ...clients.map((client) => ({
+                value: client.id,
+                label: client.name,
+              })),
+            ]}
+            className="w-64"
+          />
 
-          <Select
+          <DropdownChip
             value={selectedPlatform}
-            onValueChange={setSelectedPlatform}
-          >
-            <SelectTrigger className="w-64">
-              <SelectValue placeholder="Todas as plataformas" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas as plataformas</SelectItem>
-              <SelectItem value="META">Meta Ads</SelectItem>
-              <SelectItem value="GOOGLE">Google Ads</SelectItem>
-              <SelectItem value="TIKTOK">TikTok Ads</SelectItem>
-            </SelectContent>
-          </Select>
+            onChange={setSelectedPlatform}
+            placeholder="Todas as plataformas"
+            options={[
+              { value: "all", label: "Todas as plataformas" },
+              { value: "META", label: "Meta Ads" },
+              { value: "GOOGLE", label: "Google Ads" },
+              { value: "TIKTOK", label: "TikTok Ads" },
+            ]}
+            className="w-64"
+          />
         </div>
 
         {/* Cards de estatísticas */}
