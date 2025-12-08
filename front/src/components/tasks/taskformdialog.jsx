@@ -92,6 +92,10 @@ export default function Taskformdialog({
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!formData.title.trim()) {
+      alert("Informe um título para a tarefa.");
+      return;
+    }
     if (onSubmit) {
       onSubmit(formData);
     }

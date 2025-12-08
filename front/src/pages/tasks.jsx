@@ -11,6 +11,15 @@ export default function Tasks() {
   const [editingTask, setEditingTask] = useState(null);
   const queryClient = useQueryClient();
 
+  const showError = (error, fallback = "Erro ao processar a tarefa. Tente novamente.") => {
+    const message =
+      error?.data?.error ||
+      error?.message ||
+      error?.response?.data?.error ||
+      fallback;
+    alert(message);
+  };
+
   const { data: tasks = [], isLoading } = useQuery({
     queryKey: ["tasks"],
     queryFn: () => base44.entities.Task.list(),
@@ -31,6 +40,8 @@ export default function Tasks() {
       setDialogOpen(false);
       setEditingTask(null);
     },
+    onError: (error) =>
+      showError(error, "Não foi possível salvar a tarefa. Tente novamente."),
   });
 
   const deleteMutation = useMutation({
@@ -40,6 +51,8 @@ export default function Tasks() {
       setDialogOpen(false);
       setEditingTask(null);
     },
+    onError: (error) =>
+      showError(error, "Não foi possível excluir a tarefa. Tente novamente."),
   });
 
   const handleNew = () => {
@@ -66,12 +79,17 @@ export default function Tasks() {
   };
 
   const handleSubmitForm = (data) => {
+    if (!data.title || !data.title.trim()) {
+      alert("Informe um título para a tarefa.");
+      return;
+    }
+
     const payload = {
       title: data.title,
       description: data.description || "",
       clientId: data.clientId || null,
       status: data.status || "TODO",
-      dueDate: data.dueDate || null,
+      dueDate: data.dueDate ? new Date(data.dueDate).toISOString() : null,
     };
 
     saveMutation.mutate({
