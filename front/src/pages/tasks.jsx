@@ -37,6 +37,8 @@ export default function Tasks() {
     mutationFn: (id) => base44.entities.Task.remove(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      setDialogOpen(false);
+      setEditingTask(null);
     },
   });
 
@@ -120,6 +122,11 @@ export default function Tasks() {
           onSubmit={handleSubmitForm}
           task={editingTask}
           clients={clients}
+          isSaving={saveMutation.isPending}
+          onDelete={
+            editingTask ? () => handleDelete(editingTask.id) : undefined
+          }
+          isDeleting={deleteMutation.isPending}
         />
       </div>
     </div>

@@ -1,15 +1,37 @@
 import React from "react";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card.jsx";
-import { Badge } from "@/components/ui/badge.jsx";
-import { Button } from "@/components/ui/button.jsx";
 import Taskcard from "./taskcard.jsx";
 
-const DEFAULT_COLUMNS = [
-  { status: "TODO", title: "A fazer" },
-  { status: "IN_PROGRESS", title: "Em andamento" },
-  { status: "REVIEW", title: "Revisão" },
-  { status: "DONE", title: "Concluída" },
-  { status: "BLOCKED", title: "Bloqueada" },
+const BASE_COLUMNS = [
+  {
+    status: "TODO",
+    title: "A fazer",
+    description: "Ideias e cards recém criados.",
+    accent: "from-blue-50 to-white",
+  },
+  {
+    status: "IN_PROGRESS",
+    title: "Em andamento",
+    description: "Equipe atuando agora.",
+    accent: "from-purple-50 to-white",
+  },
+  {
+    status: "REVIEW",
+    title: "Revisão",
+    description: "Esperando revisão/cliente.",
+    accent: "from-amber-50 to-white",
+  },
+  {
+    status: "DONE",
+    title: "Concluída",
+    description: "Prontas e entregues.",
+    accent: "from-emerald-50 to-white",
+  },
+  {
+    status: "BLOCKED",
+    title: "Bloqueada",
+    description: "Aguardando dependências.",
+    accent: "from-rose-50 to-white",
+  },
 ];
 
 export default function Taskboard({
@@ -43,75 +65,80 @@ export default function Taskboard({
     return clientMap.get(id) || null;
   };
 
-  const allStatuses = Array.from(new Set(tasks.map((t) => t.status).filter(Boolean)));
-  const columnsFromData = allStatuses
-    .filter((s) => !DEFAULT_COLUMNS.find((c) => c.status === s))
-    .map((s) => ({ status: s, title: s }));
+  const allStatuses = Array.from(
+    new Set(tasks.map((t) => t.status).filter(Boolean))
+  );
+  const dynamicColumns = allStatuses
+    .filter((s) => !BASE_COLUMNS.find((col) => col.status === s))
+    .map((s) => ({
+      status: s,
+      title: s,
+      description: "Status personalizado",
+      accent: "from-gray-50 to-white",
+    }));
 
-  const columns = [...DEFAULT_COLUMNS, ...columnsFromData];
+  const columns = [...BASE_COLUMNS, ...dynamicColumns];
 
-  if (isLoading) {
-    return (
-      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-        {columns.map((col) => (
-          <Card key={col.status} className="border-dashed border-purple-200">
-            <CardHeader>
-              <CardTitle className="text-sm font-semibold text-gray-800">
-                {col.title}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {[1, 2].map((i) => (
-                  <div
-                    key={i}
-                    className="h-16 bg-gray-100 rounded-lg animate-pulse"
-                  />
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    );
-  }
+  const renderSkeleton = () => (
+    <div className="space-y-3">
+      {[1, 2, 3].map((i) => (
+        <div
+          key={i}
+          className="h-20 rounded-2xl bg-slate-200/60 animate-pulse"
+        />
+      ))}
+    </div>
+  );
 
   return (
-    <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+    <div className="flex gap-5 overflow-x-auto pb-2">
       {columns.map((col) => {
         const columnTasks = tasksByStatus.get(col.status) || [];
 
         return (
-          <Card key={col.status} className="bg-slate-50/60">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-semibold text-gray-800">
-                  {col.title}
-                </CardTitle>
-                <span className="text-xs px-2 py-1 rounded-full bg-purple-100 text-purple-700">
+          <div key={col.status} className="min-w-[280px] flex-shrink-0">
+            <div
+              className={`flex h-full flex-col rounded-3xl border border-slate-200 bg-gradient-to-b ${col.accent} p-5 shadow-sm shadow-slate-100 backdrop-blur`}
+            >
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">
+                    {col.title}
+                  </p>
+                  <p className="text-[11px] text-slate-500">
+                    {col.description}
+                  </p>
+                </div>
+                <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow">
                   {columnTasks.length}
                 </span>
               </div>
-            </CardHeader>
-            <CardContent className="space-y-3 max-h-[70vh] overflow-y-auto pr-1">
-              {columnTasks.length === 0 ? (
-                <div className="text-xs text-gray-400 border border-dashed border-gray-200 rounded-lg p-3 text-center">
-                  Nenhuma tarefa aqui ainda.
-                </div>
-              ) : (
-                columnTasks.map((task) => (
-                  <Taskcard
-                    key={task.id}
-                    task={task}
-                    client={getClient(task.clientId)}
-                    onEdit={onEdit}
-                    onDelete={onDelete}
-                    onStatusChange={onStatusChange}
-                  />
-                ))
-              )}
-            </CardContent>
-          </Card>
+
+              <div
+                className="flex-1 space-y-4 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent"
+                style={{ maxHeight: "calc(100vh - 260px)" }}
+              >
+                {isLoading
+                  ? renderSkeleton()
+                  : columnTasks.length === 0
+                  ? (
+                    <div className="rounded-2xl border border-dashed border-white/70 bg-white/60 px-4 py-6 text-center text-xs text-slate-400">
+                      Nenhuma tarefa nesta coluna.
+                    </div>
+                    )
+                  : columnTasks.map((task) => (
+                      <Taskcard
+                        key={task.id}
+                        task={task}
+                        client={getClient(task.clientId)}
+                        onEdit={onEdit}
+                        onDelete={onDelete}
+                        onStatusChange={onStatusChange}
+                      />
+                    ))}
+              </div>
+            </div>
+          </div>
         );
       })}
     </div>

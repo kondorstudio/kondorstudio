@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -9,13 +9,7 @@ import { Button } from "@/components/ui/button.jsx";
 import { Input } from "@/components/ui/input.jsx";
 import { Label } from "@/components/ui/label.jsx";
 import { Textarea } from "@/components/ui/textarea.jsx";
-import {
-  Select,
-  SelectTrigger,
-  SelectContent,
-  SelectValue,
-  SelectItem,
-} from "@/components/ui/select.jsx";
+import { ChevronDown } from "lucide-react";
 
 const STATUS_OPTIONS = [
   { value: "TODO", label: "A fazer" },
@@ -31,7 +25,9 @@ export default function Taskformdialog({
   task,
   clients = [],
   onSubmit,
-  isSaving,
+  isSaving = false,
+  onDelete,
+  isDeleting = false,
 }) {
   const [formData, setFormData] = useState({
     title: "",
@@ -40,6 +36,10 @@ export default function Taskformdialog({
     status: "TODO",
     dueDate: "",
   });
+  const [clientMenuOpen, setClientMenuOpen] = useState(false);
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const clientMenuRef = useRef(null);
+  const statusMenuRef = useRef(null);
 
   useEffect(() => {
     if (task) {
@@ -59,7 +59,28 @@ export default function Taskformdialog({
         dueDate: "",
       });
     }
-  }, [task]);
+  }, [task, open]);
+
+  useEffect(() => {
+    function handleOutsideClick(event) {
+      if (
+        clientMenuRef.current &&
+        !clientMenuRef.current.contains(event.target)
+      ) {
+        setClientMenuOpen(false);
+      }
+      if (
+        statusMenuRef.current &&
+        !statusMenuRef.current.contains(event.target)
+      ) {
+        setStatusMenuOpen(false);
+      }
+    }
+    if (clientMenuOpen || statusMenuOpen) {
+      document.addEventListener("mousedown", handleOutsideClick);
+    }
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [clientMenuOpen, statusMenuOpen]);
 
   const handleChange = (field) => (e) => {
     const value = e?.target ? e.target.value : e;
@@ -109,40 +130,88 @@ export default function Taskformdialog({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Cliente</Label>
-              <Select
-                value={formData.clientId}
-                onValueChange={handleChange("clientId")}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione um cliente" />
-                </SelectTrigger>
-                <SelectContent>
-                  {clients.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="relative" ref={clientMenuRef}>
+                <button
+                  type="button"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-left text-sm text-gray-900 shadow-sm hover:border-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-500 flex items-center justify-between"
+                  onClick={() => setClientMenuOpen((prev) => !prev)}
+                >
+                  <span>
+                    {formData.clientId
+                      ? clients.find((c) => c.id === formData.clientId)?.name ||
+                        "Cliente indefinido"
+                      : "Selecione um cliente"}
+                  </span>
+                  <ChevronDown className="w-4 h-4 text-gray-400" />
+                </button>
+                {clientMenuOpen && (
+                  <div className="absolute mt-2 w-full max-h-48 overflow-y-auto rounded-2xl border border-gray-100 bg-white shadow-xl z-20">
+                    {clients.length === 0 && (
+                      <p className="text-xs text-gray-400 p-3">
+                        Nenhum cliente cadastrado.
+                      </p>
+                    )}
+                    {clients.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-purple-50 ${
+                          formData.clientId === c.id
+                            ? "bg-purple-50 text-purple-700"
+                            : "text-gray-700"
+                        }`}
+                        onClick={() => {
+                          setFormData((prev) => ({ ...prev, clientId: c.id }));
+                          setClientMenuOpen(false);
+                        }}
+                      >
+                        {c.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="space-y-2">
               <Label>Status</Label>
-              <Select
-                value={formData.status}
-                onValueChange={handleChange("status")}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o status" />
-                </SelectTrigger>
-                <SelectContent>
-                  {STATUS_OPTIONS.map((status) => (
-                    <SelectItem key={status.value} value={status.value}>
-                      {status.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="relative" ref={statusMenuRef}>
+                <button
+                  type="button"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-left text-sm text-gray-900 shadow-sm hover:border-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-500 flex items-center justify-between"
+                  onClick={() => setStatusMenuOpen((prev) => !prev)}
+                >
+                  <span>
+                    {STATUS_OPTIONS.find((s) => s.value === formData.status)
+                      ?.label || "Selecione o status"}
+                  </span>
+                  <ChevronDown className="w-4 h-4 text-gray-400" />
+                </button>
+                {statusMenuOpen && (
+                  <div className="absolute mt-2 w-full rounded-2xl border border-gray-100 bg-white shadow-xl z-20">
+                    {STATUS_OPTIONS.map((status) => (
+                      <button
+                        key={status.value}
+                        type="button"
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-purple-50 ${
+                          formData.status === status.value
+                            ? "bg-purple-50 text-purple-700"
+                            : "text-gray-700"
+                        }`}
+                        onClick={() => {
+                          setFormData((prev) => ({
+                            ...prev,
+                            status: status.value,
+                          }));
+                          setStatusMenuOpen(false);
+                        }}
+                      >
+                        {status.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -155,19 +224,38 @@ export default function Taskformdialog({
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4">
+          <div className="flex flex-col gap-3 pt-6 sm:flex-row sm:justify-between sm:items-center">
+            {task && onDelete && (
+              <Button
+                type="button"
+                className="bg-red-600 hover:bg-red-700 w-full sm:w-auto"
+                disabled={isSaving || isDeleting}
+                onClick={() => {
+                  if (
+                    !isDeleting &&
+                    window.confirm("Deseja excluir esta tarefa?")
+                  ) {
+                    onDelete();
+                  }
+                }}
+              >
+                {isDeleting ? "Excluindo..." : "Excluir tarefa"}
+              </Button>
+            )}
+
+            <div className="flex gap-3 justify-end w-full sm:w-auto">
             <Button
               type="button"
               variant="outline"
               onClick={onClose}
-              disabled={isSaving}
+              disabled={isSaving || isDeleting}
             >
               Cancelar
             </Button>
             <Button
               type="submit"
               className="bg-purple-600 hover:bg-purple-700"
-              disabled={isSaving}
+              disabled={isSaving || isDeleting}
             >
               {isSaving
                 ? "Salvando..."
@@ -175,6 +263,7 @@ export default function Taskformdialog({
                 ? "Atualizar Tarefa"
                 : "Criar Tarefa"}
             </Button>
+            </div>
           </div>
         </form>
       </DialogContent>
