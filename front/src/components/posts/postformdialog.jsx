@@ -37,6 +37,8 @@ export default function Postformdialog({
   clients = [],
   onSubmit,
   isSaving,
+  onDelete,
+  isDeleting,
 }) {
   const [formData, setFormData] = useState({
     title: "",
@@ -262,19 +264,38 @@ export default function Postformdialog({
           </div>
 
           {/* Botões */}
-          <div className="flex justify-end gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {post && onDelete && (
+              <Button
+                type="button"
+                className="bg-red-600 hover:bg-red-700"
+                onClick={() => {
+                  if (
+                    !isDeleting &&
+                    window.confirm("Tem certeza que deseja excluir este post?")
+                  ) {
+                    onDelete();
+                  }
+                }}
+                disabled={isSaving || isUploading || isDeleting}
+              >
+                {isDeleting ? "Excluindo..." : "Excluir post"}
+              </Button>
+            )}
+
+            <div className="flex gap-3 ml-auto">
             <Button
               type="button"
               variant="outline"
               onClick={onClose}
-              disabled={isSaving}
+              disabled={isSaving || isDeleting}
             >
               Cancelar
             </Button>
             <Button
               type="submit"
               className="bg-purple-600 hover:bg-purple-700"
-              disabled={isSaving || isUploading}
+              disabled={isSaving || isUploading || isDeleting}
             >
               {isSaving
                 ? "Salvando..."
@@ -282,6 +303,7 @@ export default function Postformdialog({
                 ? "Atualizar Post"
                 : "Criar Post"}
             </Button>
+            </div>
           </div>
 
         </form>

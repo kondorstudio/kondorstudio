@@ -55,6 +55,15 @@ export default function Posts() {
     onError: showError,
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id) => base44.entities.Post.delete(id),
+    onSuccess: () => {
+      invalidatePosts();
+      handleDialogClose();
+    },
+    onError: showError,
+  });
+
   const handleEdit = (post) => {
     setEditingPost(post);
     setDialogOpen(true);
@@ -111,6 +120,12 @@ export default function Posts() {
           clients={clients}
           onSubmit={handleSubmit}
           isSaving={isSaving}
+          onDelete={
+            editingPost
+              ? () => deleteMutation.mutate(editingPost.id)
+              : undefined
+          }
+          isDeleting={deleteMutation.isPending}
         />
       </div>
     </div>
