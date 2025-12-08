@@ -1,24 +1,24 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { base44 } from "@/apiClient/base44Client";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button.jsx";
-import { Input } from "@/components/ui/input.jsx";
-import { Plus, Search, Filter } from "lucide-react";
-import Creativeformdialog from "../components/library/creativeformdialog.jsx";
-import Creativegrid from "../components/library/creativegrid.jsx";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select.jsx";
+import { Plus } from "lucide-react";
+import Creativeformdialog from "@/components/library/creativeformdialog.jsx";
+import FiltersBar from "@/components/creatives/filtersBar.jsx";
+import CreativeGrid from "@/components/creatives/creativeGrid.jsx";
+import CreativeEmptyState from "@/components/creatives/creativeEmptyState.jsx";
+import CreativeDetailsDrawer from "@/components/creatives/creativeDetailsDrawer.jsx";
 
 export default function Biblioteca() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterClient, setFilterClient] = useState("all");
   const [filterType, setFilterType] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [selectedCreative, setSelectedCreative] = useState(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const queryClient = useQueryClient();
 
   const { data: creatives = [] } = useQuery({
     queryKey: ["creatives"],
@@ -30,87 +30,137 @@ export default function Biblioteca() {
     queryFn: () => base44.entities.Client.list(),
   });
 
-  const filteredCreatives = creatives.filter((creative) => {
-    const matchesSearch =
-      creative.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      creative.tags?.some((tag) =>
-        tag.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    const matchesClient =
-      filterClient === "all" || creative.client_id === filterClient;
-    const matchesType =
-      filterType === "all" || creative.file_type === filterType;
-
-    return matchesSearch && matchesClient && matchesType;
+  const deleteMutation = useMutation({
+    mutationFn: (id) => base44.entities.Creative.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["creatives"] });
+    },
   });
 
+  const filteredCreatives = useMemo(() => {
+    return creatives.filter((creative) => {
+      const search = searchTerm.toLowerCase();
+      const matchesSearch =
+        creative.name?.toLowerCase().includes(search) ||
+        creative.tags?.some((tag) => tag.toLowerCase().includes(search));
+      const matchesClient =
+        filterClient === "all" || creative.client_id === filterClient;
+      const matchesType =
+        filterType === "all" || creative.file_type === filterType;
+      const currentStatus = creative.status || "in_use";
+      const matchesStatus =
+        filterStatus === "all" || currentStatus === filterStatus;
+
+      return matchesSearch && matchesClient && matchesType && matchesStatus;
+    });
+  }, [creatives, searchTerm, filterClient, filterType, filterStatus]);
+
+  const handleSelectCreative = (creative) => {
+    setSelectedCreative(creative);
+    setDrawerOpen(true);
+  };
+
+  const handleCloseDrawer = () => {
+    setDrawerOpen(false);
+    setSelectedCreative(null);
+  };
+
+  const handleDeleteCreative = (creative) => {
+    if (!creative) return;
+    if (window.confirm("Tem certeza que deseja excluir este criativo?")) {
+      deleteMutation.mutate(creative.id, {
+        onSuccess: () => {
+          if (selectedCreative?.id === creative.id) {
+            handleCloseDrawer();
+          }
+        },
+      });
+    }
+  };
+
+  const handleDownloadCreative = (creative) => {
+    if (!creative?.file_url) return;
+    const link = document.createElement("a");
+    link.href = creative.file_url;
+    link.download = creative.name || "criativo";
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.click();
+  };
+
+  const handleUseInPost = (creative) => {
+    console.log("Usar em post", creative);
+    alert("Em breve você poderá vincular este criativo diretamente a um post.");
+  };
+
+  const handleArchiveCreative = (creative) => {
+    console.log("Arquivar criativo", creative);
+    alert("Funcionalidade de arquivamento será adicionada em breve.");
+  };
+
   return (
-    <div className="p-6 md:p-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
+    <div className="min-h-screen bg-slate-50 py-8 px-4 md:px-8">
+      <div className="max-w-7xl mx-auto space-y-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            <p className="text-sm uppercase tracking-[0.2em] text-slate-400 font-semibold">
+              Biblioteca
+            </p>
+            <h1 className="text-3xl font-bold text-slate-900">
               Biblioteca de Criativos
             </h1>
-            <p className="text-gray-600">
-              Gerencie seus assets e criativos
+            <p className="text-slate-500 mt-1">
+              Gerencie seus assets e encontre o criativo ideal para cada post.
             </p>
           </div>
           <Button
             onClick={() => setDialogOpen(true)}
-            className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700"
+            className="self-start rounded-full bg-gradient-to-r from-purple-500 to-purple-600 px-6"
           >
             <Plus className="w-4 h-4 mr-2" />
             Novo Criativo
           </Button>
         </div>
 
-        {/* Filtros */}
-        <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <Input
-                placeholder="Buscar criativos..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
+        <FiltersBar
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          filterClient={filterClient}
+          onClientChange={setFilterClient}
+          clients={clients}
+          filterType={filterType}
+          onTypeChange={setFilterType}
+          filterStatus={filterStatus}
+          onStatusChange={setFilterStatus}
+          total={filteredCreatives.length}
+        />
 
-            <Select value={filterClient} onValueChange={setFilterClient}>
-              <SelectTrigger>
-                <SelectValue placeholder="Todos os clientes" />
-              </SelectTrigger>
-              <SelectContent className="bg-white">
-                <SelectItem value="all">Todos os clientes</SelectItem>
-                {clients.map((client) => (
-                  <SelectItem key={client.id} value={client.id}>
-                    {client.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        {filteredCreatives.length === 0 ? (
+          <CreativeEmptyState onAddCreative={() => setDialogOpen(true)} />
+        ) : (
+          <CreativeGrid
+            creatives={filteredCreatives}
+            clients={clients}
+            onSelectCreative={handleSelectCreative}
+            onUseInPost={handleUseInPost}
+            onDownloadCreative={handleDownloadCreative}
+          />
+        )}
 
-            <Select value={filterType} onValueChange={setFilterType}>
-              <SelectTrigger>
-                <SelectValue placeholder="Todos os tipos" />
-              </SelectTrigger>
-              <SelectContent className="bg-white">
-                <SelectItem value="all">Todos os tipos</SelectItem>
-                <SelectItem value="image">Imagens</SelectItem>
-                <SelectItem value="video">Vídeos</SelectItem>
-                <SelectItem value="gif">GIFs</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <div className="text-sm text-gray-600 flex items-center">
-              {filteredCreatives.length} criativos encontrados
-            </div>
-          </div>
-        </div>
-
-        <Creativegrid creatives={filteredCreatives} clients={clients} />
+        <CreativeDetailsDrawer
+          creative={selectedCreative}
+          open={drawerOpen}
+          onClose={handleCloseDrawer}
+          clientName={
+            selectedCreative
+              ? clients.find((c) => c.id === selectedCreative.client_id)?.name
+              : ""
+          }
+          onUseInPost={handleUseInPost}
+          onDownload={handleDownloadCreative}
+          onDelete={handleDeleteCreative}
+          onArchive={handleArchiveCreative}
+        />
 
         <Creativeformdialog
           open={dialogOpen}
