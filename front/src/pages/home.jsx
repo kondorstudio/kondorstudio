@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button.jsx";
 import {
   ArrowRight,
   BarChart3,
-  Building2,
   CheckCircle2,
   DollarSign,
   Menu,
@@ -15,37 +14,38 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { modulesData } from "@/data/modules.js";
 
 const navLinks = [
-  { label: "Home", href: "#hero" },
-  { label: "Módulos", href: "#modules" },
-  { label: "Demo", href: "#demo" },
-  { label: "Planos", href: "#plans" },
+  { label: "Home", to: "/" },
+  { label: "Módulos", to: "/modules" },
+  { label: "Demo", to: "/demo" },
+  { label: "Planos", to: "/pricing" },
 ];
 
 const quickBenefits = [
-  "+45% de redução de tempo em tarefas financeiras",
-  "Compliance integrado e atualizado automaticamente",
-  "Relatórios em tempo real para decisões estratégicas",
-  "Implantação em dias com suporte dedicado",
+  "Até 40% menos tempo coordenando entregas e aprovações",
+  "Clientes, conteúdo e equipe organizados em um só lugar",
+  "Alertas inteligentes evitam atrasos e retrabalho",
+  "Economia de horas e orçamento com fluxos automatizados",
 ];
 
 const functionalityBlocks = [
   {
     title: "Relatórios Inteligentes",
-    description: "Analise KPIs financeiros e operacionais em tempo real.",
+    description: "Analise KPIs de conteúdo, mídia paga e operação em tempo real.",
   },
   {
     title: "Gestão Integrada",
-    description: "Centralize financeiro, estoque e vendas em um só fluxo.",
+    description: "Centralize clientes, jobs, calendário editorial e financeiro em um só fluxo.",
   },
   {
     title: "Alertas Automatizados",
-    description: "Evite atrasos e inconsistências com monitoramento ativo.",
+    description: "Antecipe atrasos, demandas e aprovações com monitoramento ativo.",
   },
   {
     title: "Integração com ERP/CRM",
-    description: "Elimine retrabalho conectando sistemas legados e APIs.",
+    description: "Conecte mídia paga, CRM, faturamento e ferramentas criativas sem retrabalho.",
   },
 ];
 
@@ -61,87 +61,6 @@ const testimonials = [
       "Os alertas automáticos salvaram nosso fechamento mensal diversas vezes.",
     author: "Eduardo Pinheiro",
     role: "Head de Operações • Vortex Digital",
-  },
-];
-
-const modules = [
-  {
-    title: "Financeiro",
-    description:
-      "Controle total de contas a pagar, fluxo de caixa e conciliação bancária.",
-    bullets: [
-      "Automatize vencimentos e aprovações",
-      "Conciliação automática com bancos e cartões",
-      "Dashboards personalizáveis em tempo real",
-      "Alertas inteligentes para divergências",
-      "Integração com ERP e contabilidade",
-    ],
-  },
-  {
-    title: "Relatórios",
-    description: "Insights visuais para decisões estratégicas.",
-    bullets: [
-      "KPIs financeiros e operacionais ao vivo",
-      "Exportações em PDF, Excel e compartilhamento seguro",
-      "Filtros por cliente, unidade e projeto",
-      "Dashboards executivos customizados",
-      "Integração com BI externo",
-    ],
-  },
-  {
-    title: "Operacional",
-    description: "Planeje e monitore toda a execução da operação.",
-    bullets: [
-      "Workflows configuráveis por área",
-      "Controle de SLAs e automatização de tarefas",
-      "Kanban, timeline e visão de capacidade",
-      "Checklist inteligente e templates reutilizáveis",
-      "Alertas proativos para gargalos",
-    ],
-  },
-  {
-    title: "Compliance",
-    description: "Governança fiscal e regulatória sem fricção.",
-    bullets: [
-      "Monitoramento de obrigações fiscais",
-      "Logs completos para auditoria",
-      "Políticas e controles configuráveis",
-      "Alertas de compliance nativos",
-      "Integração com escritórios contábeis",
-    ],
-  },
-  {
-    title: "CRM/Clientes",
-    description: "Relacionamento ativo com clientes e parceiros.",
-    bullets: [
-      "Funil completo com follow-ups automáticos",
-      "Portal seguro para clientes e aprovadores",
-      "Histórico centralizado de contatos e contratos",
-      "Integração com e-mail e WhatsApp",
-      "Dashboards de saúde da carteira",
-    ],
-  },
-  {
-    title: "Automação Fiscal",
-    description: "Conecte notas, impostos e validações.",
-    bullets: [
-      "Integração com SEFAZ, bancos e provedores",
-      "Regras de tributação configuráveis",
-      "Alertas de divergência e multas",
-      "Robôs de conferência e arquivamento",
-      "Exportação automática para contabilidade",
-    ],
-  },
-  {
-    title: "Painel Executivo",
-    description: "Visão consolidada para diretoria e investidores.",
-    bullets: [
-      "KPIs de receita, margem e churn em um só lugar",
-      "Simuladores de cenário e previsões",
-      "Resumo diário por e-mail ou WhatsApp",
-      "Gráficos compartilháveis em um clique",
-      "Acesso seguro por perfil e função",
-    ],
   },
 ];
 
@@ -226,13 +145,13 @@ export default function Home() {
 
           <nav className="hidden md:flex items-center gap-6 text-sm">
             {navLinks.map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
+              <Link
+                key={link.to}
+                to={link.to}
                 className="text-slate-600 hover:text-slate-900 transition"
               >
                 {link.label}
-              </a>
+              </Link>
             ))}
             <Button
               variant="ghost"
@@ -267,14 +186,14 @@ export default function Home() {
                 </button>
               </div>
               {navLinks.map((link) => (
-                <a
-                  key={link.href}
-                  href={link.href}
+                <Link
+                  key={link.to}
+                  to={link.to}
                   onClick={() => setMobileMenu(false)}
                   className="text-slate-600 hover:text-slate-900"
                 >
                   {link.label}
-                </a>
+                </Link>
               ))}
               <Button
                 variant="outline"
@@ -306,14 +225,15 @@ export default function Home() {
           <div>
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 text-sm font-medium mb-6">
               <Sparkles className="w-4 h-4" />
-              Gestão financeira com inteligência e eficiência
+              Plataforma tudo-em-um para agências modernas
             </div>
             <h1 className="text-4xl lg:text-5xl font-bold leading-tight mb-6">
-              Automatize sua gestão financeira com inteligência e eficiência
+              Organize e automatize o fluxo da sua agência com inteligência
             </h1>
             <p className="text-lg text-white/80 mb-8">
-              Kondor é a plataforma completa para otimizar seus fluxos
-              financeiros, relatórios e compliance sem complicação.
+              Planejamento, criação, aprovações, relacionamento e finanças no
+              mesmo lugar. Ganhe controle, reduza retrabalho e entregue mais
+              valor em menos tempo.
             </p>
             <div className="flex flex-wrap gap-4">
               <Button
@@ -341,11 +261,11 @@ export default function Home() {
           <div className="bg-white/5 rounded-3xl border border-white/10 p-6 shadow-2xl backdrop-blur">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <p classn="text-sm uppercase tracking-[0.3em] text-white/70">
-                  Painel
+                <p className="text-sm uppercase tracking-[0.3em] text-white/70">
+                  Operação
                 </p>
                 <h3 className="text-xl font-semibold">
-                  Fluxo financeiro em tempo real
+                  Fluxo de trabalho em tempo real
                 </h3>
               </div>
               <Shield className="w-6 h-6 text-white/60" />
@@ -353,34 +273,36 @@ export default function Home() {
             <div className="grid gap-4 md:grid-cols-2 text-slate-900">
               <div className="bg-white rounded-2xl p-4 text-slate-900">
                 <p className="text-xs uppercase text-slate-500">
-                  Caixa projetado
+                  Projetos ativos
                 </p>
-                <p className="text-2xl font-bold text-slate-900">R$ 4,2 mi</p>
+                <p className="text-2xl font-bold text-slate-900">128</p>
                 <p className="text-sm text-emerald-600 mt-1">
-                  +18% vs. último mês
+                  +22% concluídos antes do prazo
                 </p>
               </div>
               <div className="bg-slate-900/70 rounded-2xl p-4">
                 <p className="text-xs uppercase text-white/60">
-                  Alertas ativos
+                  Aprovações pendentes
                 </p>
                 <p className="text-2xl font-bold">12</p>
                 <p className="text-sm text-white/70 mt-1">
-                  3 vencimentos e 9 conciliações
+                  8 posts e 4 peças de mídia
                 </p>
               </div>
               <div className="bg-white rounded-2xl p-4 text-slate-900">
-                <p className="text-xs uppercase text-slate-500">ROAS médio</p>
-                <p className="text-2xl font-bold text-slate-900">4,6x</p>
+                <p className="text-xs uppercase text-slate-500">
+                  Posts programados
+                </p>
+                <p className="text-2xl font-bold text-slate-900">86</p>
                 <p className="text-sm text-slate-500 mt-1">
                   Atualizado às 10h15
                 </p>
               </div>
               <div className="bg-slate-900/70 rounded-2xl p-4">
-                <p className="text-xs uppercase text-white/60">Compliance</p>
-                <p className="text-2xl font-bold">100%</p>
+                <p className="text-xs uppercase text-white/60">Equipe online</p>
+                <p className="text-2xl font-bold">18</p>
                 <p className="text-sm text-emerald-400 mt-1">
-                  Todas obrigações entregues
+                  Designers, redatores e mídia
                 </p>
               </div>
             </div>
@@ -445,7 +367,7 @@ export default function Home() {
 
       <section className="max-w-6xl mx-auto px-6 py-10 rounded-3xl bg-gradient-to-r from-purple-600 to-purple-700 text-white text-center">
         <p className="text-sm uppercase tracking-[0.4em] text-white/70 mb-3">
-          Transforme seu financeiro
+          Transforme sua operação
         </p>
         <h2 className="text-3xl font-bold mb-4">
           Veja como podemos transformar sua operação
@@ -466,43 +388,28 @@ export default function Home() {
             Módulos estratégicos
           </p>
           <h2 className="text-3xl font-bold mt-2">
-            Produto dentro do produto
+            Tudo que a agência precisa em um ecossistema
           </h2>
           <p className="text-slate-600 mt-2 max-w-3xl">
-            Cada módulo foi desenhado para resolver uma dor crítica da operação.
-            Ative apenas o que faz sentido ou adote o ecossistema completo.
+            Conheça rapidamente alguns módulos e aprofunde os detalhes na página
+            dedicada.
           </p>
         </div>
-        <div className="space-y-6">
-          {modules.map((module) => (
+        <div className="grid gap-6 md:grid-cols-2">
+          {modulesData.slice(0, 4).map((module) => (
             <div
               key={module.title}
               className="rounded-3xl bg-white border border-slate-100 p-6 shadow-sm"
             >
-              <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-                <div>
-                  <h3 className="text-2xl font-semibold flex items-center gap-2">
-                    {module.title}
-                  </h3>
-                  <p className="text-sm text-slate-600 mt-1">
-                    {module.description}
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  className="border-purple-200 text-purple-700"
-                >
-                  Quero este módulo na minha operação
-                </Button>
-              </div>
-              <ul className="grid md:grid-cols-2 gap-3 mt-4 text-sm text-slate-600">
-                {module.bullets.map((bullet) => (
-                  <li key={bullet} className="flex items-start gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-purple-600 mt-1" />
-                    {bullet}
-                  </li>
-                ))}
-              </ul>
+              <h3 className="text-2xl font-semibold">{module.title}</h3>
+              <p className="text-sm text-slate-600 mt-2">{module.description}</p>
+              <Button
+                variant="link"
+                className="px-0 text-purple-600 mt-4"
+                onClick={() => navigate("/modules")}
+              >
+                Ver detalhes do módulo →
+              </Button>
             </div>
           ))}
         </div>
@@ -522,8 +429,8 @@ export default function Home() {
           </h2>
           <p className="text-slate-600 mb-6">
             Em menos de 4 minutos você entende a jornada completa: problemas
-            comuns do financeiro, interface em uso, fluxos automatizados e os
-            resultados esperados.
+            comuns da operação de marketing, interface em uso, fluxos
+            automatizados e os resultados esperados.
           </p>
           <Button
             onClick={() => navigate("/register")}
@@ -680,7 +587,7 @@ export default function Home() {
           Pronto para avançar?
         </p>
         <h2 className="text-3xl font-bold mb-4">
-          Ganhe controle financeiro e operacional em tempo real
+          Ganhe controle total da operação em tempo real
         </h2>
         <div className="flex flex-wrap justify-center gap-4">
           <Button

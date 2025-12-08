@@ -26,6 +26,8 @@ const ClientLogin = lazy(() => import("./pages/clientlogin.jsx"));
 const ClientPortal = lazy(() => import("./pages/clientportal.jsx"));
 
 const Pricing = lazy(() => import("./pages/pricing.jsx"));
+const ModulesPage = lazy(() => import("./pages/modules.jsx"));
+const DemoPage = lazy(() => import("./pages/demo.jsx"));
 
 export default function App() {
   return (
@@ -41,6 +43,8 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/pricing" element={<Pricing />} />
+        <Route path="/modules" element={<ModulesPage />} />
+        <Route path="/demo" element={<DemoPage />} />
         <Route path="/register" element={<Register />} />
         <Route path="/checkout" element={<Checkout />} />
 
