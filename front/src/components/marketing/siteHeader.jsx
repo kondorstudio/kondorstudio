@@ -1,8 +1,7 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Menu, X } from "lucide-react";
-import logoFull from "@/assets/logo-full.svg";
-import logoMark from "@/assets/logo-mark.svg";
+import logoHeader from "@/assets/logo-header.png";
 
 const navLinks = [
   { label: "Home", to: "/" },
@@ -24,7 +23,11 @@ export default function SiteHeader({ variant = "solid" }) {
     <header className={`${baseClass} sticky top-0 z-40`}>
       <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-3">
-          <img src={logoFull} alt="Kondor Studio" className="h-9 w-auto" />
+          <img
+            src={logoHeader}
+            alt="Kondor Studio"
+            className="h-10 w-auto drop-shadow-sm"
+          />
         </Link>
 
         <nav className="hidden md:flex items-center gap-6 text-sm">
@@ -58,7 +61,11 @@ export default function SiteHeader({ variant = "solid" }) {
         <div className="md:hidden fixed inset-0 z-50 bg-black/50">
           <div className="ml-auto h-full w-72 bg-white shadow-xl flex flex-col">
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-              <img src={logoMark} alt="Kondor" className="h-10 w-10" />
+              <img
+                src={logoHeader}
+                alt="Kondor Studio"
+                className="h-9 w-auto drop-shadow-sm"
+              />
               <button onClick={() => setOpen(false)}>
                 <X className="w-5 h-5 text-slate-600" />
               </button>

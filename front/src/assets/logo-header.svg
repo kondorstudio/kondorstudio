@@ -1,0 +1,14 @@
+<svg width="220" height="56" viewBox="0 0 220 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="logoHeaderGradient" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#C785FF" />
+      <stop offset="1" stop-color="#7B3DFF" />
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="56" height="56" rx="12" fill="url(#logoHeaderGradient)" />
+  <path d="M12 23L28 14L44 23V40L28 49L12 40V23Z" stroke="white" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M28 14V34" stroke="white" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M12 23L28 33L44 23" stroke="white" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M28 33V49" stroke="white" stroke-width="3" stroke-linejoin="round"/>
+  <text x="76" y="38" fill="url(#logoHeaderGradient)" font-size="20" font-family="'Inter', 'Segoe UI', sans-serif" font-weight="600" letter-spacing="0.32em">STUDIO</text>
+</svg>
