@@ -23,6 +23,7 @@ function formatCurrencyBRL(value) {
 export default function Financeiro() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
+  const [defaultType, setDefaultType] = useState("income");
   const queryClient = useQueryClient();
 
   const { data: records = [], isLoading } = useQuery({
@@ -44,6 +45,13 @@ export default function Financeiro() {
 
   const handleNew = () => {
     setEditingRecord(null);
+    setDefaultType("income");
+    setDialogOpen(true);
+  };
+
+  const handleNewCost = () => {
+    setEditingRecord(null);
+    setDefaultType("expense");
     setDialogOpen(true);
   };
 
@@ -95,7 +103,7 @@ export default function Financeiro() {
   return (
     <div className="p-6 md:p-8">
       <div className="max-w-7xl mx-auto space-y-8">
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">
               Financeiro
@@ -104,13 +112,23 @@ export default function Financeiro() {
               Acompanhe os lançamentos financeiros por cliente.
             </p>
           </div>
-          <Button
-            onClick={handleNew}
-            className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Novo lançamento
-          </Button>
+          <div className="flex flex-wrap gap-3">
+            <Button
+              onClick={handleNewCost}
+              variant="outline"
+              className="rounded-full border-purple-200 text-purple-700 hover:bg-purple-50"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Novo custo
+            </Button>
+            <Button
+              onClick={handleNew}
+              className="rounded-full bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Novo lançamento
+            </Button>
+          </div>
         </div>
 
         {/* Cards de resumo */}
@@ -198,6 +216,7 @@ export default function Financeiro() {
           onClose={handleCloseDialog}
           record={editingRecord}
           clients={clients}
+          initialType={defaultType}
         />
       </div>
     </div>

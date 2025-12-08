@@ -84,12 +84,13 @@ export default function Financeformdialog({
   onClose,
   record,
   clients = [],
+  initialType = "income",
 }) {
   const queryClient = useQueryClient();
 
   const [formData, setFormData] = useState({
     clientId: "",
-    type: "income",
+    type: initialType,
     amount: "",
     currency: "BRL",
     occurredAt: "",
@@ -116,7 +117,7 @@ export default function Financeformdialog({
     } else {
       setFormData({
         clientId: "",
-        type: "income",
+        type: initialType,
         amount: "",
         currency: "BRL",
         occurredAt: "",
@@ -124,7 +125,7 @@ export default function Financeformdialog({
         costName: "",
       });
     }
-  }, [record]);
+  }, [record, initialType, open]);
 
   const mutation = useMutation({
     mutationFn: async (data) => {
