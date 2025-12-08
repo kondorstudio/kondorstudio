@@ -1,508 +1,253 @@
-import React from "react";
+import React, { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button.jsx";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card.jsx";
-import {
-  Check,
-  Zap,
-  Sparkles,
-  Crown,
-  Users,
-  BarChart3,
-  Calendar,
-  MessageSquare,
-  Image as ImageIcon,
-  DollarSign,
-} from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { pricingPlans } from "@/data/pricingPlans.js";
+import { CheckCircle2, Target, BarChart3 } from "lucide-react";
 
-const features = [
+const navLinks = [
+  { label: "Home", to: "/" },
+  { label: "Módulos", to: "/modules" },
+  { label: "Demo", to: "/demo" },
+  { label: "Planos", to: "/pricing" },
+];
+
+const plans = [
   {
-    icon: Users,
-    title: "Gestão de Clientes",
-    description:
-      "Centralize todas as informações dos seus clientes em um único lugar. Briefings, contratos e histórico completo.",
+    name: "Essencial",
+    tag: "Pequenos negócios",
+    monthly: 790,
+    yearly: 690,
+    users: "Até 5 usuários",
+    modules: ["Financeiro", "Relatórios", "CRM/Clientes"],
+    support: "Suporte em horário comercial",
+    integrations: "Integrações básicas",
+    cta: "Começar agora",
   },
   {
-    icon: Calendar,
-    title: "Calendário de posts",
-    description:
-      "Kanban visual para planejar, criar e aprovar posts. Arraste e solte entre as etapas do processo.",
+    name: "Profissional",
+    tag: "Mais popular",
+    monthly: 1590,
+    yearly: 1390,
+    users: "Até 20 usuários",
+    modules: [
+      "Financeiro",
+      "Relatórios",
+      "Operacional",
+      "Compliance",
+      "Painel Executivo",
+    ],
+    support: "Suporte 24/7 com CS dedicado",
+    integrations: "Integrações completas + API",
+    highlight: true,
+    cta: "Explorar plano",
   },
   {
-    icon: MessageSquare,
-    title: "Aprovação por WhatsApp",
-    description:
-      "Seus clientes aprovam posts direto pelo WhatsApp, sem precisar logar na plataforma.",
-  },
-  {
-    icon: ImageIcon,
-    title: "Biblioteca de Criativos",
-    description:
-      "Organize todos os seus assets com tags inteligentes e filtros avançados para encontrar qualquer arquivo rapidamente.",
-  },
-  {
-    icon: BarChart3,
-    title: "Métricas e Relatórios",
-    description:
-      "Acompanhe performance de campanhas com dashboards em tempo real e relatórios automáticos.",
-  },
-  {
-    icon: DollarSign,
-    title: "Controle Financeiro",
-    description:
-      "Gerencie receitas e despesas por cliente. Visualize margem de lucro e saúde financeira da agência.",
+    name: "Enterprise",
+    tag: "Personalizável",
+    monthly: 0,
+    yearly: 0,
+    users: "Usuários ilimitados",
+    modules: ["Todos os módulos + automações customizadas"],
+    support: "CSM dedicado e SLA contratado",
+    integrations: "Integrações avançadas e sob demanda",
+    cta: "Solicitar contato",
   },
 ];
 
-const iconMap = {
-  sparkles: Sparkles,
-  zap: Zap,
-  crown: Crown,
-};
+const comparison = [
+  { feature: "Financeiro completo", essential: true, pro: true, enterprise: true },
+  { feature: "Automação fiscal", essential: false, pro: true, enterprise: true },
+  { feature: "Portal do cliente", essential: true, pro: true, enterprise: true },
+  { feature: "APIs e integrações ilimitadas", essential: false, pro: true, enterprise: true },
+  { feature: "Automação customizada", essential: false, pro: false, enterprise: true },
+];
 
-const formatCurrency = (value, locale = "pt-BR", currency = "BRL") => {
-  return new Intl.NumberFormat(locale, {
+const formatCurrency = (value) =>
+  new Intl.NumberFormat("pt-BR", {
     style: "currency",
-    currency,
-    minimumFractionDigits: 0,
+    currency: "BRL",
     maximumFractionDigits: 0,
   }).format(value);
-};
 
 export default function Pricing() {
   const navigate = useNavigate();
+  const [isAnnual, setIsAnnual] = useState(false);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-white via-purple-50 to-white">
-      {/* Header */}
-      <nav
-        className="border-b border-gray-200 bg-white/80 backdrop-blur-md sticky top-0 z-50"
-        role="navigation"
-        aria-label="Navegação principal"
-      >
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div
-              className="w-10 h-10 bg-gradient-to-br from-purple-400 to-purple-600 rounded-xl flex items-center justify-center"
-              aria-hidden="true"
-            >
-              <Zap className="w-6 h-6 text-white" fill="currentColor" />
+    <div className="min-h-screen bg-slate-50 text-slate-900">
+      <header className="bg-white border-b border-slate-100">
+        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+          <Link to="/" className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center font-semibold">
+              K
             </div>
             <div>
-              <h1 className="font-bold text-xl text-gray-900">KONDOR</h1>
-              <p className="text-xs text-purple-400 font-medium">STUDIO</p>
+              <p className="text-sm font-bold tracking-wide">KONDOR</p>
+              <p className="text-[10px] text-purple-500 uppercase tracking-[0.4em]">
+                Pricing
+              </p>
             </div>
-          </div>
-          <Button
-            variant="outline"
-            onClick={() => navigate("/login")}
-            className="border-purple-400 text-purple-600 hover:bg-purple-50"
-            aria-label="Fazer login na plataforma"
-          >
-            Entrar
-          </Button>
-        </div>
-      </nav>
-
-      {/* Hero Section */}
-      <section
-        className="max-w-7xl mx-auto px-6 py-20 text-center"
-        aria-labelledby="hero-title"
-      >
-        <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-100 to-purple-200 rounded-full mb-6">
-          <Sparkles
-            className="w-4 h-4 text-purple-600"
-            aria-hidden="true"
-          />
-          <span className="text-sm font-medium text-purple-900">
-            A plataforma que sua agência precisa
-          </span>
-        </div>
-
-        <h2
-          id="hero-title"
-          className="text-5xl md:text-6xl font-bold text-gray-900 mb-6"
-        >
-          Gerencie sua agência
-          <span className="block mt-2 bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-transparent">
-            com eficiência e elegância
-          </span>
-        </h2>
-
-        <p className="text-xl text-gray-600 max-w-2xl mx-auto mb-8">
-          KONDOR STUDIO é a plataforma completa para agências e freelancers
-          gerenciarem clientes, posts, aprovações, criativos e finanças em um
-          único lugar.
-        </p>
-
-        <div className="flex gap-4 justify-center mb-16">
-          <Button
-            size="lg"
-            onClick={() => navigate("/register")}
-            className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700"
-            aria-label="Iniciar teste gratuito de 3 dias"
-          >
-            Começar teste grátis
-          </Button>
-          <Button
-            size="lg"
-            variant="outline"
-            onClick={() =>
-              document
-                .getElementById("plans")
-                ?.scrollIntoView({ behavior: "smooth" })
-            }
-            aria-label="Ver planos e preços"
-          >
-            Ver planos
-          </Button>
-        </div>
-
-        {/* Stats */}
-        <div
-          className="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto"
-          role="list"
-          aria-label="Estatísticas da plataforma"
-        >
-          <div role="listitem">
-            <p className="text-4xl font-bold text-purple-600 mb-2">3 dias</p>
-            <p className="text-gray-600">Teste gratuito</p>
-          </div>
-          <div role="listitem">
-            <p className="text-4xl font-bold text-purple-600 mb-2">100+</p>
-            <p className="text-gray-600">Agências ativas</p>
-          </div>
-          <div role="listitem">
-            <p className="text-4xl font-bold text-purple-600 mb-2">6</p>
-            <p className="text-gray-600">Módulos integrados</p>
-          </div>
-          <div role="listitem">
-            <p className="text-4xl font-bold text-purple-600 mb-2">24/7</p>
-            <p className="text-gray-600">Suporte dedicado</p>
-          </div>
-        </div>
-      </section>
-
-      {/* Features Section */}
-      <section
-        className="max-w-7xl mx-auto px-6 py-20 bg-white/50"
-        aria-labelledby="features-title"
-      >
-        <div className="text-center mb-16">
-          <h2
-            id="features-title"
-            className="text-4xl font-bold text-gray-900 mb-4"
-          >
-            Tudo que você precisa em um só lugar
-          </h2>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Funcionalidades desenvolvidas especialmente para o dia a dia de
-            agências de social media
-          </p>
-        </div>
-
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8" role="list">
-          {features.map((feature, index) => {
-            const Icon = feature.icon;
-            return (
-              <Card
-                key={index}
-                className="border-2 border-gray-100 hover:border-purple-200 hover:shadow-lg transition-all"
-                role="listitem"
+          </Link>
+          <nav className="hidden md:flex items-center gap-6 text-sm">
+            {navLinks.map((link) => (
+              <Link
+                key={link.to}
+                to={link.to}
+                className="text-slate-600 hover:text-slate-900"
               >
-                <CardContent className="pt-8">
-                  <div
-                    className="w-14 h-14 bg-gradient-to-br from-purple-100 to-purple-200 rounded-2xl flex items-center justify-center mb-4"
-                    aria-hidden="true"
-                  >
-                    <Icon className="w-7 h-7 text-purple-600" />
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-900 mb-3">
-                    {feature.title}
-                  </h3>
-                  <p className="text-gray-600">{feature.description}</p>
-                </CardContent>
-              </Card>
-            );
-          })}
+                {link.label}
+              </Link>
+            ))}
+            <Button
+              variant="outline"
+              className="border-purple-200 text-purple-700"
+              onClick={() => navigate("/login")}
+            >
+              Entrar
+            </Button>
+          </nav>
         </div>
-      </section>
+      </header>
 
-      {/* Benefits Section */}
-      <section
-        className="max-w-7xl mx-auto px-6 py-20"
-        aria-labelledby="benefits-title"
-      >
-        <div className="bg-gradient-to-br from-purple-600 to-purple-700 rounded-3xl p-12 text-white">
-          <div className="grid md:grid-cols-2 gap-12 items-center">
-            <div>
-              <h2 id="benefits-title" className="text-4xl font-bold mb-6">
-                Por que escolher o KONDOR STUDIO?
-              </h2>
-              <ul className="space-y-4" role="list">
-                <li className="flex items-start gap-3">
-                  <div
-                    className="w-6 h-6 bg-accent rounded-full flex items-center justify-center flex-shrink-0 mt-1"
-                    aria-hidden="true"
-                  >
-                    <Check className="w-4 h-4 text-gray-900" />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold mb-1">
-                      Economia de tempo
-                    </h4>
-                    <p className="text-purple-100">
-                      Reduza em até 70% o tempo gasto com gestão operacional
-                    </p>
-                  </div>
-                </li>
-                <li className="flex items-start gap-3">
-                  <div
-                    className="w-6 h-6 bg-accent rounded-full flex items-center justify-center flex-shrink-0 mt-1"
-                    aria-hidden="true"
-                  >
-                    <Check className="w-4 h-4 text-gray-900" />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold mb-1">
-                      Aprovações mais rápidas
-                    </h4>
-                    <p className="text-purple-100">
-                      Clientes aprovam posts pelo WhatsApp em minutos
-                    </p>
-                  </div>
-                </li>
-                <li className="flex items-start gap-3">
-                  <div
-                    className="w-6 h-6 bg-accent rounded-full flex items-center justify-center flex-shrink-0 mt-1"
-                    aria-hidden="true"
-                  >
-                    <Check className="w-4 h-4 text-gray-900" />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold mb-1">
-                      Organização profissional
-                    </h4>
-                    <p className="text-purple-100">
-                      Impressione seus clientes com portais personalizados
-                    </p>
-                  </div>
-                </li>
-                <li className="flex items-start gap-3">
-                  <div
-                    className="w-6 h-6 bg-accent rounded-full flex items-center justify-center flex-shrink-0 mt-1"
-                    aria-hidden="true"
-                  >
-                    <Check className="w-4 h-4 text-gray-900" />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold mb-1">
-                      Controle financeiro
-                    </h4>
-                    <p className="text-purple-100">
-                      Saiba exatamente quanto cada cliente rende para sua
-                      agência
-                    </p>
-                  </div>
-                </li>
-              </ul>
-            </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8">
-              <div className="space-y-6" role="list">
-                <div
-                  className="flex items-center gap-4"
-                  role="listitem"
-                >
-                  <div
-                    className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center"
-                    aria-hidden="true"
-                  >
-                    <Zap className="w-6 h-6 text-accent" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">
-                      Automação inteligente
-                    </p>
-                    <p className="text-purple-100">
-                      IA para gerar legendas
-                    </p>
-                  </div>
-                </div>
-                <div
-                  className="flex items-center gap-4"
-                  role="listitem"
-                >
-                  <div
-                    className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center"
-                    aria-hidden="true"
-                  >
-                    <Users className="w-6 h-6 text-accent" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">Multi-equipe</p>
-                    <p className="text-purple-100">
-                      Colaboração em tempo real
-                    </p>
-                  </div>
-                </div>
-                <div
-                  className="flex items-center gap-4"
-                  role="listitem"
-                >
-                  <div
-                    className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center"
-                    aria-hidden="true"
-                  >
-                    <BarChart3 className="w-6 h-6 text-accent" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">
-                      Analytics avançado
-                    </p>
-                    <p className="text-purple-100">
-                      Dashboards personalizados
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Plans Section */}
-      <section
-        id="plans"
-        className="max-w-7xl mx-auto px-6 pb-20"
-        aria-labelledby="plans-title"
-      >
-        <div className="text-center mb-16">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-100 to-purple-200 rounded-full mb-6">
-            <Sparkles
-              className="w-4 h-4 text-purple-600"
-              aria-hidden="true"
-            />
-            <span className="text-sm font-medium text-purple-900">
-              3 dias grátis • Sem cartão
+      <main className="max-w-6xl mx-auto px-6 py-20 space-y-12">
+        <section className="text-center space-y-4">
+          <p className="text-sm text-purple-600 font-semibold">
+            Planos e Preços
+          </p>
+          <h1 className="text-4xl font-bold">Escolha o plano ideal</h1>
+          <p className="text-slate-600 max-w-3xl mx-auto">
+            Ative módulos sob demanda e evolua conforme a sua operação cresce.
+            Todos os planos incluem portal do cliente, aprovações e suporte
+            humano.
+          </p>
+          <div className="flex items-center justify-center gap-3 text-sm mt-4">
+            <span className={!isAnnual ? "font-semibold" : "text-slate-500"}>
+              Mensal
+            </span>
+            <button
+              onClick={() => setIsAnnual((prev) => !prev)}
+              className={`relative w-12 h-6 rounded-full transition ${
+                isAnnual ? "bg-purple-600" : "bg-slate-200"
+              }`}
+            >
+              <span
+                className={`absolute w-5 h-5 bg-white rounded-full top-0.5 transition ${
+                  isAnnual ? "right-0.5" : "left-0.5"
+                }`}
+              />
+            </button>
+            <span className={isAnnual ? "font-semibold" : "text-slate-500"}>
+              Anual (-15%)
             </span>
           </div>
+        </section>
 
-          <h2
-            id="plans-title"
-            className="text-4xl font-bold text-gray-900 mb-4"
-          >
-            Escolha o plano ideal para sua agência
-          </h2>
-
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Todos os planos incluem teste gratuito de 3 dias. Cancele quando
-            quiser.
-          </p>
-        </div>
-
-        <div
-          className="grid md:grid-cols-3 gap-8"
-          role="list"
-          aria-label="Planos disponíveis"
-        >
-          {pricingPlans.map((plan) => {
-            const Icon = (plan.icon && iconMap[plan.icon]) || Sparkles;
+        <section className="grid gap-6 md:grid-cols-3">
+          {plans.map((plan) => {
+            const price = isAnnual ? plan.yearly : plan.monthly;
             return (
-              <Card
+              <div
                 key={plan.name}
-                className={`relative overflow-hidden ${
-                  plan.popular
-                    ? "pricing-card-popular border-2 border-accent"
-                    : "border-gray-200"
+                className={`rounded-3xl border p-6 bg-white shadow-sm ${
+                  plan.highlight
+                    ? "border-purple-400 shadow-xl relative"
+                    : "border-slate-100"
                 }`}
-                role="listitem"
-                aria-label={`Plano ${plan.name} - ${formatCurrency(
-                  plan.price
-                )} por mês`}
               >
-                {plan.popular && (
-                  <div className="absolute top-0 right-0 bg-gradient-to-r from-accent to-green-400 text-gray-900 px-4 py-1 text-xs font-bold rounded-bl-lg">
-                    POPULAR
-                  </div>
+                {plan.highlight && (
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-purple-600 text-white text-xs font-semibold px-3 py-1 rounded-full shadow-lg">
+                    Mais popular
+                  </span>
                 )}
-
-                <CardHeader className="pb-8 pt-8">
-                  <div
-                    className={`w-16 h-16 bg-gradient-to-br ${plan.color} rounded-2xl flex items-center justify-center mb-4`}
-                    aria-hidden="true"
-                  >
-                    <Icon className="w-8 h-8 text-white" />
-                  </div>
-                  <CardTitle className="text-3xl font-bold text-gray-900">
-                    {plan.name}
-                  </CardTitle>
-                  <p className="text-gray-500">{plan.description}</p>
-                  <div className="mt-6">
-                    <span className="text-5xl font-bold text-gray-900">
-                      {formatCurrency(plan.price)}
+                <p className="text-sm text-purple-600 font-semibold">
+                  {plan.tag}
+                </p>
+                <h3 className="text-2xl font-bold mt-1">{plan.name}</h3>
+                {price > 0 ? (
+                  <p className="text-4xl font-bold mt-4">
+                    {formatCurrency(price)}
+                    <span className="text-base text-slate-500">
+                      /{isAnnual ? "mês (anual)" : "mês"}
                     </span>
-                    <span className="text-gray-500">/mês</span>
-                  </div>
-                </CardHeader>
-
-                <CardContent className="space-y-4">
-                  <ul
-                    role="list"
-                    aria-label={`Recursos do plano ${plan.name}`}
-                  >
-                    {plan.features.map((feature, idx) => (
-                      <li
-                        key={idx}
-                        className="flex items-start gap-3 mb-4"
-                      >
-                        <div
-                          className="w-5 h-5 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0 mt-0.5"
-                          aria-hidden="true"
-                        >
-                          <Check className="w-3 h-3 text-purple-600" />
-                        </div>
-                        <span className="text-gray-700">{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
-
-                  <Button
-                    className={`w-full mt-8 ${
-                      plan.popular
-                        ? "bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700"
-                        : "bg-purple-400 hover:bg-purple-500"
-                    }`}
-                    size="lg"
-                    onClick={() => navigate("/register")}
-                    aria-label={`Iniciar teste grátis do plano ${plan.name}`}
-                  >
-                    Começar teste grátis
-                  </Button>
-                </CardContent>
-              </Card>
+                  </p>
+                ) : (
+                  <p className="text-4xl font-bold mt-4">Custom</p>
+                )}
+                <p className="text-sm text-slate-600 mt-2">{plan.users}</p>
+                <ul className="space-y-2 text-sm text-slate-600 mt-4">
+                  {plan.modules.map((item) => (
+                    <li key={item} className="flex items-start gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-green-600 mt-0.5" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-4 text-sm text-slate-600 space-y-2">
+                  <p className="flex items-start gap-2">
+                    <Target className="w-4 h-4 text-purple-500 mt-1" />
+                    {plan.support}
+                  </p>
+                  <p className="flex items-start gap-2">
+                    <BarChart3 className="w-4 h-4 text-purple-500 mt-1" />
+                    {plan.integrations}
+                  </p>
+                </div>
+                <Button
+                  className="w-full mt-6"
+                  variant={plan.highlight ? "default" : "outline"}
+                  onClick={() =>
+                    plan.cta === "Solicitar contato"
+                      ? navigate("/register")
+                      : navigate("/checkout", { state: { plan: plan.name } })
+                  }
+                >
+                  {plan.cta}
+                </Button>
+              </div>
             );
           })}
-        </div>
+        </section>
 
-        {/* Trial Info */}
-        <div className="mt-16 text-center">
-          <div className="inline-block bg-gradient-to-r from-purple-100 to-purple-200 rounded-2xl px-8 py-6">
-            <p className="text-purple-900 font-medium text-lg mb-2">
-              ✨ Todos os planos incluem 3 dias de teste gratuito
-            </p>
-            <p className="text-purple-700">
-              Teste TODAS as funcionalidades sem compromisso • Não precisa de
-              cartão
-            </p>
-          </div>
-        </div>
-      </section>
+        <section className="overflow-auto border border-slate-100 rounded-3xl">
+          <table className="w-full text-sm text-slate-600">
+            <thead>
+              <tr className="bg-slate-50 text-slate-800">
+                <th className="text-left py-4 px-4">Comparativo</th>
+                <th>Essencial</th>
+                <th>Profissional</th>
+                <th>Enterprise</th>
+              </tr>
+            </thead>
+            <tbody>
+              {comparison.map((row) => (
+                <tr key={row.feature} className="border-t border-slate-100">
+                  <td className="py-3 px-4 text-left font-medium">
+                    {row.feature}
+                  </td>
+                  {[row.essential, row.pro, row.enterprise].map((val, idx) => (
+                    <td key={idx} className="text-center">
+                      {val ? "✔️" : "—"}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+
+        <section className="text-center space-y-3">
+          <p className="text-slate-600">
+            Ainda com dúvidas? Nossa equipe pode te ajudar a escolher o plano
+            certo.
+          </p>
+          <Button
+            variant="outline"
+            className="border-purple-200 text-purple-700"
+            onClick={() => navigate("/register")}
+          >
+            Falar com especialista
+          </Button>
+        </section>
+      </main>
     </div>
   );
 }
