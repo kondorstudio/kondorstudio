@@ -1,22 +1,10 @@
-import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import React from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button.jsx";
-import {
-  ArrowRight,
-  CheckCircle2,
-  Menu,
-  Shield,
-  Sparkles,
-  X,
-} from "lucide-react";
+import { ArrowRight, CheckCircle2, Shield, Sparkles } from "lucide-react";
 import { modulesData } from "@/data/modules.js";
-
-const navLinks = [
-  { label: "Home", to: "/" },
-  { label: "Módulos", to: "/modules" },
-  { label: "Demo", to: "/demo" },
-  { label: "Planos", to: "/pricing" },
-];
+import SiteHeader from "@/components/marketing/siteHeader.jsx";
+import SiteFooter from "@/components/marketing/siteFooter.jsx";
 
 const quickBenefits = [
   "Até 40% menos tempo coordenando entregas e aprovações",
@@ -115,93 +103,10 @@ const differentiators = [
 
 export default function Home() {
   const navigate = useNavigate();
-  const [mobileMenu, setMobileMenu] = useState(false);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-slate-100">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-purple-600 text-white flex items-center justify-center font-semibold">
-              K
-            </div>
-            <div>
-              <p className="text-sm font-bold tracking-wide">KONDOR</p>
-              <p className="text-[10px] text-purple-500 uppercase tracking-[0.4em]">
-                Platform
-              </p>
-            </div>
-          </Link>
-
-          <nav className="hidden md:flex items-center gap-6 text-sm">
-            {navLinks.map((link) => (
-              <Link
-                key={link.to}
-                to={link.to}
-                className="text-slate-600 hover:text-slate-900 transition"
-              >
-                {link.label}
-              </Link>
-            ))}
-            <Button
-              variant="ghost"
-              className="text-sm text-slate-600 hover:text-slate-900"
-              onClick={() => navigate("/login")}
-            >
-              Entrar
-            </Button>
-            <Button
-              className="bg-gradient-to-r from-purple-500 to-purple-700 text-white text-sm"
-              onClick={() => navigate("/register")}
-            >
-              Comece Agora
-            </Button>
-          </nav>
-
-          <button
-            className="md:hidden text-slate-700"
-            onClick={() => setMobileMenu(true)}
-          >
-            <Menu className="w-6 h-6" />
-          </button>
-        </div>
-
-        {mobileMenu && (
-          <div className="md:hidden fixed inset-0 z-50 bg-black/50">
-            <div className="ml-auto w-72 h-full bg-white shadow-xl p-6 flex flex-col gap-4">
-              <div className="flex items-center justify-between mb-4">
-                <p className="font-semibold text-slate-800">Menu</p>
-                <button onClick={() => setMobileMenu(false)}>
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              {navLinks.map((link) => (
-                <Link
-                  key={link.to}
-                  to={link.to}
-                  onClick={() => setMobileMenu(false)}
-                  className="text-slate-600 hover:text-slate-900"
-                >
-                  {link.label}
-                </Link>
-              ))}
-              <Button
-                variant="outline"
-                onClick={() => navigate("/login")}
-                className="w-full"
-              >
-                Entrar
-              </Button>
-              <Button
-                onClick={() => navigate("/register")}
-                className="bg-gradient-to-r from-purple-500 to-purple-700 w-full"
-              >
-                Comece Agora
-              </Button>
-            </div>
-          </div>
-        )}
-      </header>
+      <SiteHeader />
 
       {/* Hero */}
       <section
@@ -478,25 +383,7 @@ export default function Home() {
         </div>
       </section>
 
-      <footer className="bg-slate-950 text-slate-400">
-        <div className="max-w-6xl mx-auto px-6 py-8 text-sm flex flex-col md:flex-row justify-between items-center gap-3">
-          <span>© {new Date().getFullYear()} Kondor Platform</span>
-          <div className="flex flex-wrap gap-4">
-            <Link to="/login" className="hover:text-white transition">
-              Entrar
-            </Link>
-            <Link to="/register" className="hover:text-white transition">
-              Começar
-            </Link>
-            <Link to="/pricing" className="hover:text-white transition">
-              Planos
-            </Link>
-            <Link to="/checkout" className="hover:text-white transition">
-              Checkout
-            </Link>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

@@ -1,54 +1,17 @@
 import React from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button.jsx";
 import { CheckCircle2, Layers } from "lucide-react";
 import { modulesData } from "@/data/modules.js";
-
-const headerLinks = [
-  { label: "Home", to: "/" },
-  { label: "Módulos", to: "/modules" },
-  { label: "Demo", to: "/demo" },
-  { label: "Planos", to: "/pricing" },
-];
+import SiteHeader from "@/components/marketing/siteHeader.jsx";
+import SiteFooter from "@/components/marketing/siteFooter.jsx";
 
 export default function ModulesPage() {
   const navigate = useNavigate();
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="bg-white border-b border-slate-100">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center font-semibold">
-              K
-            </div>
-            <div>
-              <p className="text-sm font-bold tracking-wide">KONDOR</p>
-              <p className="text-[10px] uppercase text-purple-500 tracking-[0.4em]">
-                Modules
-              </p>
-            </div>
-          </Link>
-          <nav className="hidden md:flex items-center gap-6 text-sm">
-            {headerLinks.map((link) => (
-              <Link
-                key={link.to}
-                to={link.to}
-                className="text-slate-600 hover:text-slate-900"
-              >
-                {link.label}
-              </Link>
-            ))}
-            <Button
-              variant="outline"
-              className="border-purple-200 text-purple-700"
-              onClick={() => navigate("/register")}
-            >
-              Comece Agora
-            </Button>
-          </nav>
-        </div>
-      </header>
+      <SiteHeader />
 
       <main className="max-w-6xl mx-auto px-6 py-16 space-y-16">
         <section className="text-center space-y-4">
@@ -117,6 +80,7 @@ export default function ModulesPage() {
           </Button>
         </section>
       </main>
+      <SiteFooter />
     </div>
   );
 }

@@ -1,0 +1,15 @@
+<svg width="280" height="80" viewBox="0 0 280 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="gradFull" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#C785FF" />
+      <stop offset="1" stop-color="#7B3DFF" />
+    </linearGradient>
+  </defs>
+  <rect x="5" y="5" width="70" height="70" rx="16" fill="url(#gradFull)" />
+  <path d="M20 36L40 24L60 36V60L40 72L20 60V36Z" stroke="white" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M40 24V52" stroke="white" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M20 36L40 48L60 36" stroke="white" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M40 48V72" stroke="white" stroke-width="4" stroke-linejoin="round"/>
+  <text x="90" y="35" fill="#0F172A" font-size="22" font-family="'Inter', 'Segoe UI', sans-serif" font-weight="700">KONDOR</text>
+  <text x="90" y="60" fill="url(#gradFull)" font-size="20" font-family="'Inter', 'Segoe UI', sans-serif" font-weight="600">STUDIO</text>
+</svg>
