@@ -78,11 +78,6 @@ module.exports = {
       description: data.description || null,
       status: data.status || 'TODO',
       priority: data.priority || 'MEDIUM',
-      tags: Array.isArray(data.tags)
-        ? data.tags
-        : data.tags
-        ? [data.tags]
-        : [],
       assignedTo: data.assignedTo || null,
       dueDate: toDateOrNull(data.dueDate || data.due_date),
       createdBy: userId || null,
@@ -117,14 +112,6 @@ module.exports = {
     if (data.priority !== undefined) updateData.priority = data.priority;
 
     if (data.assignedTo !== undefined) updateData.assignedTo = data.assignedTo;
-
-    if (data.tags !== undefined) {
-      updateData.tags = Array.isArray(data.tags)
-        ? data.tags
-        : data.tags
-        ? [data.tags]
-        : [];
-    }
 
     if (data.comments !== undefined) updateData.comments = data.comments;
 
