@@ -219,7 +219,7 @@ model TeamMember {
   role        Role     @default(MEMBER)
   permissions Json?    // permissões específicas por membro
   salaryCents Int?
-  salaryRecordId String?
+  salaryRecordId String? @unique
   salaryRecord FinancialRecord? @relation("TeamMemberSalaryRecord", fields: [salaryRecordId], references: [id], onDelete: SetNull)
   createdAt   DateTime @default(now())
 
