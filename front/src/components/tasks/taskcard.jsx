@@ -8,7 +8,14 @@ import {
 } from "@/components/ui/card.jsx";
 import { Button } from "@/components/ui/button.jsx";
 import { Badge } from "@/components/ui/badge.jsx";
-import { Pencil, CalendarDays, ChevronDown } from "lucide-react";
+import { Pencil, CalendarDays } from "lucide-react";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select.jsx";
 
 const STATUS_OPTIONS = [
   { value: "TODO", label: "Rascunho" },
@@ -46,28 +53,13 @@ export default function Taskcard({
   client,
   onEdit,
   onStatusChange,
+  onDelete,
 }) {
   const dueLabel = formatDate(task.dueDate);
   const statusStyle = STATUS_STYLES[task.status] || STATUS_STYLES.TODO;
-  const [menuOpen, setMenuOpen] = React.useState(false);
-  const menuRef = React.useRef(null);
-
-  React.useEffect(() => {
-    function handleClickOutside(event) {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
-        setMenuOpen(false);
-      }
-    }
-    if (menuOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [menuOpen]);
-
   const handleStatusChange = (value) => {
     if (!onStatusChange) return;
     onStatusChange(task.id, value);
-    setMenuOpen(false);
   };
 
   return (
@@ -113,42 +105,28 @@ export default function Taskcard({
       </CardContent>
 
       <CardFooter className="pt-4 flex flex-col gap-3">
-        <div className="relative" ref={menuRef}>
-          <button
-            type="button"
-            className="flex w-full items-center justify-between rounded-xl border border-purple-200 bg-white px-3 py-2 text-xs font-semibold text-purple-700"
-            onClick={() => setMenuOpen((prev) => !prev)}
-          >
-            <span>Status</span>
-            <ChevronDown className="w-4 h-4 text-purple-400" />
-          </button>
-          {menuOpen && (
-            <div className="absolute left-0 right-0 mt-2 rounded-2xl border border-slate-100 bg-white shadow-2xl z-20">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <Select value={task.status} onValueChange={handleStatusChange}>
+            <SelectTrigger className="h-9 w-full rounded-full border border-purple-200 text-xs font-medium text-purple-700 bg-white sm:w-[170px]">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
               {STATUS_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  className={`w-full px-3 py-2 text-left text-xs hover:bg-purple-50 ${
-                    task.status === option.value
-                      ? "bg-purple-50 text-purple-700"
-                      : "text-gray-600"
-                  }`}
-                  onClick={() => handleStatusChange(option.value)}
-                >
+                <SelectItem key={option.value} value={option.value}>
                   {option.label}
-                </button>
+                </SelectItem>
               ))}
-            </div>
-          )}
-        </div>
+            </SelectContent>
+          </Select>
 
-        <Button
-          className="w-full bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-xs font-semibold"
-          onClick={() => onEdit && onEdit(task)}
-        >
-          <Pencil className="w-4 h-4 mr-2" />
-          Editar
-        </Button>
+          <Button
+            className="w-full rounded-full bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-xs font-semibold sm:w-auto"
+            onClick={() => onEdit && onEdit(task)}
+          >
+            <Pencil className="w-4 h-4 mr-2" />
+            Editar
+          </Button>
+        </div>
       </CardFooter>
     </Card>
   );
