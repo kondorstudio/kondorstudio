@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Menu, X } from "lucide-react";
 import logoHeader from "@/assets/logoheader.png";
 
@@ -12,6 +12,7 @@ const navLinks = [
 
 export default function SiteHeader({ variant = "solid" }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -25,6 +26,10 @@ export default function SiteHeader({ variant = "solid" }) {
     };
   }, [open]);
 
+  useEffect(() => {
+    setOpen(false);
+  }, [location.pathname]);
+
   const baseClass =
     variant === "transparent"
       ? "bg-transparent"
@@ -32,7 +37,7 @@ export default function SiteHeader({ variant = "solid" }) {
 
   return (
     <header className={`${baseClass} sticky top-0 z-40`}>
-      <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between relative">
+      <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-3">
           <img
             src={logoHeader}
@@ -61,7 +66,10 @@ export default function SiteHeader({ variant = "solid" }) {
         </nav>
 
         <button
-          className="md:hidden text-slate-700 relative z-50"
+          className="md:hidden text-slate-700 p-2"
+          type="button"
+          aria-label="Abrir menu"
+          aria-expanded={open}
           onClick={() => setOpen(true)}
         >
           <Menu className="w-6 h-6" />
