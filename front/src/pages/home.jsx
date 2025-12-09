@@ -360,7 +360,7 @@ export default function Home() {
         </div>
       </section>
 
-      <SiteFooter />
+      <SiteFooter className="mt-0" />
     </div>
   );
 }

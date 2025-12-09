@@ -21,7 +21,7 @@ export default function SiteHeader({ variant = "solid" }) {
 
   return (
     <header className={`${baseClass} sticky top-0 z-40`}>
-      <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+      <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between relative">
         <Link to="/" className="flex items-center gap-3">
           <img
             src={logoHeader}
@@ -50,7 +50,7 @@ export default function SiteHeader({ variant = "solid" }) {
         </nav>
 
         <button
-          className="md:hidden text-slate-700"
+          className="md:hidden text-slate-700 relative z-50"
           onClick={() => setOpen(true)}
         >
           <Menu className="w-6 h-6" />
@@ -58,8 +58,11 @@ export default function SiteHeader({ variant = "solid" }) {
       </div>
 
       {open && (
-        <div className="md:hidden fixed inset-0 z-50 bg-black/50">
-          <div className="ml-auto h-full w-72 bg-white shadow-xl flex flex-col">
+        <div className="md:hidden fixed inset-0 z-40 bg-black/50" onClick={() => setOpen(false)}>
+          <div
+            className="ml-auto h-full w-72 bg-white shadow-xl flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
               <img
                 src={logoHeader}

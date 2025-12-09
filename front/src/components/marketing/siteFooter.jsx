@@ -30,9 +30,9 @@ const footerColumns = [
   },
 ];
 
-export default function SiteFooter() {
+export default function SiteFooter({ className = "mt-20" }) {
   return (
-    <footer className="bg-slate-950 text-slate-300 mt-20">
+    <footer className={`bg-slate-950 text-slate-300 ${className}`}>
       <div className="max-w-6xl mx-auto px-6 py-12 grid gap-8 md:grid-cols-4">
         <div className="space-y-3">
           <img
