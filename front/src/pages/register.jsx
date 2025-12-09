@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { Loader2 } from "lucide-react";
 import { base44 } from "@/apiClient/base44Client";
 
 function slugify(value) {
@@ -73,125 +74,146 @@ export default function Register() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-white px-4">
-      <div className="w-full max-w-2xl border border-gray-200 rounded-2xl shadow-sm p-8 space-y-6">
-        <div className="text-center space-y-2">
-          <p className="text-xs font-semibold text-purple-600 tracking-wide uppercase">
+    <div className="min-h-screen bg-gradient-to-b from-purple-50 via-white to-white px-4 py-10 flex items-center justify-center">
+      <div className="w-full max-w-3xl space-y-8">
+        <div className="text-center space-y-3">
+          <span className="text-xs font-semibold text-purple-600 tracking-[0.3em] uppercase">
             Teste gratuito de 3 dias
-          </p>
-          <h1 className="text-3xl font-bold text-gray-900">
+          </span>
+          <h1 className="text-4xl font-bold text-slate-900">
             Crie sua conta no KONDOR STUDIO
           </h1>
-          <p className="text-sm text-gray-600 max-w-lg mx-auto">
-            Configure sua agência, adicione clientes e use todos os módulos durante o período de teste.
+          <p className="text-sm text-slate-600 max-w-2xl mx-auto">
+            Configure sua agência, convide o time e use todos os módulos durante o período de teste. Todo o fluxo foi pensado para funcionar perfeitamente em telas menores.
           </p>
         </div>
 
-        <form className="grid gap-5" onSubmit={handleSubmit}>
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                Nome da agência *
-              </label>
-              <input
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-                value={form.agencyName}
-                onChange={handleChange("agencyName")}
-                placeholder="Ex.: Alfa Social"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                Slug (subdomínio) *
-              </label>
-              <input
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-                value={form.tenantSlug}
-                onChange={handleChange("tenantSlug")}
-                placeholder="ex: alfa-social"
-              />
-              <p className="text-[11px] text-gray-500 mt-1">
-                Usaremos: <span className="font-medium">{suggestedSlug || "seu-slug"}</span>
-              </p>
-            </div>
-          </div>
+        <div className="card">
+          <form className="grid gap-5" onSubmit={handleSubmit} noValidate>
+            <fieldset className="grid gap-5" disabled={loading}>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1" htmlFor="agencyName">
+                    Nome da agência *
+                  </label>
+                  <input
+                    id="agencyName"
+                    name="agencyName"
+                    value={form.agencyName}
+                    onChange={handleChange("agencyName")}
+                    placeholder="Ex.: Alfa Social"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1" htmlFor="tenantSlug">
+                    Slug / subdomínio *
+                  </label>
+                  <input
+                    id="tenantSlug"
+                    name="tenantSlug"
+                    pattern="[a-z0-9-]+"
+                    value={form.tenantSlug}
+                    onChange={handleChange("tenantSlug")}
+                    placeholder="ex: alfa-social"
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Endereço sugerido: <span className="font-medium">{suggestedSlug || "seu-slug"}</span>
+                  </p>
+                </div>
+              </div>
 
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                Nome do administrador *
-              </label>
-              <input
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-                value={form.adminName}
-                onChange={handleChange("adminName")}
-                placeholder="Seu nome"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                E-mail corporativo *
-              </label>
-              <input
-                type="email"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-                value={form.email}
-                onChange={handleChange("email")}
-                placeholder="voce@agencia.com"
-                required
-              />
-            </div>
-          </div>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1" htmlFor="adminName">
+                    Nome do administrador *
+                  </label>
+                  <input
+                    id="adminName"
+                    name="adminName"
+                    value={form.adminName}
+                    onChange={handleChange("adminName")}
+                    placeholder="Seu nome"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1" htmlFor="email">
+                    E-mail corporativo *
+                  </label>
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    inputMode="email"
+                    value={form.email}
+                    onChange={handleChange("email")}
+                    placeholder="voce@agencia.com"
+                    required
+                  />
+                </div>
+              </div>
 
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                Senha *
-              </label>
-              <input
-                type="password"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-                value={form.password}
-                onChange={handleChange("password")}
-                placeholder="mínimo 6 caracteres"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                Confirmar senha *
-              </label>
-              <input
-                type="password"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-                value={form.confirmPassword}
-                onChange={handleChange("confirmPassword")}
-                placeholder="repita sua senha"
-                required
-              />
-            </div>
-          </div>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1" htmlFor="password">
+                    Senha *
+                  </label>
+                  <input
+                    id="password"
+                    name="password"
+                    type="password"
+                    value={form.password}
+                    onChange={handleChange("password")}
+                    placeholder="mínimo 6 caracteres"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1" htmlFor="confirmPassword">
+                    Confirmar senha *
+                  </label>
+                  <input
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    type="password"
+                    value={form.confirmPassword}
+                    onChange={handleChange("confirmPassword")}
+                    placeholder="repita sua senha"
+                    required
+                  />
+                </div>
+              </div>
+            </fieldset>
 
-          {error && (
-            <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
-              {error}
+            <div aria-live="assertive" className="min-h-[1.5rem]">
+              {error && (
+                <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
+                  {error}
+                </div>
+              )}
             </div>
-          )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full inline-flex items-center justify-center rounded-lg bg-purple-600 text-white text-sm font-medium px-4 py-2 hover:bg-purple-700 transition disabled:opacity-60"
-          >
-            {loading ? "Criando conta..." : "Começar meu teste grátis"}
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full inline-flex items-center justify-center rounded-full bg-purple-600 text-white text-sm font-semibold px-4 py-3 shadow-lg shadow-purple-500/20 hover:bg-purple-700 transition disabled:opacity-60"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Criando conta...
+                </>
+              ) : (
+                "Começar meu teste grátis"
+              )}
+            </button>
+          </form>
+        </div>
 
-        <div className="text-center text-sm text-gray-600">
+        <div className="text-center text-sm text-slate-600">
           Já tem conta?{" "}
-          <Link to="/login" className="text-purple-600 font-medium hover:underline">
+          <Link to="/login" className="text-purple-600 font-semibold hover:underline">
             Fazer login
           </Link>
         </div>

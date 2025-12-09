@@ -1,5 +1,6 @@
 // front/src/layout.jsx
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Menu, X } from "lucide-react";
@@ -70,8 +71,20 @@ const navItems = [
 
 export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    document.body.style.overflow = mobileOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobileOpen]);
 
   const toggleMobile = () => setMobileOpen((prev) => !prev);
   const closeMobile = () => setMobileOpen(false);
@@ -164,6 +177,8 @@ export default function Layout() {
               type="button"
               onClick={toggleMobile}
               className="p-2 rounded-lg border border-gray-200 text-gray-700"
+              aria-label={mobileOpen ? "Fechar menu" : "Abrir menu"}
+              aria-expanded={mobileOpen}
             >
               {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
@@ -178,54 +193,70 @@ export default function Layout() {
         </header>
 
         {/* MENU MOBILE */}
-        {mobileOpen && (
-          <nav className="md:hidden bg-white border-b border-gray-200 px-4 py-3 space-y-1">
-            <p className="text-xs font-semibold text-gray-500 px-1 mb-2">
-              Principal
-            </p>
-            {navItems.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                onClick={() => {
-                  closeMobile();
-                  handlePrefetch(item.prefetch);
-                }}
-                onMouseEnter={() => handlePrefetch(item.prefetch)}
-                className={({ isActive }) =>
-                  [
-                    "block px-3 py-2 rounded-lg text-sm transition-colors",
-                    isActive
-                      ? "font-medium"
-                      : "text-gray-600 hover:bg-gray-100",
-                  ].join(" ")
-                }
-                style={({ isActive }) =>
-                  isActive
-                    ? {
-                        background: "var(--primary-light)",
-                        color: "var(--primary)",
-                      }
-                    : {}
-                }
-              >
-                {item.label}
-              </NavLink>
-            ))}
-            <div className="pt-4 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={() => {
-                  closeMobile();
-                  handleLogout();
-                }}
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 active:bg-gray-100 transition"
-              >
-                Sair
-              </button>
-            </div>
-          </nav>
-        )}
+        {mobileOpen && isMounted
+          ? createPortal(
+              <div className="md:hidden fixed inset-0 z-[9999]">
+                <div
+                  className="absolute inset-0 bg-black/40"
+                  onClick={closeMobile}
+                  aria-hidden="true"
+                />
+                <nav className="absolute inset-y-0 right-0 w-72 max-w-full bg-white border-l border-gray-100 shadow-2xl px-4 py-6 flex flex-col">
+                  <div className="flex items-center justify-between mb-6">
+                    <img
+                      src={logoHeader}
+                      alt="Kondor Studio"
+                      className="h-8 w-auto"
+                    />
+                    <button
+                      type="button"
+                      onClick={closeMobile}
+                      className="p-2 rounded-full border border-gray-200 text-gray-600"
+                      aria-label="Fechar menu"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <p className="text-xs font-semibold text-gray-500 px-1 mb-2">
+                    Principal
+                  </p>
+                  <div className="flex-1 overflow-y-auto space-y-1">
+                    {navItems.map((item) => (
+                      <NavLink
+                        key={item.to}
+                        to={item.to}
+                        onClick={() => {
+                          closeMobile();
+                          handlePrefetch(item.prefetch);
+                        }}
+                        className={({ isActive }) =>
+                          [
+                            "block px-3 py-2 rounded-lg text-sm transition-colors",
+                            isActive
+                              ? "bg-purple-50 text-purple-700 font-medium"
+                              : "text-gray-600 hover:bg-gray-50",
+                          ].join(" ")
+                        }
+                      >
+                        {item.label}
+                      </NavLink>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closeMobile();
+                      handleLogout();
+                    }}
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 active:bg-gray-100 transition mt-3"
+                  >
+                    Sair
+                  </button>
+                </nav>
+              </div>,
+              document.body,
+            )
+          : null}
 
         {/* CONTEÚDO */}
         <main className="flex-1 overflow-auto p-4 md:p-6">
