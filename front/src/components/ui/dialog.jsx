@@ -34,7 +34,7 @@ export function DialogContent({ className = "", children, ...props }) {
     <div
       className={
         "bg-white rounded-2xl shadow-xl border border-gray-200 " +
-        "w-full max-w-lg mx-4 p-6 " +
+        "w-[calc(100vw-2rem)] max-w-full sm:max-w-lg mx-auto p-4 sm:p-6 " +
         className
       }
       {...props}
