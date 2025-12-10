@@ -50,12 +50,20 @@ router.post('/', upload.single('file'), async (req, res) => {
       metadata: { uploadedBy: req.user?.id || null },
     });
 
+    const forwardedProtoHeader = (req.headers["x-forwarded-proto"] || "")
+      .toString()
+      .split(",")[0]
+      .trim();
+    const fallbackProto = forwardedProtoHeader || req.protocol || "http";
+    const host = req.get("host") || "localhost";
+    const fallbackBase = `${fallbackProto}://${host}`;
+
     const baseUrl =
       process.env.UPLOADS_BASE_URL ||
       process.env.API_PUBLIC_URL ||
       process.env.API_BASE_URL ||
       process.env.RENDER_EXTERNAL_URL ||
-      `${req.protocol}://${req.get('host')}`;
+      fallbackBase;
     const normalizedBase = baseUrl.replace(/\/$/, '');
     const finalUrl = `${normalizedBase}/uploads/public/${encodeURIComponent(result.key)}`;
 

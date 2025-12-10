@@ -16,6 +16,9 @@ const auditLog = require("./middleware/auditLog");
 const errorLogger = require("./middleware/errorLogger");
 
 const app = express();
+// Honra X-Forwarded-* headers quando estamos atrás de proxies (Render / Nginx).
+// Sem isso, req.protocol fica como "http" e os links de upload retornam URLs inseguras.
+app.set("trust proxy", 1);
 const isProduction = process.env.NODE_ENV === "production";
 
 async function ensureRefreshTokenColumns() {
