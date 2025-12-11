@@ -7,7 +7,7 @@ const authMiddleware = require('../middleware/auth');
 const tenantMiddleware = require('../middleware/tenant');
 const uploadsService = require('../services/uploadsService');
 
-const MAX_FILE_SIZE_MB = Number(process.env.UPLOADS_MAX_FILE_SIZE_MB || 150);
+const MAX_FILE_SIZE_MB = Number(process.env.UPLOADS_MAX_FILE_SIZE_MB || 200);
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
 // memória storage (usamos buffer para enviar ao S3 via service)
