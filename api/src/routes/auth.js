@@ -154,14 +154,21 @@ router.post('/client-login', loginRateLimiter, async (req, res) => {
     }
 
     const { email, password } = parseResult.data;
+    const normalizedEmail = (email || '').trim().toLowerCase();
 
     const client = await prisma.client.findFirst({
-      where: { email },
+      where: {
+        OR: [
+          { email: normalizedEmail },
+          { portalEmail: normalizedEmail },
+        ],
+      },
       select: {
         id: true,
         tenantId: true,
         name: true,
         email: true,
+        portalEmail: true,
         metadata: true,
         portalPasswordHash: true,
       },
@@ -221,7 +228,7 @@ router.post('/client-login', loginRateLimiter, async (req, res) => {
       client: {
         id: client.id,
         name: client.name,
-        email: client.email,
+        email: client.portalEmail || client.email,
         tenantId: client.tenantId,
       },
     });
