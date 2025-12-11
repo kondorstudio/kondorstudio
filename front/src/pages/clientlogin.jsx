@@ -1,6 +1,7 @@
 // front/src/pages/clientlogin.jsx
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
+import { Loader2, Mail, Lock } from "lucide-react";
 import { base44 } from "@/apiClient/base44Client";
 
 export default function ClientLogin() {
@@ -50,64 +51,105 @@ export default function ClientLogin() {
     }
   }
 
+  const inputClass =
+    "w-full rounded-[14px] border-[1.5px] border-[#C4B5FD]/90 bg-white/85 px-4 py-3 text-[15px] text-slate-900 placeholder:text-slate-400 shadow-[0_15px_45px_rgba(124,58,237,0.08)] focus:outline-none focus:ring-2 focus:ring-[#A78BFA] focus:border-[#A78BFA] transition-all duration-150";
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-white">
-      <div className="w-full max-w-md border border-gray-200 rounded-xl shadow-sm p-8">
-        <div className="mb-6 text-center">
-          <h1 className="text-xl font-semibold text-gray-900">
-            Portal do Cliente
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Acesse para aprovar posts, ver métricas e relatórios.
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(124,58,237,0.2),_transparent_60%)] from-slate-900/5 via-white to-white px-4 py-16 flex items-center justify-center">
+      <div className="w-full max-w-xl space-y-10">
+        <div className="text-center space-y-3">
+          <p className="tracking-widest text-xs font-semibold text-[#A78BFA] uppercase">
+            Bem-vindo ao portal
+          </p>
+          <h1 className="text-3xl font-bold text-gray-900">Acesse como cliente</h1>
+          <p className="text-base text-gray-500 max-w-md mx-auto">
+            Aprove a criação da sua agência, acompanhe métricas e mantenha a operação sincronizada em tempo real.
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              E-mail
-            </label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-              placeholder="seuemail@empresa.com"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Senha do portal
-            </label>
-            <input
-              type="password"
-              required
-              value={portalPassword}
-              onChange={(e) => setPortalPassword(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-              placeholder="Digite sua senha"
-            />
-            <p className="mt-1 text-[11px] text-gray-500">
-              No primeiro acesso, você definirá a senha do portal.
-            </p>
-          </div>
-
-          {error && (
-            <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
-              {error}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full inline-flex items-center justify-center rounded-md bg-purple-500 text-white text-sm font-medium px-4 py-2 hover:bg-purple-600 disabled:opacity-60 disabled:cursor-not-allowed transition"
+        <div className="relative group animate-fade-in-up">
+          <div className="absolute inset-0 rounded-[32px] bg-gradient-to-br from-white/70 via-white/10 to-white/70 blur-3xl" aria-hidden />
+          <form
+            onSubmit={handleSubmit}
+            noValidate
+            className="relative rounded-[24px] border border-[#C4B5FD]/20 bg-white/80 backdrop-blur-xl shadow-2xl px-8 py-10 md:px-10 md:py-12 transition-all duration-500 ease-out group-hover:-translate-y-1 group-hover:shadow-[0_30px_80px_rgba(79,70,229,0.18)]"
           >
-            {loading ? "Entrando..." : "Entrar no portal"}
-          </button>
-        </form>
+            <fieldset className="space-y-6" disabled={loading}>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-500" htmlFor="client-email">
+                  E-mail
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400 pointer-events-none" />
+                  <input
+                    id="client-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="seuemail@empresa.com"
+                    className={`${inputClass} pl-12`}
+                    autoComplete="email"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-500" htmlFor="client-password">
+                  Senha do portal
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400 pointer-events-none" />
+                  <input
+                    id="client-password"
+                    type="password"
+                    value={portalPassword}
+                    onChange={(e) => setPortalPassword(e.target.value)}
+                    placeholder="Digite sua senha"
+                    className={`${inputClass} pl-12`}
+                    autoComplete="current-password"
+                    required
+                  />
+                </div>
+                <p className="text-[11px] text-gray-400">
+                  No primeiro acesso, você cria a senha do portal a partir do convite enviado pela agência.
+                </p>
+              </div>
+            </fieldset>
+
+            <div aria-live="assertive" className="min-h-[1.5rem] mt-6">
+              {error && (
+                <div className="text-xs text-red-600 bg-red-50/80 border border-red-100 rounded-2xl px-4 py-2">
+                  {error}
+                </div>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="mt-2 w-full inline-flex items-center justify-center rounded-full bg-gradient-to-r from-[#7C3AED] to-[#A78BFA] text-sm font-semibold tracking-wide text-white px-6 py-4 shadow-lg shadow-[#7C3AED]/30 hover:scale-[1.02] transition-all duration-150 disabled:opacity-70 disabled:hover:scale-100"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Validando acesso...
+                </>
+              ) : (
+                "Entrar no portal"
+              )}
+            </button>
+          </form>
+        </div>
+
+        <div className="text-center space-y-2 text-sm text-gray-600">
+          <Link
+            to="/login"
+            className="inline-flex items-center justify-center text-xs text-gray-500 underline decoration-gray-300/60 underline-offset-4 hover:text-gray-700 hover:decoration-purple-200 transition"
+          >
+            Sou da agência e preciso do painel interno
+          </Link>
+        </div>
       </div>
     </div>
   );
