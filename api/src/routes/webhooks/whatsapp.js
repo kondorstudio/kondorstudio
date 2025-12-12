@@ -25,16 +25,29 @@ router.post(
   "/meta",
   express.json({ type: "*/*" }),
   (req, res) => {
-    // IMPORTANTE: responder rápido
     res.sendStatus(200);
 
     try {
-      console.log(
-        "📩 WhatsApp webhook recebido:",
-        JSON.stringify(req.body, null, 2)
-      );
+      const entry = req.body?.entry?.[0];
+      const change = entry?.changes?.[0];
+      const value = change?.value;
+
+      if (!value?.messages?.length) return;
+
+      const message = value.messages[0];
+
+      const parsedMessage = {
+        from: message.from,
+        messageId: message.id,
+        type: message.type,
+        text: message.text?.body || null,
+        timestamp: message.timestamp,
+        phoneNumberId: value.metadata?.phone_number_id || null,
+      };
+
+      console.log("📩 WhatsApp message parsed:", parsedMessage);
     } catch (err) {
-      console.error("Erro ao processar webhook:", err);
+      console.error("❌ Error parsing WhatsApp webhook:", err);
     }
   }
 );
