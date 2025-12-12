@@ -1,8 +1,43 @@
-const crypto = require("crypto");
 const express = require("express");
 const router = express.Router();
 
-const { prisma } = require("../../prisma");
+/**
+ * Envia mensagem de texto via WhatsApp Cloud API
+ */
+async function sendWhatsAppText({ to, body, phoneNumberId }) {
+  const token = process.env.WHATSAPP_META_TOKEN;
+  const pnid = phoneNumberId || process.env.WHATSAPP_META_PHONE_NUMBER_ID;
+
+  if (!token) throw new Error("WHATSAPP_META_TOKEN não configurado");
+  if (!pnid) throw new Error("WHATSAPP_META_PHONE_NUMBER_ID não configurado");
+
+  const url = `https://graph.facebook.com/v22.0/${pnid}/messages`;
+
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to,
+      type: "text",
+      text: { body },
+    }),
+  });
+
+  const data = await resp.json().catch(() => ({}));
+
+  if (!resp.ok) {
+    const msg =
+      data?.error?.message ||
+      `Falha ao enviar WhatsApp (HTTP ${resp.status})`;
+    throw new Error(msg);
+  }
+
+  return data;
+}
 
 /**
  * Verificação do webhook (Meta)
@@ -24,20 +59,24 @@ router.get("/meta", (req, res) => {
  * Eventos do WhatsApp (mensagens, status etc.)
  * POST /api/webhooks/whatsapp/meta
  */
-router.post("/meta", express.json({ type: "*/*" }), async (req, res) => {
-  // IMPORTANTE: responder rápido pra Meta não re-tentar
+router.post("/meta", express.json({ type: "*/*" }), (req, res) => {
+  // responde rápido pro Meta não tentar de novo
   res.sendStatus(200);
 
-  try {
-    const entry = req.body?.entry?.[0];
-    const change = entry?.changes?.[0];
-    const value = change?.value;
+  // processa “em background” dentro do request
+  setImmediate(async () => {
+    try {
+      const entry = req.body?.entry?.[0];
+      const change = entry?.changes?.[0];
+      const value = change?.value;
 
-    if (!value) return;
+      // Ignora eventos que não são mensagens recebidas
+      if (!value?.messages?.length) return;
 
-    // === Mensagens recebidas ===
-    if (value.messages?.length) {
       const message = value.messages[0];
+
+      // Ignora se não for mensagem “real” (ex.: não tem from)
+      if (!message?.from) return;
 
       const parsedMessage = {
         from: message.from,
@@ -49,45 +88,25 @@ router.post("/meta", express.json({ type: "*/*" }), async (req, res) => {
         contactName: value.contacts?.[0]?.profile?.name || null,
       };
 
-      // Salva no banco (tabela criada via SQL no server.js)
-      const id = crypto.randomUUID();
-
-      await prisma.$executeRaw`
-        INSERT INTO "whatsapp_messages"
-          ("id", "tenantId", "from", "waMessageId", "phoneNumberId", "type", "textBody", "rawPayload")
-        VALUES
-          (${id}, ${null}, ${parsedMessage.from}, ${parsedMessage.messageId}, ${parsedMessage.phoneNumberId}, ${parsedMessage.type}, ${parsedMessage.text}, ${req.body})
-        ON CONFLICT ("waMessageId") DO NOTHING;
-      `;
-
       console.log("✅ WhatsApp message parsed:", parsedMessage);
-      console.log("💾 WhatsApp message saved:", {
-        waMessageId: parsedMessage.messageId,
-        from: parsedMessage.from,
-      });
-      return;
+
+      // ======= RESPOSTA AUTOMÁTICA (primeiro teste) =======
+      // responde somente quando vier texto
+      if (parsedMessage.type === "text") {
+        const replyText = `Recebi sua mensagem ✅\n\nMensagem: "${parsedMessage.text || ""}"`;
+
+        const sent = await sendWhatsAppText({
+          to: parsedMessage.from, // responde para quem enviou
+          body: replyText,
+          phoneNumberId: parsedMessage.phoneNumberId, // usa o phone_number_id do evento (melhor)
+        });
+
+        console.log("📤 WhatsApp reply sent:", sent);
+      }
+    } catch (err) {
+      console.error("❌ Error handling WhatsApp webhook:", err?.message || err);
     }
-
-    // === Status de entrega/leitura (se você assinar 'statuses'/'message_status') ===
-    if (value.statuses?.length) {
-      const status = value.statuses[0];
-
-      const parsedStatus = {
-        messageId: status.id,
-        status: status.status, // sent, delivered, read, failed
-        timestamp: status.timestamp,
-        recipientId: status.recipient_id,
-        phoneNumberId: value.metadata?.phone_number_id || null,
-      };
-
-      console.log("✅ WhatsApp status parsed:", parsedStatus);
-      return;
-    }
-
-    // Outros eventos (ignorar por enquanto)
-  } catch (err) {
-    console.error("❌ Error handling WhatsApp webhook:", err);
-  }
+  });
 });
 
 module.exports = router;
