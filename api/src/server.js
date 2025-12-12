@@ -130,12 +130,51 @@ async function ensureTeamMemberColumns() {
     );
   }
 }
+async function ensureWhatsAppMessagesTable() {
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "whatsapp_messages" (
+        "id" TEXT PRIMARY KEY,
+        "tenantId" TEXT,
+        "from" TEXT NOT NULL,
+        "waMessageId" TEXT,
+        "phoneNumberId" TEXT,
+        "type" TEXT NOT NULL,
+        "textBody" TEXT,
+        "rawPayload" JSONB NOT NULL,
+        "receivedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE UNIQUE INDEX IF NOT EXISTS "whatsapp_messages_waMessageId_key"
+      ON "whatsapp_messages"("waMessageId")
+      WHERE "waMessageId" IS NOT NULL;
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS "whatsapp_messages_tenantId_idx"
+      ON "whatsapp_messages"("tenantId");
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS "whatsapp_messages_from_idx"
+      ON "whatsapp_messages"("from");
+    `);
+  } catch (err) {
+    console.warn(
+      "Não foi possível garantir tabela whatsapp_messages:",
+      err?.message || err
+    );
+  }
+}
 
 ensureRefreshTokenColumns();
 ensureUserColumns();
 ensureClientOnboardingColumns();
 ensureFinancialRecordColumns();
 ensureTeamMemberColumns();
+ensureWhatsAppMessagesTable();
 
 // Helpers
 function safeMount(path, router) {

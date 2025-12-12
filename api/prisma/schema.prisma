@@ -776,3 +776,18 @@ model JobHistory {
   @@map("job_history")
   @@index([tenantId])
 }
+model WhatsAppMessage {
+  id            String   @id @default(cuid())
+  tenantId      String?
+  from          String
+  waMessageId   String?  @unique
+  phoneNumberId String?
+  type          String
+  textBody      String?
+  rawPayload    Json
+  receivedAt    DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([from])
+  @@map("whatsapp_messages")
+}
