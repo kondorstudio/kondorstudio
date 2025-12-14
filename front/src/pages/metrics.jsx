@@ -88,7 +88,6 @@ function DropdownChip({ value, onChange, options, placeholder, className = "" })
 
 export default function Metrics() {
   const [selectedClient, setSelectedClient] = useState("all");
-  const [selectedPlatform, setSelectedPlatform] = useState("all");
   const METRIC_KEYS = ["impressions", "clicks", "conversions", "spend", "revenue"];
 
   const { data: clients = [] } = useQuery({
@@ -99,12 +98,8 @@ export default function Metrics() {
   const filters = React.useMemo(
     () => ({
       clientId: selectedClient !== "all" ? selectedClient : undefined,
-      source:
-        selectedPlatform !== "all"
-          ? selectedPlatform.toLowerCase()
-          : undefined,
     }),
-    [selectedClient, selectedPlatform],
+    [selectedClient],
   );
 
   const { data: aggregateData = { buckets: [] }, isLoading: loadingAggregate } = useQuery({
@@ -133,7 +128,6 @@ export default function Metrics() {
       params.set("days", "30");
       params.set("metricTypes", METRIC_KEYS.join(","));
       if (filters.clientId) params.set("clientId", filters.clientId);
-      if (filters.source) params.set("source", filters.source);
       return base44.jsonFetch(`/metrics/summary/quick?${params.toString()}`);
     },
   });
@@ -222,19 +216,6 @@ export default function Metrics() {
                 value: client.id,
                 label: client.name,
               })),
-            ]}
-            className="w-64"
-          />
-
-          <DropdownChip
-            value={selectedPlatform}
-            onChange={setSelectedPlatform}
-            placeholder="Todas as plataformas"
-            options={[
-              { value: "all", label: "Todas as plataformas" },
-              { value: "meta", label: "Meta Ads" },
-              { value: "google_ads", label: "Google Ads" },
-              { value: "tiktok", label: "TikTok Ads" },
             ]}
             className="w-64"
           />

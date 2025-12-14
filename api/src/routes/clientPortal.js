@@ -98,10 +98,7 @@ router.get('/metrics', clientAuth, async (req, res) => {
       where: {
         tenantId: req.tenantId,
         ...(Object.keys(dateFilter).length ? { collectedAt: dateFilter } : {}),
-        OR: [
-          { clientId: req.client.id },
-          { post: { clientId: req.client.id } },
-        ],
+        post: { clientId: req.client.id },
       },
       orderBy: { collectedAt: 'desc' },
       include: {

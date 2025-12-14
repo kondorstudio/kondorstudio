@@ -178,7 +178,7 @@ router.get("/campaigns", async (req, res) => {
     const tenantId = req.tenantId;
 
     const campaigns = await prisma.metric.groupBy({
-      by: ["source"],
+      by: ["postId"],
       where: { tenantId },
       _sum: {
         value: true,
@@ -189,11 +189,24 @@ router.get("/campaigns", async (req, res) => {
       take: 10,
     });
 
+    const postIds = campaigns.map((c) => c.postId);
+    const posts = await prisma.post.findMany({
+      where: { id: { in: postIds } },
+      select: { id: true, title: true, clientId: true },
+    });
+
+    const postMap = new Map(posts.map((p) => [p.id, p]));
+
     return res.json({
-      items: campaigns.map((item) => ({
-        source: item.source || 'desconhecido',
-        totalValue: item._sum.value || 0,
-      })),
+      items: campaigns.map((item) => {
+        const post = postMap.get(item.postId);
+        return {
+          postId: item.postId,
+          title: post?.title || 'Campanha',
+          clientId: post?.clientId || null,
+          totalValue: item._sum.value || 0,
+        };
+      }),
     });
   } catch (err) {
     console.error("GET /metrics/campaigns error:", err);

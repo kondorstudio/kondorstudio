@@ -88,7 +88,7 @@ async function finalizeJob(entry, status, result, options = {}) {
   });
 }
 
-async function saveMetric(tenantId, metric, providerType, range, defaultClientId = null) {
+async function saveMetric(tenantId, metric, providerType, range) {
   const referenceTs = getReferenceTimestamp(range);
   const { start, end } = getDayBounds(referenceTs);
 
@@ -99,15 +99,17 @@ async function saveMetric(tenantId, metric, providerType, range, defaultClientId
   }
 
   const value = Number(metric.value || 0);
-  const source = providerType || 'integration';
-  const clientId = metric.clientId || metric.client_id || defaultClientId || null;
+  const postId = metric.postId || metric.post_id || null;
+  if (!postId) {
+    safeLog('saveMetric ignorou métrica sem postId', metric);
+    return null;
+  }
 
   const existing = await prisma.metric.findFirst({
     where: {
       tenantId,
       name,
-      source,
-      clientId,
+      postId,
       collectedAt: {
         gte: start,
         lt: end,
@@ -134,12 +136,14 @@ async function saveMetric(tenantId, metric, providerType, range, defaultClientId
   return prisma.metric.create({
     data: {
       tenantId,
-      clientId,
+      postId,
       name,
       value,
       collectedAt: referenceTs,
-      source,
-      meta: range || metric.meta ? { ...(metric.meta || {}), range: range || null } : null,
+      meta:
+        range || metric.meta
+          ? { ...(metric.meta || {}), range: range || null, provider: providerType || null }
+          : null,
     },
   });
 }
@@ -219,13 +223,7 @@ async function processMetricJob(entry) {
       safeLog('Nenhuma métrica retornada do provider', providerKey);
     } else {
       for (const m of metrics) {
-        await saveMetric(
-          tenantId,
-          m,
-          providerKey,
-          payload.range,
-          payload.clientId || null,
-        );
+        await saveMetric(tenantId, m, providerKey, payload.range);
       }
     }
 
