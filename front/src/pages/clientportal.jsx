@@ -159,6 +159,32 @@ export default function ClientPortal() {
 
   const approvals = approvalsData?.items || [];
 
+  const approveClientApproval = useCallback(
+    (approvalId, payload) =>
+      fetchClient(
+        `/client-portal/approvals/${approvalId}/approve`,
+        clientToken,
+        {
+          method: "POST",
+          body: JSON.stringify(payload || {}),
+        },
+      ),
+    [clientToken],
+  );
+
+  const rejectClientApproval = useCallback(
+    (approvalId, payload) =>
+      fetchClient(
+        `/client-portal/approvals/${approvalId}/reject`,
+        clientToken,
+        {
+          method: "POST",
+          body: JSON.stringify(payload || {}),
+        },
+      ),
+    [clientToken],
+  );
+
   const approvalsByPostId = useMemo(() => {
     const map = new Map();
     approvals.forEach((approval) => {
@@ -520,20 +546,3 @@ function MetricsPanel({ metrics }) {
     </div>
   );
 }
-  const approveClientApproval = useCallback(
-    (approvalId, payload) =>
-      fetchClient(`/client-portal/approvals/${approvalId}/approve`, clientToken, {
-        method: "POST",
-        body: JSON.stringify(payload || {}),
-      }),
-    [clientToken],
-  );
-
-  const rejectClientApproval = useCallback(
-    (approvalId, payload) =>
-      fetchClient(`/client-portal/approvals/${approvalId}/reject`, clientToken, {
-        method: "POST",
-        body: JSON.stringify(payload || {}),
-      }),
-    [clientToken],
-  );

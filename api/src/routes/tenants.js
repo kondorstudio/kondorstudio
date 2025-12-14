@@ -2,8 +2,45 @@ const express = require('express');
 const router = express.Router();
 const { prisma } = require('../prisma');
 const { hashPassword, hashToken } = require('../utils/hash');
-const { createAccessToken, createRefreshToken } = require('../utils/jwt');
-const jwt = require('jsonwebtoken');
+const {
+  createAccessToken,
+  createRefreshToken,
+  REFRESH_TOKEN_EXPIRES_IN,
+} = require('../utils/jwt');
+
+function computeExpiryDateFromString(expiresIn) {
+  try {
+    const lower = String(expiresIn || '').toLowerCase().trim();
+    if (!lower) {
+      const d = new Date();
+      d.setDate(d.getDate() + 30);
+      return d;
+    }
+
+    if (lower.endsWith('d')) {
+      const days = parseInt(lower.slice(0, -1), 10);
+      const d = new Date();
+      d.setDate(d.getDate() + (Number.isFinite(days) ? days : 30));
+      return d;
+    }
+    if (lower.endsWith('h')) {
+      const hours = parseInt(lower.slice(0, -1), 10);
+      const d = new Date();
+      d.setHours(d.getHours() + (Number.isFinite(hours) ? hours : 24));
+      return d;
+    }
+    if (lower.endsWith('m')) {
+      const mins = parseInt(lower.slice(0, -1), 10);
+      const d = new Date();
+      d.setMinutes(d.getMinutes() + (Number.isFinite(mins) ? mins : 60));
+      return d;
+    }
+  } catch (err) {}
+
+  const d = new Date();
+  d.setDate(d.getDate() + 30);
+  return d;
+}
 
 /**
  * POST /tenants/register
@@ -82,18 +119,15 @@ router.post('/register', async (req, res) => {
 
     const payload = { sub: user.id, tenantId: tenant.id };
     const accessToken = createAccessToken(payload);
-    const refreshToken = createRefreshToken(payload);
-
-    const decodedRefresh = jwt.decode(refreshToken);
-    const expiresAt = decodedRefresh?.exp
-      ? new Date(decodedRefresh.exp * 1000)
-      : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const refreshToken = createRefreshToken();
+    const expiresAt = computeExpiryDateFromString(REFRESH_TOKEN_EXPIRES_IN);
 
     const refreshHash = await hashToken(refreshToken);
     const refreshRecord = await prisma.refreshToken.create({
       data: {
         tokenHash: refreshHash,
         userId: user.id,
+        tenantId: tenant.id,
         expiresAt,
       },
     });

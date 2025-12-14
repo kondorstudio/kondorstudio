@@ -67,12 +67,21 @@ async function checkSubscription(req, res, next) {
       });
     }
 
-    const validStatuses = ["trial", "active"];
+    // PaymentStatus enum values in Prisma (uppercase) + optional lowercase fallbacks
+    const validStatuses = ["PENDING", "SUCCEEDED", "TRIAL", "ACTIVE"];
+    const subscriptionStatus = (
+      typeof subscription?.status === "string"
+        ? subscription.status
+        : ""
+    ).toUpperCase();
+    const periodValid =
+      !subscription?.currentPeriodEnd ||
+      dayjs(subscription.currentPeriodEnd).isAfter(now);
+
     const subValid =
       subscription &&
-      validStatuses.includes(subscription.status) &&
-      subscription.currentPeriodEnd &&
-      dayjs(subscription.currentPeriodEnd).isAfter(now);
+      validStatuses.includes(subscriptionStatus) &&
+      periodValid;
 
     if (subscription && !subValid) {
       return res.status(402).json({
