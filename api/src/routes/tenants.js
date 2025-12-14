@@ -111,10 +111,17 @@ router.post('/register', async (req, res) => {
         },
       });
 
-      await prisma.tenant.update({
-        where: { id: tenant.id },
-        data: { planId: plan.id },
-      });
+      try {
+        await prisma.tenant.update({
+          where: { id: tenant.id },
+          data: { planId: plan.id },
+        });
+      } catch (err) {
+        console.warn(
+          "[TENANTS_REGISTER] Não foi possível vincular plano ao tenant:",
+          err?.message || err,
+        );
+      }
     }
 
     const payload = { sub: user.id, tenantId: tenant.id };

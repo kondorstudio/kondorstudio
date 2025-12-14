@@ -2,6 +2,8 @@ const dayjs = require("dayjs");
 const { PrismaClient } = require("@prisma/client");
 
 const prisma = new PrismaClient();
+const STRICT_SUBSCRIPTION_CHECK =
+  process.env.ENFORCE_SUBSCRIPTION_CHECK === "true";
 
 const ALWAYS_ALLOWED = [
   "/api/auth/login",
@@ -60,11 +62,20 @@ async function checkSubscription(req, res, next) {
 
     const isTrial = !subscription && now.isBefore(trialEnds);
 
-    if (!subscription && !isTrial) {
-      return res.status(402).json({
-        error: "Assinatura necessária para continuar.",
-        code: "SUBSCRIPTION_REQUIRED",
-      });
+    if (!subscription) {
+      req.subscription = {
+        status: isTrial ? "trial" : "missing",
+        currentPeriodEnd: trialEnds.toDate(),
+      };
+
+      if (STRICT_SUBSCRIPTION_CHECK && !isTrial) {
+        return res.status(402).json({
+          error: "Assinatura necessária para continuar.",
+          code: "SUBSCRIPTION_REQUIRED",
+        });
+      }
+
+      return next();
     }
 
     // PaymentStatus enum values in Prisma (uppercase) + optional lowercase fallbacks
@@ -84,10 +95,16 @@ async function checkSubscription(req, res, next) {
       periodValid;
 
     if (subscription && !subValid) {
-      return res.status(402).json({
-        error: "Sua assinatura expirou.",
-        code: "SUBSCRIPTION_EXPIRED",
-      });
+      if (STRICT_SUBSCRIPTION_CHECK) {
+        return res.status(402).json({
+          error: "Sua assinatura expirou.",
+          code: "SUBSCRIPTION_EXPIRED",
+        });
+      }
+      console.warn(
+        "[CHECK_SUBSCRIPTION] assinatura inválida, liberando por modo flexível",
+        subscription.id,
+      );
     }
 
     req.subscription = subscription || {
