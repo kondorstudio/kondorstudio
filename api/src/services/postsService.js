@@ -43,8 +43,10 @@ async function ensureApprovalRequest(tenantId, post, userId) {
 		postId: post.id,
 		clientId: post.clientId,
 		status: 'PENDING',
-		title: post.title,
-		description: post.caption,
+		notes: post.caption || post.body || null,
+		metadata: {
+			postTitle: post.title || null,
+		},
 	});
 }
 
