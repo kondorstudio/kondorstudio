@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { Worker, QueueScheduler } = require('bullmq');
+const { Worker } = require('bullmq');
 const Redis = require('ioredis');
 
 const {
@@ -50,29 +50,6 @@ async function runPollOnce(jobModule, label) {
     throw err;
   }
 }
-
-// ------------------------------------------------------
-// Schedulers das filas (necessários para jobs delayed/repeatable)
-// ------------------------------------------------------
-const metricsScheduler = new QueueScheduler(metricsSyncQueue.name, {
-  connection,
-});
-const reportsScheduler = new QueueScheduler(reportsQueue.name, {
-  connection,
-});
-const whatsappScheduler = new QueueScheduler(whatsappQueue.name, {
-  connection,
-});
-
-metricsScheduler.on('failed', (jobId, err) => {
-  console.error('[metrics-sync:scheduler] failed', jobId, err);
-});
-reportsScheduler.on('failed', (jobId, err) => {
-  console.error('[reports-generation:scheduler] failed', jobId, err);
-});
-whatsappScheduler.on('failed', (jobId, err) => {
-  console.error('[whatsapp-automation:scheduler] failed', jobId, err);
-});
 
 // ------------------------------------------------------
 // Workers das filas
@@ -161,35 +138,9 @@ async function ensureRepeatableJobs() {
     WHATSAPP_AUTOMATION_PERIOD_MS,
   });
 
-  await metricsSyncQueue.add(
-    'metrics-poll',
-    {},
-    {
-      repeat: { every: METRICS_AGG_PERIOD_MS },
-      jobId: 'metrics-poll',
-      removeOnComplete: true,
-    },
-  );
-
-  await reportsQueue.add(
-    'reports-poll',
-    {},
-    {
-      repeat: { every: REPORTS_GENERATION_PERIOD_MS },
-      jobId: 'reports-poll',
-      removeOnComplete: true,
-    },
-  );
-
-  await whatsappQueue.add(
-    'whatsapp-poll',
-    {},
-    {
-      repeat: { every: WHATSAPP_AUTOMATION_PERIOD_MS },
-      jobId: 'whatsapp-poll',
-      removeOnComplete: true,
-    },
-  );
+  await metricsSyncQueue.upsertJobScheduler('metrics-poll', { every: METRICS_AGG_PERIOD_MS });
+  await reportsQueue.upsertJobScheduler('reports-poll', { every: REPORTS_GENERATION_PERIOD_MS });
+  await whatsappQueue.upsertJobScheduler('whatsapp-poll', { every: WHATSAPP_AUTOMATION_PERIOD_MS });
 
   console.log('[worker] repeatable jobs registrados com sucesso');
 }
