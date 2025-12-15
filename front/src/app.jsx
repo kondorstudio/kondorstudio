@@ -1,6 +1,6 @@
 // front/src/app.jsx
 import React, { Suspense, lazy } from "react";
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 
 import Layout from "./layout.jsx";
 import PrivateRoute from "./components/privateRoute.jsx";
@@ -24,7 +24,16 @@ const Register = lazy(() => import("./pages/register.jsx"));
 const Onboarding = lazy(() => import("./pages/onboarding.jsx"));
 
 const ClientLogin = lazy(() => import("./pages/clientlogin.jsx"));
-const ClientPortal = lazy(() => import("./pages/clientportal.jsx"));
+const ClientPortalLayout = lazy(() => import("./pages/clientportal.jsx"));
+const ClientHomePage = lazy(() =>
+  import("./pages/clientportal.jsx").then((m) => ({ default: m.ClientHomePage })),
+);
+const ClientPostsPage = lazy(() =>
+  import("./pages/clientportal.jsx").then((m) => ({ default: m.ClientPostsPage })),
+);
+const ClientMetricsPage = lazy(() =>
+  import("./pages/clientportal.jsx").then((m) => ({ default: m.ClientMetricsPage })),
+);
 
 const Pricing = lazy(() => import("./pages/pricing.jsx"));
 const ModulesPage = lazy(() => import("./pages/modules.jsx"));
@@ -60,7 +69,13 @@ export default function App() {
 
         {/* Login / portal do cliente (white-label) */}
         <Route path="/clientlogin" element={<ClientLogin />} />
-        <Route path="/clientportal" element={<ClientPortal />} />
+        <Route path="/client" element={<ClientPortalLayout />}>
+          <Route index element={<ClientHomePage />} />
+          <Route path="home" element={<ClientHomePage />} />
+          <Route path="posts" element={<ClientPostsPage />} />
+          <Route path="metrics" element={<ClientMetricsPage />} />
+        </Route>
+        <Route path="/clientportal/*" element={<Navigate to="/client" replace />} />
 
         {/* Área autenticada da agência */}
         <Route element={<PrivateRoute />}>
