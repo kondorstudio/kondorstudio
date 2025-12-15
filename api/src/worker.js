@@ -17,7 +17,9 @@ const automationWhatsAppJob = require('./jobs/automationWhatsAppJob');
 // Conexão do BullMQ (usa REDIS_URL da env; em dev cai pro localhost)
 // ------------------------------------------------------
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
-const connection = new Redis(REDIS_URL);
+const connection = new Redis(REDIS_URL, {
+  maxRetriesPerRequest: null,
+});
 
 // Períodos de agendamento (ms)
 const METRICS_AGG_PERIOD_MS = Number(process.env.METRICS_AGG_PERIOD_MS) || 3600000; // 1h
