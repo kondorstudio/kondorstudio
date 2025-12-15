@@ -51,8 +51,7 @@ module.exports = {
 
     if (q) {
       where.OR = [
-        { title: { contains: q, mode: 'insensitive' } },
-        { description: { contains: q, mode: 'insensitive' } },
+        { notes: { contains: q, mode: 'insensitive' } },
       ];
     }
 
@@ -82,18 +81,32 @@ module.exports = {
    * data pode conter: title, description, postId, clientId, status, assignedTo, metadata
    */
   async create(tenantId, userId, data = {}) {
+    const resolvedNotes =
+      data.notes !== undefined
+        ? data.notes
+        : data.description || data.body || null;
+
+    let metadata =
+      data.metadata && typeof data.metadata === 'object'
+        ? { ...data.metadata }
+        : null;
+
+    const resolvedTitle = data.title || data.name || null;
+    if (resolvedTitle) {
+      metadata = metadata ? { ...metadata, title: resolvedTitle } : { title: resolvedTitle };
+    }
+
     const payload = {
       tenantId,
-      title: data.title || data.name || null,
-      description: data.description || data.body || null,
+      notes: resolvedNotes,
       postId: data.postId || data.post_id || null,
       clientId: data.clientId || data.client_id || null,
       status: data.status || 'PENDING',
       assignedTo: data.assignedTo || null,
       createdBy: userId || null,
       dueDate: toDateOrNull(data.dueDate || data.due_date),
-      metadata: data.metadata || null,
-      attachments: data.attachments || null, // array/json with media refs
+      metadata,
+      attachments: data.attachments || null,
       version: data.version || 1,
     };
 
@@ -118,8 +131,10 @@ module.exports = {
     if (!existing) return null;
 
     const updateData = {};
-    if (data.title !== undefined) updateData.title = data.title;
-    if (data.description !== undefined) updateData.description = data.description;
+    if (data.notes !== undefined || data.description !== undefined) {
+      updateData.notes =
+        data.notes !== undefined ? data.notes : data.description || null;
+    }
     if (data.postId !== undefined || data.post_id !== undefined) {
       updateData.postId = data.postId || data.post_id || null;
     }
@@ -131,7 +146,17 @@ module.exports = {
     if (data.dueDate !== undefined || data.due_date !== undefined) {
       updateData.dueDate = toDateOrNull(data.dueDate || data.due_date);
     }
-    if (data.metadata !== undefined) updateData.metadata = data.metadata;
+    if (data.metadata !== undefined) {
+      updateData.metadata = data.metadata;
+    } else if (data.title !== undefined || data.name !== undefined) {
+      const baseMetadata = existing.metadata && typeof existing.metadata === 'object'
+        ? { ...existing.metadata }
+        : {};
+      const resolvedTitle = data.title !== undefined ? data.title : data.name;
+      updateData.metadata = resolvedTitle
+        ? { ...baseMetadata, title: resolvedTitle }
+        : baseMetadata;
+    }
     if (data.attachments !== undefined) updateData.attachments = data.attachments;
     if (data.version !== undefined) updateData.version = data.version;
 
@@ -207,10 +232,7 @@ module.exports = {
     return prisma.approval.findMany({
       where: {
         tenantId,
-        OR: [
-          { title: { contains: term, mode: 'insensitive' } },
-          { description: { contains: term, mode: 'insensitive' } },
-        ],
+        notes: { contains: term, mode: 'insensitive' },
       },
       orderBy: { createdAt: 'desc' },
       take: limit,
