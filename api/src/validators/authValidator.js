@@ -10,15 +10,6 @@ const loginSchema = z.object({
 const clientLoginSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
   password: z.string().min(6).max(100),
-  tenantSlug: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .regex(/^[a-z0-9-]+$/, {
-      message: 'Informe apenas letras, números ou hífen no slug',
-    })
-    .optional()
-    .nullable(),
 });
 
 const registerSchema = z.object({

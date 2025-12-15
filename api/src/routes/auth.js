@@ -153,9 +153,8 @@ router.post('/client-login', loginRateLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Dados inválidos', details });
     }
 
-    const { email, password, tenantSlug } = parseResult.data;
+    const { email, password } = parseResult.data;
     const normalizedEmail = (email || '').trim().toLowerCase();
-    const normalizedSlug = (tenantSlug || '').trim().toLowerCase() || null;
 
     const whereClause = {
       OR: [
@@ -173,12 +172,6 @@ router.post('/client-login', loginRateLimiter, async (req, res) => {
         },
       ],
     };
-
-    if (normalizedSlug) {
-      whereClause.tenant = {
-        slug: normalizedSlug,
-      };
-    }
 
     const matches = await prisma.client.findMany({
       where: whereClause,
@@ -200,14 +193,6 @@ router.post('/client-login', loginRateLimiter, async (req, res) => {
 
     if (!matches.length) {
       return res.status(401).json({ error: 'Credenciais inválidas' });
-    }
-
-    if (!normalizedSlug && matches.length > 1) {
-      return res.status(409).json({
-        error:
-          'Encontramos mais de uma conta com este e-mail. Informe o slug/subdomínio da agência para acessar o portal correto.',
-        code: 'CLIENT_LOGIN_AMBIGUOUS',
-      });
     }
 
     const client = matches[0];

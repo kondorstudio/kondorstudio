@@ -1,29 +1,15 @@
 // front/src/pages/clientlogin.jsx
 import React, { useEffect, useState } from "react";
-import { useNavigate, Link, useLocation } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { Loader2, Mail, Lock } from "lucide-react";
 import { base44 } from "@/apiClient/base44Client";
 
 export default function ClientLogin() {
   const navigate = useNavigate();
-  const location = useLocation();
   const [email, setEmail] = useState("");
   const [portalPassword, setPortalPassword] = useState("");
-  const [agencySlug, setAgencySlug] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const slugParam =
-      params.get("slug") ||
-      params.get("tenant") ||
-      params.get("subdomain") ||
-      "";
-    if (slugParam) {
-      setAgencySlug(slugParam);
-    }
-  }, [location.search]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -38,7 +24,6 @@ export default function ClientLogin() {
         body: JSON.stringify({
           email,
           password: portalPassword,
-          tenantSlug: agencySlug.trim() || undefined,
         }),
       });
 
@@ -90,26 +75,6 @@ export default function ClientLogin() {
             className="relative rounded-[24px] border border-[#C4B5FD]/20 bg-white/80 backdrop-blur-xl shadow-2xl px-8 py-10 md:px-10 md:py-12 transition-all duration-500 ease-out group-hover:-translate-y-1 group-hover:shadow-[0_30px_80px_rgba(79,70,229,0.18)]"
           >
             <fieldset className="space-y-6" disabled={loading}>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-500" htmlFor="client-slug">
-                  Slug / Subdomínio da sua agência
-                </label>
-                <div className="relative">
-                  <input
-                    id="client-slug"
-                    type="text"
-                    value={agencySlug}
-                    onChange={(e) => setAgencySlug(e.target.value)}
-                    placeholder="ex: kondor"
-                    className={`${inputClass}`}
-                    autoComplete="organization"
-                  />
-                </div>
-                <p className="text-[11px] text-gray-400">
-                  Informe o endereço usado pela agência (o mesmo slug configurado no cadastro).
-                </p>
-              </div>
-
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-500" htmlFor="client-email">
                   E-mail
