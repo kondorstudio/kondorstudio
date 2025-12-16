@@ -57,17 +57,47 @@ async function authMiddleware(req, res, next) {
       return res.status(401).json({ error: 'Token inválido ou expirado' });
     }
 
-    // O payload pode conter userId ou sub dependendo de como o token foi gerado
-    const userId = payload.userId || payload.id || payload.sub;
-    if (!userId) {
+    const principalId =
+      payload.id ||
+      payload.userId ||
+      payload.sub ||
+      payload.uid ||
+      payload.clientId;
+
+    if (!principalId) {
+      const payloadKeys =
+        payload && typeof payload === 'object' ? Object.keys(payload) : [];
+      console.warn(
+        'Auth middleware: payload sem identificador. keys:',
+        payloadKeys
+      );
       return res
         .status(401)
         .json({ error: 'Token sem identificação de usuário' });
     }
 
+    const isClientToken =
+      payload.type === 'client' &&
+      Boolean(payload.clientId) &&
+      (payload.tenantId || payload.tenant_id);
+
+    if (isClientToken) {
+      req.user = {
+        id: principalId,
+        role: payload.role || 'CLIENT',
+        name: payload.name || null,
+        email: payload.email || null,
+        type: 'client',
+        tenantId: payload.tenantId || payload.tenant_id || null,
+      };
+      req.clientId = payload.clientId;
+      req.tenantId = payload.tenantId || payload.tenant_id || null;
+      return next();
+    }
+
     // Busca usuário no banco (traz apenas campos necessários)
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: principalId },
       select: {
         id: true,
         email: true,
@@ -83,12 +113,12 @@ async function authMiddleware(req, res, next) {
 
     // Injeta dados úteis no request para uso posterior
     req.user = {
-      id: user.id,
+      id: principalId,
       email: user.email,
-      role: user.role,
+      role: payload.role || user.role,
       name: user.name,
     };
-    req.tenantId = user.tenantId;
+    req.tenantId = payload.tenantId || user.tenantId;
 
     return next();
   } catch (error) {
