@@ -198,7 +198,7 @@ router.post('/approvals/:id/reject', clientAuth, async (req, res) => {
       by: req.client.id,
     });
 
-    await postsService.updateStatus(req.tenantId, approval.post.id, 'REJECTED', req.client.id);
+    await postsService.updateStatus(req.tenantId, approval.post.id, 'CANCELLED', req.client.id);
 
     return res.json({ ok: true });
   } catch (err) {

@@ -85,13 +85,18 @@ export function resolveMediaUrl(raw) {
     base44.API_BASE_URL ||
     (typeof window !== "undefined" ? window.location.origin : "") ||
     "";
-  const normalizedBase = base.replace(/\/$/, "");
+  const normalizedBase = base.replace(/\/+$/, "");
+  const publicBase =
+    normalizedBase && /\/api$/i.test(normalizedBase)
+      ? normalizedBase.replace(/\/api$/i, "")
+      : normalizedBase;
+  const mediaBase = publicBase || normalizedBase;
 
   // Se já veio um path que contém "/uploads", só completa com a base.
   // Ex.: "/uploads/public/tenant%2F..." ou "uploads/public/tenant%2F..."
   if (raw.includes("/uploads/")) {
     const suffix = raw.startsWith("/") ? raw : `/${raw}`;
-    const url = normalizedBase ? `${normalizedBase}${suffix}` : suffix;
+    const url = mediaBase ? `${mediaBase}${suffix}` : suffix;
     return enforceProtocol(url);
   }
 
@@ -99,7 +104,7 @@ export function resolveMediaUrl(raw) {
   // e montamos a rota pública correta.
   const encodedKey = encodeURIComponent(raw);
   const suffix = `/uploads/public/${encodedKey}`;
-  const url = normalizedBase ? `${normalizedBase}${suffix}` : suffix;
+  const url = mediaBase ? `${mediaBase}${suffix}` : suffix;
 
   return enforceProtocol(url);
 }

@@ -91,6 +91,7 @@ export default function ClientPortalLayout() {
   const queryClient = useQueryClient();
   const [clientToken, setClientToken] = useState(null);
   const [authError, setAuthError] = useState("");
+  const [toast, setToast] = useState(null);
 
   useEffect(() => {
     const raw =
@@ -222,6 +223,17 @@ export default function ClientPortalLayout() {
     [posts],
   );
 
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timeout = setTimeout(() => setToast(null), 3500);
+    return () => clearTimeout(timeout);
+  }, [toast]);
+
+  const showToast = useCallback((message) => {
+    if (!message) return;
+    setToast({ id: Date.now(), message });
+  }, []);
+
   const queryClientInvalidate = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["client-portal", "posts"] });
     queryClient.invalidateQueries({ queryKey: ["client-portal", "approvals", "PENDING"] });
@@ -278,21 +290,43 @@ export default function ClientPortalLayout() {
         throw new Error("Descreva o ajuste com pelo menos 3 caracteres");
       }
 
-      await requestPostChanges(postId, trimmed);
+      const updatedPost = await requestPostChanges(postId, trimmed);
+
+      queryClient.setQueryData(["client-portal", "posts"], (old) => {
+        if (!old || !Array.isArray(old.items)) return old;
+        return {
+          ...old,
+          items: old.items.map((item) => {
+            if (item.id !== postId) return item;
+            const nextFeedback =
+              updatedPost?.clientFeedback ??
+              updatedPost?.client_feedback ??
+              trimmed;
+            const nextStatus = updatedPost?.status || "DRAFT";
+            return {
+              ...item,
+              status: nextStatus,
+              clientFeedback: nextFeedback,
+              client_feedback: nextFeedback,
+            };
+          }),
+        };
+      });
 
       if (approvalId) {
-        await rejectClientApproval(approvalId, {
-          notes: trimmed,
-          type: "REVISION_REQUESTED",
+        queryClient.setQueryData(["client-portal", "approvals", "PENDING"], (old) => {
+          if (!old || !Array.isArray(old.items)) return old;
+          return {
+            ...old,
+            items: old.items.filter((approval) => approval.id !== approvalId),
+          };
         });
       }
 
       queryClientInvalidate();
-      if (typeof window !== "undefined") {
-        window.alert("Solicitação de ajuste enviada.");
-      }
+      showToast("Solicitação enviada com sucesso!");
     },
-    [queryClientInvalidate, rejectClientApproval, requestPostChanges],
+    [queryClient, queryClientInvalidate, requestPostChanges, showToast],
   );
 
   const handleLogout = useCallback(() => {
@@ -378,6 +412,7 @@ export default function ClientPortalLayout() {
   return (
     <ClientPortalContext.Provider value={contextValue}>
       <ClientPortalScaffold />
+      <PortalToast toast={toast} />
     </ClientPortalContext.Provider>
   );
 }
@@ -1254,6 +1289,17 @@ function EmptyState({ message }) {
     <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white/70 px-6 py-10 text-center text-sm text-slate-400">
       <BarChart3 className="mb-3 h-8 w-8 text-slate-300" />
       {message}
+    </div>
+  );
+}
+
+function PortalToast({ toast }) {
+  if (!toast || !toast.message) return null;
+  return (
+    <div className="fixed bottom-6 right-6 z-50 flex transition duration-200">
+      <div className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-medium text-white shadow-lg shadow-emerald-900/20">
+        {toast.message}
+      </div>
     </div>
   );
 }
