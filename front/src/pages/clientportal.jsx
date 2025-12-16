@@ -48,6 +48,10 @@ function useClientPortal() {
 }
 
 async function fetchClient(path, token, options = {}) {
+  if (!token) {
+    throw new Error("Sessão expirada. Faça login novamente.");
+  }
+
   const fetchOptions = {
     method: options.method || "GET",
     headers: {
