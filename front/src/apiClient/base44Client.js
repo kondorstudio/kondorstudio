@@ -616,11 +616,21 @@ const Metric = {
 // --------------------
 
 const Tenant = {
+  async list(params) {
+    const qs = buildQuery(params);
+    const data = await jsonFetch(`/tenants${qs}`, { method: "GET" });
+    return normalizeListResponse(data);
+  },
+
   async getCurrent() {
     return jsonFetch("/dashboard/tenant", { method: "GET" });
   },
 
-  async update(payload) {
+  async update(idOrPayload, maybePayload) {
+    const payload =
+      typeof idOrPayload === "string" || typeof idOrPayload === "number"
+        ? maybePayload
+        : idOrPayload;
     return jsonFetch("/tenants/current", {
       method: "PUT",
       body: JSON.stringify(payload),
@@ -635,6 +645,11 @@ const Tenant = {
 const Dashboard = {
   async overview() {
     return jsonFetch("/dashboard/overview", { method: "GET" });
+  },
+
+  async summary(params) {
+    const qs = buildQuery(params);
+    return jsonFetch(`/dashboard/summary${qs}`, { method: "GET" });
   },
 };
 

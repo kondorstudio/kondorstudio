@@ -330,6 +330,7 @@ safeMount("/api/uploads", require("./routes/uploads"));
 safeMount("/api/reports", require("./routes/reports"));
 safeMount("/api/billing", require("./routes/billing"));
 safeMount("/api/team", require("./routes/team"));
+safeMount("/api/dashboard", require("./routes/dashboard"));
 safeMount("/api/admin", require("./routes/admin"));
 try {
   safeMount("/api/automation", require("./routes/automation"));

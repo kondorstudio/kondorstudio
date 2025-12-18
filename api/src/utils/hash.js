@@ -1,7 +1,12 @@
 // api/src/utils/hash.js
 // Utilitários para hashing seguro de senhas usando bcrypt
 
-const bcrypt = require('bcrypt');
+let bcrypt;
+try {
+  bcrypt = require('bcrypt');
+} catch (err) {
+  bcrypt = require('bcryptjs');
+}
 
 // Custo padrão do hash (10 é bom para produção sem pesar CPU)
 const SALT_ROUNDS = parseInt(process.env.HASH_ROUNDS || "10", 10);

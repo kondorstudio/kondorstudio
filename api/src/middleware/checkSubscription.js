@@ -1,7 +1,11 @@
 const dayjs = require("dayjs");
-const { PrismaClient } = require("@prisma/client");
+const { prisma } = require("../prisma");
 
-const prisma = new PrismaClient();
+const CHECK_SUBSCRIPTION_ENABLED =
+  (process.env.CHECK_SUBSCRIPTION_ENABLED || "true") === "true";
+
+// Modo estrito: bloqueia acesso quando não há assinatura válida.
+// Em modo não estrito, apenas injeta req.subscription e permite seguir.
 const STRICT_SUBSCRIPTION_CHECK =
   process.env.ENFORCE_SUBSCRIPTION_CHECK === "true";
 
@@ -9,8 +13,10 @@ const ALWAYS_ALLOWED = [
   "/api/auth/login",
   "/api/auth/refresh",
   "/api/auth/logout",
+  "/api/auth/client-login",
   "/api/tenants/register",
   "/api/billing/plans",
+  "/api/billing/status",
   "/api/billing/subscribe",
   "/api/health",
   "/api/ready",
@@ -27,12 +33,55 @@ function isPublicRoute(path) {
   return PUBLIC_PREFIXES.some((prefix) => path.startsWith(prefix));
 }
 
+function normalizeSubscriptionContext({ subscription, isTrial, trialEnds }) {
+  if (!subscription) {
+    return {
+      status: isTrial ? "trial" : "missing",
+      currentPeriodEnd: trialEnds ? trialEnds.toDate() : null,
+      raw: null,
+    };
+  }
+
+  const now = dayjs();
+  const status = (subscription.status || "").toString().toUpperCase();
+  const periodValid =
+    !subscription?.currentPeriodEnd ||
+    dayjs(subscription.currentPeriodEnd).isAfter(now);
+
+  if (status === "SUCCEEDED" && periodValid) {
+    return {
+      status: "active",
+      currentPeriodEnd: subscription.currentPeriodEnd || null,
+      raw: subscription,
+    };
+  }
+
+  if (status === "PENDING" && periodValid) {
+    return {
+      status: "pending",
+      currentPeriodEnd: subscription.currentPeriodEnd || null,
+      raw: subscription,
+    };
+  }
+
+  return {
+    status: "expired",
+    currentPeriodEnd: subscription.currentPeriodEnd || null,
+    raw: subscription,
+  };
+}
+
 async function checkSubscription(req, res, next) {
   try {
     const path = req.originalUrl || req.path || "";
 
     // Rotas públicas
     if (isPublicRoute(path) || isAlwaysAllowed(path)) return next();
+
+    if (!CHECK_SUBSCRIPTION_ENABLED) {
+      req.subscription = { status: "disabled" };
+      return next();
+    }
 
     if (!req.tenantId) return next();
 
@@ -62,55 +111,31 @@ async function checkSubscription(req, res, next) {
 
     const isTrial = !subscription && now.isBefore(trialEnds);
 
-    if (!subscription) {
-      req.subscription = {
-        status: isTrial ? "trial" : "missing",
-        currentPeriodEnd: trialEnds.toDate(),
-      };
+    const ctx = normalizeSubscriptionContext({ subscription, isTrial, trialEnds });
+    req.subscription = ctx;
 
-      if (STRICT_SUBSCRIPTION_CHECK && !isTrial) {
+    if (STRICT_SUBSCRIPTION_CHECK) {
+      if (ctx.status === "missing") {
         return res.status(402).json({
           error: "Assinatura necessária para continuar.",
           code: "SUBSCRIPTION_REQUIRED",
         });
       }
 
-      return next();
-    }
-
-    // PaymentStatus enum values in Prisma (uppercase) + optional lowercase fallbacks
-    const validStatuses = ["PENDING", "SUCCEEDED", "TRIAL", "ACTIVE"];
-    const subscriptionStatus = (
-      typeof subscription?.status === "string"
-        ? subscription.status
-        : ""
-    ).toUpperCase();
-    const periodValid =
-      !subscription?.currentPeriodEnd ||
-      dayjs(subscription.currentPeriodEnd).isAfter(now);
-
-    const subValid =
-      subscription &&
-      validStatuses.includes(subscriptionStatus) &&
-      periodValid;
-
-    if (subscription && !subValid) {
-      if (STRICT_SUBSCRIPTION_CHECK) {
+      if (ctx.status === "expired") {
         return res.status(402).json({
           error: "Sua assinatura expirou.",
           code: "SUBSCRIPTION_EXPIRED",
         });
       }
-      console.warn(
-        "[CHECK_SUBSCRIPTION] assinatura inválida, liberando por modo flexível",
-        subscription.id,
-      );
+    } else {
+      if (ctx.status === "expired") {
+        console.warn(
+          "[CHECK_SUBSCRIPTION] assinatura expirada/inválida; liberando por modo flexível",
+          subscription?.id,
+        );
+      }
     }
-
-    req.subscription = subscription || {
-      status: "trial",
-      currentPeriodEnd: trialEnds.toDate(),
-    };
 
     return next();
   } catch (err) {

@@ -13,6 +13,10 @@
 const { prisma } = require('../prisma');
 
 const DEFAULT_BODY_MAX = 2000; // bytes/characters to store
+const DEFAULT_META_MAX = 5000;
+
+const SENSITIVE_KEY_RE =
+  /(pass(word)?|senha|token|refresh|secret|authorization|api[_-]?key|jwt)/i;
 
 function inferResourceAndAction(method = 'GET', path = '') {
   // heuristics: /api/posts/:id -> resource=post, action=create/read/update/delete/list
@@ -37,12 +41,35 @@ function inferResourceAndAction(method = 'GET', path = '') {
   return { resource, action };
 }
 
+function sanitizeValue(value, depth = 0) {
+  if (depth > 4) return '[TRUNCATED_DEPTH]';
+  if (value === null || value === undefined) return value;
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return value;
+  if (Array.isArray(value)) {
+    return value.slice(0, 50).map((item) => sanitizeValue(item, depth + 1));
+  }
+  if (typeof value === 'object') {
+    const out = {};
+    const entries = Object.entries(value).slice(0, 50);
+    for (const [key, val] of entries) {
+      if (SENSITIVE_KEY_RE.test(key)) {
+        out[key] = '[REDACTED]';
+      } else {
+        out[key] = sanitizeValue(val, depth + 1);
+      }
+    }
+    return out;
+  }
+  return String(value);
+}
+
 function summarizeBody(body = {}, maxLen = DEFAULT_BODY_MAX) {
   if (!body) return null;
   try {
     let s;
     if (typeof body === 'string') s = body;
-    else s = JSON.stringify(body);
+    else s = JSON.stringify(sanitizeValue(body));
     if (s.length > maxLen) {
       return s.slice(0, maxLen) + '... (truncated)';
     }
@@ -52,17 +79,43 @@ function summarizeBody(body = {}, maxLen = DEFAULT_BODY_MAX) {
   }
 }
 
+function extractResourceId(req, path) {
+  const paramId = req?.params?.id || req?.params?.tenantId || req?.params?.clientId;
+  if (paramId) return String(paramId);
+  const parts = (path || '').split('?')[0].split('/').filter(Boolean);
+  const last = parts[parts.length - 1];
+  if (last && /^[0-9a-fA-F\-]{6,}$/.test(last)) return last;
+  return null;
+}
+
 function createAuditRecordSafe(audit) {
   // try to persist via prisma.auditLog if model exists; if not, fallback to console.log
   (async () => {
     try {
-      if (prisma && prisma.auditLog && typeof prisma.auditLog.create === 'function') {
-        // guard: remove huge fields if any
-        const safe = Object.assign({}, audit);
-        if (safe.body && typeof safe.body === 'string' && safe.body.length > DEFAULT_BODY_MAX) {
-          safe.body = safe.body.slice(0, DEFAULT_BODY_MAX) + '... (truncated)';
-        }
-        await prisma.auditLog.create({ data: safe });
+      if (
+        audit?.tenantId &&
+        prisma &&
+        prisma.auditLog &&
+        typeof prisma.auditLog.create === 'function'
+      ) {
+        const metaJson = sanitizeValue(audit.meta || {});
+        const metaString = JSON.stringify(metaJson);
+        const safeMeta =
+          metaString.length > DEFAULT_META_MAX
+            ? { truncated: true, preview: metaString.slice(0, DEFAULT_META_MAX) }
+            : metaJson;
+
+        await prisma.auditLog.create({
+          data: {
+            tenantId: audit.tenantId,
+            userId: audit.userId || null,
+            action: audit.action,
+            resource: audit.resource || null,
+            resourceId: audit.resourceId || null,
+            ip: audit.ip || null,
+            meta: safeMeta,
+          },
+        });
         return;
       }
     } catch (err) {
@@ -95,7 +148,8 @@ function auditLog(opts = {}) {
     try {
       const start = Date.now();
       // skip if path matches
-      if (skipRe && skipRe.test(req.path)) return next();
+      const fullPathForSkip = req.originalUrl || req.url || req.path || '';
+      if (skipRe && skipRe.test(fullPathForSkip)) return next();
 
       // After response finishes, record outcome (non-blocking)
       res.on('finish', () => {
@@ -115,22 +169,26 @@ function auditLog(opts = {}) {
           const bodySummary = summarizeBody(req.body, bodyMax);
 
           const { resource, action } = inferResourceAndAction(method, path);
+          const resourceId = extractResourceId(req, path);
 
           const audit = {
             tenantId,
             userId,
-            method,
-            path,
-            status,
-            params: params ? JSON.stringify(params) : null,
-            query: query ? JSON.stringify(query) : null,
-            body: bodySummary,
             ip,
             userAgent,
             resource,
             action,
-            durationMs: duration,
-            createdAt: new Date(),
+            resourceId,
+            meta: {
+              method,
+              path,
+              status,
+              durationMs: duration,
+              params: params ? sanitizeValue(params) : null,
+              query: query ? sanitizeValue(query) : null,
+              body: bodySummary,
+              userAgent,
+            },
           };
 
           // non-blocking persistence

@@ -24,6 +24,9 @@ services:
       - key: NODE_ENV
         value: production
 
+      - key: NODE_VERSION
+        value: "18"
+
       - key: PORT
         value: 4000
 
@@ -75,6 +78,16 @@ services:
       - key: WHATSAPP_PROVIDER
         sync: false
       - key: WHATSAPP_TOKEN
+        sync: false
+      - key: WHATSAPP_VERIFY_TOKEN
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_WABA_ID
+        sync: false
+      - key: WHATSAPP_META_TOKEN
+        sync: false
+      - key: WHATSAPP_META_PHONE_NUMBER_ID
         sync: false
 
       # ==== MÉTRICAS ====
@@ -138,6 +151,9 @@ services:
       - key: NODE_ENV
         value: production
 
+      - key: NODE_VERSION
+        value: "18"
+
       - key: DATABASE_URL
         fromDatabase:
           name: kondor-db
@@ -180,6 +196,16 @@ services:
         sync: false
       - key: WHATSAPP_TOKEN
         sync: false
+      - key: WHATSAPP_VERIFY_TOKEN
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_WABA_ID
+        sync: false
+      - key: WHATSAPP_META_TOKEN
+        sync: false
+      - key: WHATSAPP_META_PHONE_NUMBER_ID
+        sync: false
 
       # ==== MÉTRICAS ====
       - key: META_GRAPH_BASE_URL
@@ -213,6 +239,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NODE_VERSION
+        value: "18"
       # força instalar devDependencies (onde está o vite) caso Render respeite esse env no runtime
       - key: NPM_CONFIG_PRODUCTION
         value: "false"

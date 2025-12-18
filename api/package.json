@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Kondor Studio API (Express + Prisma + Multi-tenant)",
   "main": "src/server.js",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "start": "npm run prisma:migrate:deploy && node src/server.js",
     "dev": "nodemon src/server.js",

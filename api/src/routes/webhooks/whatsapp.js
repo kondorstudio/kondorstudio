@@ -5,13 +5,25 @@ const router = express.Router();
  * Envia mensagem de texto via WhatsApp Cloud API
  */
 async function sendWhatsAppText({ to, body, phoneNumberId }) {
-  const token = process.env.WHATSAPP_META_TOKEN;
-  const pnid = phoneNumberId || process.env.WHATSAPP_META_PHONE_NUMBER_ID;
+  const token =
+    process.env.WHATSAPP_META_TOKEN ||
+    process.env.WHATSAPP_TOKEN ||
+    process.env.WHATSAPP_API_KEY;
+
+  const pnid =
+    phoneNumberId ||
+    process.env.WHATSAPP_META_PHONE_NUMBER_ID ||
+    process.env.WHATSAPP_PHONE_NUMBER_ID;
 
   if (!token) throw new Error("WHATSAPP_META_TOKEN não configurado");
-  if (!pnid) throw new Error("WHATSAPP_META_PHONE_NUMBER_ID não configurado");
+  if (!pnid)
+    throw new Error(
+      "WHATSAPP_META_PHONE_NUMBER_ID/WHATSAPP_PHONE_NUMBER_ID não configurado"
+    );
 
-  const url = `https://graph.facebook.com/v22.0/${pnid}/messages`;
+  const baseUrl =
+    process.env.WHATSAPP_API_URL || "https://graph.facebook.com/v22.0";
+  const url = `${String(baseUrl).replace(/\/$/, "")}/${pnid}/messages`;
 
   const resp = await fetch(url, {
     method: "POST",

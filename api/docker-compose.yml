@@ -3,7 +3,6 @@ version: '3.8'
 services:
   postgres:
     image: postgres:15-alpine
-    container_name: kondor-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: kond
@@ -21,7 +20,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: kondor-redis
     restart: unless-stopped
     ports:
       - "6379:6379"
