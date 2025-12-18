@@ -108,3 +108,19 @@ export function resolveMediaUrl(raw) {
 
   return enforceProtocol(url);
 }
+
+/**
+ * Detecta se uma mídia deve ser tratada como vídeo.
+ * Útil para renderizar <video> em vez de <img>.
+ */
+export function isVideoMedia({ url, mediaType, mimeType } = {}) {
+  const type = (mediaType || "").toString().toLowerCase().trim();
+  if (type.includes("video")) return true;
+
+  const mime = (mimeType || "").toString().toLowerCase().trim();
+  if (mime.startsWith("video/")) return true;
+
+  const normalizedUrl = (url || "").toString();
+  if (!normalizedUrl) return false;
+  return /\.(mp4|webm|mov|m4v|ogg)(\?|#|$)/i.test(normalizedUrl);
+}

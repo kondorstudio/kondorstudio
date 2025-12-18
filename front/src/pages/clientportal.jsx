@@ -31,11 +31,12 @@ import {
   MessageCircle,
   ThumbsUp,
   XCircle,
+  Video,
 } from "lucide-react";
 
 import { base44 } from "@/apiClient/base44Client";
 import logoHeader from "@/assets/logoheader.png";
-import { resolveMediaUrl } from "@/lib/media.js";
+import { isVideoMedia, resolveMediaUrl } from "@/lib/media.js";
 
 const ClientPortalContext = createContext(null);
 
@@ -786,6 +787,11 @@ function RecentPostsCard({ posts, approvalsByPostId, onApprove, onRequestChanges
           posts.map((post) => {
             const approval = approvalsByPostId.get(post.id);
             const mediaUrl = resolveMediaUrl(post.media_url || post.mediaUrl || "");
+            const isVideo = isVideoMedia({
+              url: mediaUrl,
+              mediaType: post.mediaType || post.media_type,
+              mimeType: post.mimeType || post.mime_type,
+            });
             const platform = post.platform || post.channel || post.socialNetwork || "Social";
             return (
               <article
@@ -794,11 +800,17 @@ function RecentPostsCard({ posts, approvalsByPostId, onApprove, onRequestChanges
               >
                 <div className="flex items-center gap-4">
                   {mediaUrl ? (
-                    <img
-                      src={mediaUrl}
-                      alt={post.title || "Prévia do post"}
-                      className="h-16 w-16 rounded-lg object-cover"
-                    />
+                    isVideo ? (
+                      <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-slate-100 text-slate-400">
+                        <Video className="h-6 w-6" />
+                      </div>
+                    ) : (
+                      <img
+                        src={mediaUrl}
+                        alt={post.title || "Prévia do post"}
+                        className="h-16 w-16 rounded-lg object-cover"
+                      />
+                    )
                   ) : (
                     <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-slate-100 text-slate-400">
                       {platform.slice(0, 2).toUpperCase()}
@@ -944,6 +956,11 @@ function KanbanColumn({ title, posts, approvalsByPostId, onApprove, onRequestCha
 
 function KanbanCard({ post, approval, onApprove, onRequestChanges, onReject, onPreview }) {
   const mediaUrl = resolveMediaUrl(post.media_url || post.mediaUrl || "");
+  const isVideo = isVideoMedia({
+    url: mediaUrl,
+    mediaType: post.mediaType || post.media_type,
+    mimeType: post.mimeType || post.mime_type,
+  });
   const platform = post.platform || post.channel || post.socialNetwork || "Social";
   const [isAdjusting, setIsAdjusting] = useState(false);
   const [notes, setNotes] = useState("");
@@ -979,7 +996,17 @@ function KanbanCard({ post, approval, onApprove, onRequestChanges, onReject, onP
       >
         <div className="flex items-center gap-3">
           {mediaUrl ? (
-            <img src={mediaUrl} alt={post.title || "Prévia"} className="h-12 w-12 rounded-lg object-cover" />
+            isVideo ? (
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-slate-100 text-slate-400">
+                <Video className="h-5 w-5" />
+              </div>
+            ) : (
+              <img
+                src={mediaUrl}
+                alt={post.title || "Prévia"}
+                className="h-12 w-12 rounded-lg object-cover"
+              />
+            )
           ) : (
             <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-slate-100 text-xs font-semibold text-slate-500">
               {platform.slice(0, 2).toUpperCase()}
@@ -1051,6 +1078,11 @@ function KanbanCard({ post, approval, onApprove, onRequestChanges, onReject, onP
 function PostPreviewModal({ post, approval, onClose, onApprove, onReject, onRequestChanges }) {
   if (!post) return null;
   const mediaUrl = resolveMediaUrl(post.media_url || post.mediaUrl || "");
+  const isVideo = isVideoMedia({
+    url: mediaUrl,
+    mediaType: post.mediaType || post.media_type,
+    mimeType: post.mimeType || post.mime_type,
+  });
   const [isAdjusting, setIsAdjusting] = useState(false);
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1098,7 +1130,21 @@ function PostPreviewModal({ post, approval, onClose, onApprove, onReject, onRequ
         <div className="grid gap-6 px-6 py-6 md:grid-cols-2">
           <div>
             {mediaUrl ? (
-              <img src={mediaUrl} alt="Prévia" className="w-full rounded-xl object-cover" />
+              isVideo ? (
+                <video
+                  src={mediaUrl}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  className="w-full rounded-xl bg-black"
+                />
+              ) : (
+                <img
+                  src={mediaUrl}
+                  alt="Prévia"
+                  className="w-full rounded-xl object-cover"
+                />
+              )
             ) : (
               <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-slate-200 text-slate-400">
                 Sem mídia enviada.

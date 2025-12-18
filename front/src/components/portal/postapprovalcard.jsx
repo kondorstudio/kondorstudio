@@ -11,7 +11,7 @@ import {
   Video,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { resolveMediaUrl } from "@/lib/media.js";
+import { isVideoMedia, resolveMediaUrl } from "@/lib/media.js";
 
 /**
  * FASE 3 — APROVAÇÕES
@@ -40,6 +40,15 @@ export default function Postapprovalcard({
   const mediaUrl = useMemo(
     () => (rawMedia ? resolveMediaUrl(rawMedia) : ""),
     [rawMedia]
+  );
+  const isVideo = useMemo(
+    () =>
+      isVideoMedia({
+        url: mediaUrl,
+        mediaType: post?.mediaType || post?.media_type,
+        mimeType: post?.mimeType || post?.mime_type,
+      }),
+    [mediaUrl, post?.mediaType, post?.media_type, post?.mimeType, post?.mime_type]
   );
 
   const currentStatus = useMemo(() => {
@@ -144,7 +153,7 @@ export default function Postapprovalcard({
         <div>
           {mediaUrl ? (
             <div className="relative rounded-lg overflow-hidden bg-gray-100">
-              {post.media_type === "video" ? (
+              {isVideo ? (
                 <div className="aspect-square flex items-center justify-center">
                   <Video className="w-16 h-16 text-gray-400" />
                 </div>
