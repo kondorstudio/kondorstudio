@@ -107,14 +107,28 @@ router.post("/meta", express.json({ type: "*/*" }), (req, res) => {
       if (parsedMessage.type === "text") {
         const replyText = `Recebi sua mensagem ✅\n\nMensagem: "${parsedMessage.text || ""}"`;
 
-        const sent = await sendWhatsAppText({
-          to: parsedMessage.from, // responde para quem enviou
-          body: replyText,
-          phoneNumberId: parsedMessage.phoneNumberId, // usa o phone_number_id do evento (melhor)
-        });
+const fallbackPnId =
+  process.env.WHATSAPP_META_PHONE_NUMBER_ID ||
+  process.env.WHATSAPP_PHONE_NUMBER_ID;
 
-        console.log("📤 WhatsApp reply sent:", sent);
-      }
+// se vier evento de teste com phone_number_id fake, cai pro fallback
+const pnidToUse =
+  parsedMessage.phoneNumberId && /^\d{10,}$/.test(String(parsedMessage.phoneNumberId))
+    ? parsedMessage.phoneNumberId
+    : fallbackPnId;
+
+if (!pnidToUse) {
+  console.error("❌ phoneNumberId ausente (pnidToUse vazio). Configure WHATSAPP_META_PHONE_NUMBER_ID.");
+  return;
+}
+
+await sendWhatsAppText({
+  to: parsedMessage.from,
+  body: replyText,
+  phoneNumberId: pnidToUse,
+});
+
+
     } catch (err) {
       console.error("❌ Error handling WhatsApp webhook:", err?.message || err);
     }
