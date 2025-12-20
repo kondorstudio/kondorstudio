@@ -47,6 +47,10 @@ const AdminTenantDetails = lazy(() => import("./pages/admin/AdminTenantDetails.j
 const AdminLogs = lazy(() => import("./pages/admin/AdminLogs.jsx"));
 const AdminJobs = lazy(() => import("./pages/admin/AdminJobs.jsx"));
 
+// ✅ Novas páginas públicas (Meta exige URLs públicas válidas)
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy.jsx"));
+const Terms = lazy(() => import("./pages/Terms.jsx"));
+
 export default function App() {
   return (
     <Suspense
@@ -65,6 +69,11 @@ export default function App() {
         <Route path="/demo" element={<DemoPage />} />
         <Route path="/register" element={<Register />} />
         <Route path="/checkout" element={<Checkout />} />
+
+        {/* ✅ Páginas legais (Meta) */}
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/terms" element={<Terms />} />
+
         <Route path="/admin/login" element={<AdminLogin />} />
 
         {/* Login / portal do cliente (white-label) */}
