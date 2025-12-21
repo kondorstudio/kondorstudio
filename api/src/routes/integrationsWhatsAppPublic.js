@@ -16,7 +16,10 @@ function buildRedirectUrl(result) {
   return `${String(base).replace(/\/+$/, '')}${fallback}`;
 }
 
-async function fetchJsonWithTimeout(url, { method = 'GET', headers = {}, timeoutMs = 8000 } = {}) {
+async function fetchJsonWithTimeout(
+  url,
+  { method = 'GET', headers = {}, body = undefined, timeoutMs = 8000 } = {},
+) {
   if (typeof fetch !== 'function') {
     throw new Error('Global fetch() não disponível no runtime Node (exige Node >=18).');
   }
@@ -27,6 +30,7 @@ async function fetchJsonWithTimeout(url, { method = 'GET', headers = {}, timeout
     const res = await fetch(url, {
       method,
       headers: { Accept: 'application/json', ...headers },
+      body,
       signal: controller.signal,
     });
 
@@ -118,19 +122,22 @@ router.get('/callback', async (req, res) => {
     return res.status(400).json({ error: 'invalid state' });
   }
 
-  const nowIso = new Date().toISOString();
-
   try {
     const { oauthVersion, appId, appSecret, redirectUri } = ensureMetaEnv();
     const graphBase = `https://graph.facebook.com/${oauthVersion}`;
 
-    const tokenUrl = new URL(`${graphBase}/oauth/access_token`);
-    tokenUrl.searchParams.set('client_id', String(appId));
-    tokenUrl.searchParams.set('client_secret', String(appSecret));
-    tokenUrl.searchParams.set('redirect_uri', String(redirectUri));
-    tokenUrl.searchParams.set('code', String(code));
+    const tokenBody = new URLSearchParams();
+    tokenBody.set('client_id', String(appId));
+    tokenBody.set('client_secret', String(appSecret));
+    tokenBody.set('redirect_uri', String(redirectUri));
+    tokenBody.set('code', String(code));
 
-    const shortResp = await fetchJsonWithTimeout(tokenUrl.toString(), { timeoutMs: 9000 });
+    const shortResp = await fetchJsonWithTimeout(`${graphBase}/oauth/access_token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: tokenBody.toString(),
+      timeoutMs: 9000,
+    });
     if (!shortResp.ok) {
       const msg = shortResp?.data?.error?.message || 'Falha ao trocar code por token';
       const redirectUrl = buildRedirectUrl('error');
@@ -170,9 +177,9 @@ router.get('/callback', async (req, res) => {
       // Best-effort: se falhar, continua com short-lived.
     }
 
-    // Confirma validade do token e captura meta_user_id
+    // Confirma validade do token e captura meta_user_id + businesses/WABA
     const meUrl = new URL(`${graphBase}/me`);
-    meUrl.searchParams.set('fields', 'id,name');
+    meUrl.searchParams.set('fields', 'id,name,businesses{owned_whatsapp_business_accounts{id,name}}');
     const meResp = await fetchJsonWithTimeout(meUrl.toString(), {
       timeoutMs: 9000,
       headers: { Authorization: `Bearer ${finalToken}` },
@@ -187,6 +194,25 @@ router.get('/callback', async (req, res) => {
 
     const metaUserId = meResp?.data?.id || null;
     const metaUserName = meResp?.data?.name || null;
+
+    let wabaId = null;
+    const businesses = Array.isArray(meResp?.data?.businesses?.data) ? meResp.data.businesses.data : [];
+    for (const business of businesses) {
+      const accounts = Array.isArray(business?.owned_whatsapp_business_accounts?.data)
+        ? business.owned_whatsapp_business_accounts.data
+        : [];
+      const firstAccount = accounts.find((acc) => acc?.id);
+      if (firstAccount?.id) {
+        wabaId = String(firstAccount.id);
+        break;
+      }
+    }
+
+    if (!wabaId) {
+      const redirectUrl = buildRedirectUrl('error');
+      if (process.env.PUBLIC_APP_URL) return res.redirect(302, redirectUrl);
+      return res.status(502).json({ error: 'Nenhuma WABA encontrada para este usuário' });
+    }
 
     // Best-effort: capturar permissões concedidas
     let grantedScopes = null;
@@ -203,69 +229,34 @@ router.get('/callback', async (req, res) => {
       }
     } catch (_) {}
 
-    // Best-effort: descobrir WABA e phone_number_id se tivermos business_id
-    const businessId =
-      (req.query && (req.query.business_id || req.query.businessId)) ||
-      payload.business_id ||
-      payload.businessId ||
-      null;
-
-    let wabaId = null;
     let phoneNumberId = null;
-    if (businessId) {
-      try {
-        const wabaUrl = new URL(`${graphBase}/${encodeURIComponent(String(businessId))}/owned_whatsapp_business_accounts`);
-        wabaUrl.searchParams.set('fields', 'id,name');
+    let displayPhoneNumber = null;
+    try {
+      const phonesUrl = new URL(`${graphBase}/${encodeURIComponent(wabaId)}/phone_numbers`);
+      phonesUrl.searchParams.set('fields', 'id,display_phone_number,verified_name');
+      const phonesResp = await fetchJsonWithTimeout(phonesUrl.toString(), {
+        timeoutMs: 9000,
+        headers: { Authorization: `Bearer ${finalToken}` },
+      });
 
-        const wabaResp = await fetchJsonWithTimeout(wabaUrl.toString(), {
-          timeoutMs: 9000,
-          headers: { Authorization: `Bearer ${finalToken}` },
-        });
-
-        const firstWaba = wabaResp?.ok && Array.isArray(wabaResp?.data?.data) ? wabaResp.data.data[0] : null;
-        if (firstWaba?.id) {
-          wabaId = String(firstWaba.id);
-
-          try {
-            const phonesUrl = new URL(`${graphBase}/${encodeURIComponent(wabaId)}/phone_numbers`);
-            phonesUrl.searchParams.set('fields', 'id,display_phone_number,verified_name');
-            const phonesResp = await fetchJsonWithTimeout(phonesUrl.toString(), {
-              timeoutMs: 9000,
-              headers: { Authorization: `Bearer ${finalToken}` },
-            });
-
-            const firstPhone =
-              phonesResp?.ok && Array.isArray(phonesResp?.data?.data)
-                ? phonesResp.data.data[0]
-                : null;
-            if (firstPhone?.id) phoneNumberId = String(firstPhone.id);
-          } catch (_) {}
+      const firstPhone =
+        phonesResp?.ok && Array.isArray(phonesResp?.data?.data) ? phonesResp.data.data[0] : null;
+      if (firstPhone?.id) {
+        phoneNumberId = String(firstPhone.id);
+        if (firstPhone.display_phone_number) {
+          displayPhoneNumber = String(firstPhone.display_phone_number);
         }
-      } catch (_) {
-        // Best-effort: falha aqui não impede concluir OAuth.
       }
+    } catch (_) {}
+
+    if (!phoneNumberId) {
+      const redirectUrl = buildRedirectUrl('error');
+      if (process.env.PUBLIC_APP_URL) return res.redirect(302, redirectUrl);
+      return res.status(502).json({ error: 'Nenhum phone_number_id encontrado para esta WABA' });
     }
 
-    const existing = await prisma.integration.findFirst({
-      where: {
-        tenantId: String(tenantId),
-        provider: 'WHATSAPP_META_CLOUD',
-        ownerType: 'AGENCY',
-        ownerKey: 'AGENCY',
-      },
-      select: { id: true, config: true },
-    });
-
-    const baseConfig =
-      existing &&
-      existing.config &&
-      typeof existing.config === 'object' &&
-      !Array.isArray(existing.config)
-        ? existing.config
-        : null;
-
+    const nowIso = new Date().toISOString();
     const nextConfig = cleanJson({
-      ...(baseConfig || {}),
       connected_at: nowIso,
       callback_received_at: nowIso,
       meta_oauth_version: oauthVersion,
@@ -274,43 +265,44 @@ router.get('/callback', async (req, res) => {
       meta_user_id: metaUserId,
       meta_user_name: metaUserName,
       scopes_granted: grantedScopes || undefined,
-      business_id: businessId ? String(businessId) : undefined,
-      waba_id: wabaId || undefined,
-      phone_number_id: phoneNumberId || undefined,
+      waba_id: wabaId,
+      phone_number_id: phoneNumberId,
+      display_phone_number: displayPhoneNumber || undefined,
     });
 
     const encryptedToken = encrypt(finalToken);
-
-    if (existing) {
-      await prisma.integration.update({
-        where: { id: existing.id },
-        data: {
-          ownerType: 'AGENCY',
-          ownerKey: 'AGENCY',
-          status: 'CONNECTED',
-          accessToken: null,
-          accessTokenEncrypted: encryptedToken,
-          refreshToken: null,
-          scopes: Array.isArray(grantedScopes) ? grantedScopes : [],
-          config: nextConfig,
-        },
-      });
-    } else {
-      await prisma.integration.create({
-        data: {
+    const scopes = Array.isArray(grantedScopes) ? grantedScopes : [];
+    await prisma.integration.upsert({
+      where: {
+        tenantId_provider_ownerKey: {
           tenantId: String(tenantId),
           provider: 'WHATSAPP_META_CLOUD',
-          ownerType: 'AGENCY',
           ownerKey: 'AGENCY',
-          status: 'CONNECTED',
-          accessToken: null,
-          accessTokenEncrypted: encryptedToken,
-          refreshToken: null,
-          scopes: Array.isArray(grantedScopes) ? grantedScopes : [],
-          config: nextConfig,
         },
-      });
-    }
+      },
+      update: {
+        ownerType: 'AGENCY',
+        ownerKey: 'AGENCY',
+        status: 'CONNECTED',
+        accessToken: null,
+        accessTokenEncrypted: encryptedToken,
+        refreshToken: null,
+        scopes,
+        config: nextConfig,
+      },
+      create: {
+        tenantId: String(tenantId),
+        provider: 'WHATSAPP_META_CLOUD',
+        ownerType: 'AGENCY',
+        ownerKey: 'AGENCY',
+        status: 'CONNECTED',
+        accessToken: null,
+        accessTokenEncrypted: encryptedToken,
+        refreshToken: null,
+        scopes,
+        config: nextConfig,
+      },
+    });
 
     const redirectUrl = buildRedirectUrl('connected');
     if (process.env.PUBLIC_APP_URL) return res.redirect(302, redirectUrl);
@@ -321,6 +313,7 @@ router.get('/callback', async (req, res) => {
       meta_user_id: metaUserId,
       waba_id: wabaId,
       phone_number_id: phoneNumberId,
+      display_phone_number: displayPhoneNumber,
       token_saved: true,
     });
   } catch (err) {
