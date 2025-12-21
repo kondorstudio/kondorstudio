@@ -67,33 +67,46 @@ router.get('/whatsapp/status', async (req, res) => {
         provider: 'WHATSAPP_META_CLOUD',
         ownerType: 'AGENCY',
         ownerKey: 'AGENCY',
+        status: 'CONNECTED',
       },
-      select: { status: true, config: true, updatedAt: true },
+      select: { status: true, config: true },
     });
 
     if (!integration) {
-      return res.json({ ok: true, status: 'DISCONNECTED', config: null });
+      return res.json({
+        ok: true,
+        provider: 'WHATSAPP_META_CLOUD',
+        status: 'DISCONNECTED',
+        phoneNumberId: null,
+        displayPhoneNumber: null,
+        lastWebhookAt: null,
+      });
     }
 
-    const status = integration.status === 'CONNECTED' ? 'CONNECTED' : 'DISCONNECTED';
+    const config =
+      integration.config && typeof integration.config === 'object' && !Array.isArray(integration.config)
+        ? integration.config
+        : {};
+    const phoneNumberId = config.phone_number_id ? String(config.phone_number_id) : null;
+    const displayPhoneNumber = config.display_phone_number
+      ? String(config.display_phone_number)
+      : config.displayPhoneNumber
+        ? String(config.displayPhoneNumber)
+        : null;
+    const lastWebhookAt = config.last_webhook_at
+      ? String(config.last_webhook_at)
+      : config.lastWebhookAt
+        ? String(config.lastWebhookAt)
+        : null;
 
-    let config = integration.config;
-    if (config && typeof config === 'object' && !Array.isArray(config)) {
-      config = { ...config };
-      // hardening: nunca retornar nada parecido com token
-      for (const key of [
-        'access_token',
-        'accessToken',
-        'accessTokenEncrypted',
-        'token',
-        'refresh_token',
-        'refreshToken',
-      ]) {
-        if (Object.prototype.hasOwnProperty.call(config, key)) delete config[key];
-      }
-    }
-
-    return res.json({ ok: true, status, config });
+    return res.json({
+      ok: true,
+      provider: 'WHATSAPP_META_CLOUD',
+      status: 'CONNECTED',
+      phoneNumberId,
+      displayPhoneNumber,
+      lastWebhookAt,
+    });
   } catch (err) {
     return res.status(500).json({ error: 'server error' });
   }
