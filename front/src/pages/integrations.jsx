@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import React, { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "react-router-dom";
 import { base44 } from "../apiClient/base44Client";
 
 import { Button } from "@/components/ui/button.jsx";
@@ -40,6 +41,8 @@ function StatusBadge({ status }) {
 
 export default function Integrations() {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const location = useLocation();
+  const queryClient = useQueryClient();
 
   const {
     data: integrations = [],
@@ -52,9 +55,15 @@ export default function Integrations() {
   });
 
   const genericIntegrations = useMemo(() => {
-    const waProviders = new Set(["WHATSAPP_META_CLOUD", "WHATSAPP", "META_WHATSAPP"]);
-    return integrations.filter((i) => !waProviders.has(i.provider));
+    return integrations.filter((i) => i.provider !== "WHATSAPP_META_CLOUD");
   }, [integrations]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search || "");
+    if (params.get("whatsapp") === "connected") {
+      queryClient.invalidateQueries({ queryKey: ["integrations"] });
+    }
+  }, [location.search, queryClient]);
 
   return (
     <div className="p-6 md:p-8">

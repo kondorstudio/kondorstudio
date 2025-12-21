@@ -15,18 +15,21 @@ export default function WhatsAppIntegrationCard({ integrations }) {
   const queryClient = useQueryClient();
   const [connecting, setConnecting] = useState(false);
 
-  // Ajuste os valores conforme você decidir no backend.
-  // Sugestão: provider = "WHATSAPP_META_CLOUD"
   const waIntegration = useMemo(() => {
-    return integrations.find((i) =>
-      ["WHATSAPP_META_CLOUD", "WHATSAPP", "META_WHATSAPP"].includes(i.provider)
-    );
+    return integrations.find((i) => i.provider === "WHATSAPP_META_CLOUD");
   }, [integrations]);
 
-  const status = waIntegration?.status || "disconnected";
+  const statusRaw = waIntegration?.status || "DISCONNECTED";
+  const statusNorm = String(statusRaw || "DISCONNECTED").toLowerCase();
+  const isConnected = statusNorm === "connected";
   const cfg = waIntegration?.config || {};
   const displayPhone =
-    cfg.display_phone || cfg.displayPhone || cfg.phone || cfg.whatsappE164 || "-";
+    cfg.display_phone_number ||
+    cfg.display_phone ||
+    cfg.displayPhone ||
+    cfg.phone ||
+    cfg.whatsappE164 ||
+    "-";
   const lastWebhookAt = cfg.last_webhook_at || cfg.lastWebhookAt || null;
 
   const connectMutation = useMutation({
@@ -94,11 +97,11 @@ export default function WhatsAppIntegrationCard({ integrations }) {
     <IntegrationCard
       title="WhatsApp (Cloud API Oficial)"
       description="Envio automático de aprovações + captura de respostas (APROVAR/AJUSTES/REPROVAR)."
-      status={status}
+      status={statusNorm}
       metaLines={metaLines}
       rightIcon={<MessageCircle className="w-5 h-5 text-purple-600" />}
       primaryAction={
-        status === "connected"
+        isConnected
           ? null
           : {
               label: connecting ? "Conectando..." : "Conectar WhatsApp",
@@ -109,7 +112,7 @@ export default function WhatsAppIntegrationCard({ integrations }) {
             }
       }
       secondaryAction={
-        status === "connected"
+        isConnected
           ? {
               label: testMutation.isPending ? "Testando..." : "Testar conexão",
               onClick: handleTest,
@@ -125,7 +128,7 @@ export default function WhatsAppIntegrationCard({ integrations }) {
             }
       }
       dangerAction={
-        status === "connected"
+        isConnected
           ? {
               label: disconnectMutation.isPending ? "Desconectando..." : "Desconectar",
               onClick: handleDisconnect,
@@ -135,7 +138,7 @@ export default function WhatsAppIntegrationCard({ integrations }) {
           : null
       }
       footerHint={
-        status === "connected"
+        isConnected
           ? "Conectado: você pode enviar solicitações e receber respostas automaticamente."
           : "Desconectado: você ainda pode usar envio manual via link wa.me (fallback)."
       }
