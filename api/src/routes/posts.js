@@ -6,6 +6,7 @@ const tenantMiddleware = require("../middleware/tenant");
 const postsService = require("../services/postsService");
 const { PostValidationError } = postsService;
 const postsController = require("../controllers/postsController");
+const whatsappCloud = require("../services/whatsappCloud");
 const { Prisma } = require("@prisma/client");
 //const { whatsappQueue } = require("../queues/whatsappQueue"); //TODO: Reativar automações WhatsApp quando a fila estiver configurada.
 router.use(authMiddleware);
@@ -164,7 +165,40 @@ router.delete("/:id", async (req, res) => {
  * Atualiza o post para status AGUARDANDO_APROVACAO e cria uma approval
  */
 router.post("/:id/send-to-approval", async (req, res) => {
-  return postsController.requestApproval(req, res);
+  try {
+    const postId = req.params.id;
+    const userId = req.user?.id || null;
+    const forceNewLink = Boolean(req.body?.forceNewLink || false);
+
+    const approvalResult = await postsService.requestApproval(req.tenantId, postId, {
+      userId,
+      forceNewLink,
+      enqueueWhatsapp: false,
+    });
+
+    const sendResult = await whatsappCloud.sendApprovalRequest({
+      tenantId: req.tenantId,
+      postId,
+    });
+
+    return res.json({
+      ...approvalResult,
+      whatsappSend: sendResult,
+    });
+  } catch (err) {
+    if (err instanceof whatsappCloud.WhatsAppSendError) {
+      const status = err.statusCode || 500;
+      const payload = { error: err.message, code: err.code };
+      if (status < 500 && err.details) payload.details = err.details;
+      return res.status(status).json(payload);
+    }
+    if (err instanceof PostValidationError) {
+      const statusCode = err.code === "NOT_FOUND" ? 404 : err.code === "MISSING_CLIENT" ? 400 : 409;
+      return res.status(statusCode).json({ error: err.message, code: err.code });
+    }
+    console.error('POST /posts/:id/send-to-approval error:', err);
+    return res.status(500).json({ error: "Erro ao solicitar aprovação" });
+  }
 });
 
 module.exports = router;
