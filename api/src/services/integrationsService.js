@@ -39,6 +39,24 @@ function sanitizeIntegrationResponse(record) {
   const cloned = { ...record };
   delete cloned.accessToken;
   delete cloned.refreshToken;
+  delete cloned.accessTokenEncrypted;
+  if (cloned.config && typeof cloned.config === 'object' && !Array.isArray(cloned.config)) {
+    const nextConfig = { ...cloned.config };
+    for (const key of [
+      'access_token',
+      'accessToken',
+      'accessTokenEncrypted',
+      'token',
+      'refresh_token',
+      'refreshToken',
+      'app_secret',
+      'client_secret',
+      'secret',
+    ]) {
+      if (Object.prototype.hasOwnProperty.call(nextConfig, key)) delete nextConfig[key];
+    }
+    cloned.config = nextConfig;
+  }
   return cloned;
 }
 
@@ -80,6 +98,7 @@ module.exports = {
           providerName: true,
           status: true,
           settings: true,
+          config: true,
           ownerType: true,
           ownerKey: true,
           lastSyncedAt: true,
@@ -91,7 +110,7 @@ module.exports = {
     ]);
 
     return {
-      items,
+      items: items.map((item) => sanitizeIntegrationResponse(item)),
       total,
       page,
       perPage,
