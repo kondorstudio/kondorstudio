@@ -675,6 +675,13 @@ const PublicApprovals = {
       body: JSON.stringify(payload || {}),
     });
   },
+
+  async publicRequestChanges(token, payload) {
+    return jsonFetch(`/public/approvals/${token}/request-changes`, {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    });
+  },
 };
 
 // --------------------

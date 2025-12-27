@@ -13,6 +13,14 @@ import { base44 } from "@/apiClient/base44Client";
 import { Video } from "lucide-react";
 import { resolveMediaUrl } from "@/lib/media.js";
 
+function formatDateTimeInput(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const offset = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
 export default function Postformdialog({
   open,
   onClose,
@@ -32,6 +40,8 @@ export default function Postformdialog({
     media_url: "",
     media_type: "image",
     integrationId: "",
+    platform: "",
+    scheduledDate: "",
   });
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -52,6 +62,14 @@ export default function Postformdialog({
             post.metadata?.integrationId ||
             post.metadata?.integration_id ||
             "",
+          platform:
+            post.platform ||
+            post.metadata?.platform ||
+            post.metadata?.platform_name ||
+            "",
+          scheduledDate: formatDateTimeInput(
+            post.scheduledDate || post.scheduled_date || post.scheduledAt || post.scheduled_at
+          ),
         }
       : {
           title: "",
@@ -61,6 +79,8 @@ export default function Postformdialog({
           media_url: "",
           media_type: "image",
           integrationId: "",
+          platform: "",
+          scheduledDate: "",
         };
 
     setFormData(payload);
@@ -135,6 +155,44 @@ export default function Postformdialog({
     return integration.provider || null;
   };
 
+  const platformOptions = React.useMemo(() => {
+    if (!selectedIntegration) return [];
+    const kind = selectedIntegration.settings?.kind;
+    if (kind === "meta_business") {
+      const options = [];
+      const settings = selectedIntegration.settings || {};
+      if (settings.igBusinessId || settings.ig_business_id) {
+        options.push({ value: "instagram", label: "Instagram" });
+      }
+      if (settings.pageId || settings.page_id) {
+        options.push({ value: "facebook", label: "Facebook" });
+      }
+      return options.length ? options : [
+        { value: "instagram", label: "Instagram" },
+        { value: "facebook", label: "Facebook" },
+      ];
+    }
+    if (kind === "instagram_only") return [{ value: "instagram", label: "Instagram" }];
+    if (kind === "tiktok") return [{ value: "tiktok", label: "TikTok" }];
+    return [];
+  }, [selectedIntegration]);
+
+  useEffect(() => {
+    if (!selectedIntegration) return;
+    const current = formData.platform;
+    const available = platformOptions.map((opt) => opt.value);
+    if (current && available.includes(current)) return;
+    if (available.length === 1) {
+      setFormData((prev) => ({ ...prev, platform: available[0] }));
+    }
+  }, [formData.platform, platformOptions, selectedIntegration]);
+
+  useEffect(() => {
+    if (selectedIntegration) return;
+    if (!formData.platform) return;
+    setFormData((prev) => ({ ...prev, platform: "" }));
+  }, [formData.platform, selectedIntegration]);
+
   useEffect(() => {
     if (!formData.clientId) return;
     if (formData.integrationId) return;
@@ -188,6 +246,10 @@ export default function Postformdialog({
       alert("Selecione a rede social do cliente antes de salvar.");
       return;
     }
+    if (platformOptions.length > 1 && !formData.platform) {
+      alert("Selecione o canal de publicação.");
+      return;
+    }
 
     try {
       setIsUploading(true);
@@ -207,7 +269,12 @@ export default function Postformdialog({
         integrationId: formData.integrationId || null,
         integrationKind: selectedIntegration?.settings?.kind || null,
         integrationProvider: selectedIntegration?.provider || null,
-        platform: resolvePlatformValue(selectedIntegration),
+        platform:
+          formData.platform ||
+          resolvePlatformValue(selectedIntegration),
+        scheduledDate: formData.scheduledDate
+          ? new Date(formData.scheduledDate).toISOString()
+          : null,
       };
 
       if (onSubmit) {
@@ -319,6 +386,40 @@ export default function Postformdialog({
               <option value="PUBLISHED">Publicado</option>
               <option value="ARCHIVED">Arquivado</option>
             </select>
+          </div>
+
+          {/* Canal */}
+          {selectedIntegration ? (
+            <div className="space-y-2">
+              <Label>Canal de publicação</Label>
+              <select
+                value={formData.platform}
+                onChange={handleChange("platform")}
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                disabled={platformOptions.length === 0}
+              >
+                <option value="">
+                  {platformOptions.length === 0
+                    ? "Canal indisponível"
+                    : "Selecione o canal"}
+                </option>
+                {platformOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+
+          {/* Agendamento */}
+          <div className="space-y-2">
+            <Label>Data e hora de publicação</Label>
+            <Input
+              type="datetime-local"
+              value={formData.scheduledDate}
+              onChange={handleChange("scheduledDate")}
+            />
           </div>
 
           {/* Upload de mídia */}

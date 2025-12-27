@@ -679,6 +679,33 @@ module.exports = {
     });
     if (!existing) return null;
 
+    const latestApproval = await prisma.approval.findFirst({
+      where: { tenantId, postId, status: 'PENDING' },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (latestApproval) {
+      const [approvalResult, postResult] = await prisma.$transaction([
+        prisma.approval.update({
+          where: { id: latestApproval.id },
+          data: {
+            status: 'REJECTED',
+            notes: feedback,
+            approverId: userId || latestApproval.approverId || null,
+          },
+        }),
+        prisma.post.update({
+          where: { id: postId },
+          data: {
+            clientFeedback: feedback,
+            status: 'DRAFT',
+          },
+        }),
+      ]);
+
+      return { ...postResult, approval: approvalResult };
+    }
+
     return prisma.post.update({
       where: { id: postId },
       data: {

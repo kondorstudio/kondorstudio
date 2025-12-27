@@ -46,6 +46,7 @@ const AdminTenants = lazy(() => import("./pages/admin/AdminTenants.jsx"));
 const AdminTenantDetails = lazy(() => import("./pages/admin/AdminTenantDetails.jsx"));
 const AdminLogs = lazy(() => import("./pages/admin/AdminLogs.jsx"));
 const AdminJobs = lazy(() => import("./pages/admin/AdminJobs.jsx"));
+const PublicApproval = lazy(() => import("./pages/publicApproval.jsx"));
 
 // ✅ Novas páginas públicas (Meta exige URLs públicas válidas)
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy.jsx"));
@@ -73,6 +74,8 @@ export default function App() {
         {/* ✅ Páginas legais (Meta) */}
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<Terms />} />
+
+        <Route path="/public/approvals/:token" element={<PublicApproval />} />
 
         <Route path="/admin/login" element={<AdminLogin />} />
 

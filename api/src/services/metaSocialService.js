@@ -13,6 +13,12 @@ function getOauthVersion() {
   return process.env.META_OAUTH_VERSION || 'v24.0';
 }
 
+function getGraphBaseUrl() {
+  const base = process.env.META_GRAPH_BASE_URL;
+  if (base && String(base).trim()) return String(base).replace(/\/$/, '');
+  return `https://graph.facebook.com/${getOauthVersion()}`;
+}
+
 function assertEnv(name) {
   const v = process.env[name];
   if (!v || !String(v).trim()) {
@@ -38,6 +44,126 @@ function buildGraphGet(oauthVersion) {
     }
 
     return json;
+  };
+}
+
+async function graphPost(path, params = {}) {
+  const base = getGraphBaseUrl();
+  const url = new URL(`${base}/${path}`);
+  const body = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null) return;
+    body.set(key, String(value));
+  });
+
+  const res = await fetch(url.toString(), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Accept: 'application/json',
+    },
+    body: body.toString(),
+  });
+
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = json?.error?.message || 'Graph API error';
+    const code = json?.error?.code || 'unknown';
+    throw new Error(`Graph POST ${path} failed (${code}): ${msg}`);
+  }
+
+  return json;
+}
+
+async function waitForInstagramContainer(containerId, accessToken) {
+  if (!containerId) return;
+  const base = getGraphBaseUrl();
+  const maxAttempts = Number(process.env.META_IG_CONTAINER_POLL_ATTEMPTS) || 6;
+  const delayMs = Number(process.env.META_IG_CONTAINER_POLL_DELAY_MS) || 4000;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const url = new URL(`${base}/${containerId}`);
+    url.searchParams.set('fields', 'status_code');
+    url.searchParams.set('access_token', accessToken);
+
+    const res = await fetch(url.toString());
+    const json = await res.json().catch(() => ({}));
+    const status = json?.status_code || null;
+    if (status === 'FINISHED') return;
+    if (status === 'ERROR') {
+      throw new Error('Instagram container error');
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+}
+
+async function publishInstagramPost({ igBusinessId, accessToken, mediaUrl, caption, mediaType }) {
+  if (!igBusinessId) throw new Error('Missing igBusinessId');
+  if (!accessToken) throw new Error('Missing accessToken');
+  if (!mediaUrl) throw new Error('Missing mediaUrl');
+
+  const payload = {
+    access_token: accessToken,
+    caption: caption || undefined,
+  };
+
+  if (mediaType === 'video') {
+    payload.media_type = 'VIDEO';
+    payload.video_url = mediaUrl;
+  } else {
+    payload.image_url = mediaUrl;
+  }
+
+  const createResult = await graphPost(`${igBusinessId}/media`, payload);
+  const creationId = createResult?.id;
+  if (!creationId) {
+    throw new Error('Instagram media container not created');
+  }
+
+  if (mediaType === 'video') {
+    await waitForInstagramContainer(creationId, accessToken);
+  }
+
+  const publishResult = await graphPost(`${igBusinessId}/media_publish`, {
+    access_token: accessToken,
+    creation_id: creationId,
+  });
+
+  return {
+    externalId: publishResult?.id || publishResult?.media_id || creationId,
+    raw: {
+      create: createResult,
+      publish: publishResult,
+    },
+  };
+}
+
+async function publishFacebookPost({ pageId, accessToken, mediaUrl, caption, mediaType }) {
+  if (!pageId) throw new Error('Missing pageId');
+  if (!accessToken) throw new Error('Missing accessToken');
+  if (!mediaUrl) throw new Error('Missing mediaUrl');
+
+  const isVideo = mediaType === 'video';
+  const endpoint = isVideo ? `${pageId}/videos` : `${pageId}/photos`;
+  const payload = {
+    access_token: accessToken,
+    caption: caption || undefined,
+  };
+
+  if (isVideo) {
+    payload.file_url = mediaUrl;
+    if (caption) payload.description = caption;
+  } else {
+    payload.url = mediaUrl;
+  }
+
+  const result = await graphPost(endpoint, payload);
+
+  return {
+    externalId: result?.post_id || result?.id || null,
+    raw: result,
   };
 }
 
@@ -253,4 +379,7 @@ module.exports = {
       expiresIn,
     };
   },
+
+  publishInstagramPost,
+  publishFacebookPost,
 };

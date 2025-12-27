@@ -8,9 +8,11 @@ const connection = new Redis(process.env.REDIS_URL);
 const metricsSyncQueue = new Queue('metrics-sync', { connection });
 const reportsQueue = new Queue('reports-generation', { connection });
 const whatsappQueue = new Queue('whatsapp-automation', { connection });
+const publishingQueue = new Queue('posts-publish', { connection });
 
 module.exports = {
   metricsSyncQueue,
   reportsQueue,
   whatsappQueue,
+  publishingQueue,
 };

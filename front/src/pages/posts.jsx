@@ -69,12 +69,24 @@ export default function Posts() {
     onError: showError,
   });
 
+  const sendToApprovalMutation = useMutation({
+    mutationFn: (id) => base44.entities.Post.sendToApproval(id),
+    onSuccess: () => {
+      invalidatePosts();
+    },
+    onError: showError,
+  });
+
   const handleEdit = (post) => {
     setEditingPost(post);
     setDialogOpen(true);
   };
 
   const handleStatusChange = (postId, newStatus) => {
+    if (newStatus === "PENDING_APPROVAL") {
+      sendToApprovalMutation.mutate(postId);
+      return;
+    }
     updateMutation.mutate({
       id: postId,
       data: { status: newStatus },
@@ -89,7 +101,10 @@ export default function Posts() {
     }
   };
 
-  const isSaving = createMutation.isPending || updateMutation.isPending;
+  const isSaving =
+    createMutation.isPending ||
+    updateMutation.isPending ||
+    sendToApprovalMutation.isPending;
 
   return (
     <div className="p-6 md:p-8">

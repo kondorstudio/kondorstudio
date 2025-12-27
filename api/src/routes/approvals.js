@@ -227,10 +227,11 @@ router.post('/:id/status', async (req, res) => {
       // - APPROVED -> Post.status = 'APPROVED' (ou equivalente no seu enum)
       // - REJECTED -> aqui, opcionalmente, podemos trazer o Post para 'DRAFT'
       if (status === 'APPROVED') {
-        postUpdateData.status = 'APPROVED';
+        postUpdateData.status = post.scheduledDate ? 'SCHEDULED' : 'APPROVED';
       } else if (status === 'REJECTED') {
-        // Se o schema não tiver 'REJECTED' em Post, 'DRAFT' é um fallback seguro.
-        postUpdateData.status = 'DRAFT';
+        const hasFeedback =
+          clientFeedback !== undefined && String(clientFeedback || '').trim().length > 0;
+        postUpdateData.status = hasFeedback ? 'DRAFT' : 'CANCELLED';
       }
 
       if (clientFeedback !== undefined) {

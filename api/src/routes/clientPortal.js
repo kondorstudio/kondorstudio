@@ -180,7 +180,8 @@ router.post('/approvals/:id/approve', clientAuth, async (req, res) => {
       by: req.client.id,
     });
 
-    await postsService.updateStatus(req.tenantId, approval.post.id, 'APPROVED', req.client.id);
+    const nextStatus = approval.post.scheduledDate ? 'SCHEDULED' : 'APPROVED';
+    await postsService.updateStatus(req.tenantId, approval.post.id, nextStatus, req.client.id);
 
     return res.json({ ok: true });
   } catch (err) {

@@ -6,6 +6,7 @@ const {
   metricsSyncQueue,
   reportsQueue,
   whatsappQueue,
+  publishingQueue,
 } = require('./queues');
 const { prisma } = require('./prisma');
 
@@ -13,6 +14,7 @@ const updateMetricsJob = require('./jobs/updateMetricsJob');
 const reportGenerationJob = require('./jobs/reportGenerationJob');
 const automationWhatsAppJob = require('./jobs/automationWhatsAppJob');
 const whatsappApprovalJob = require('./jobs/whatsappApprovalRequestJob');
+const publishScheduledPostsJob = require('./jobs/publishScheduledPostsJob');
 
 // ------------------------------------------------------
 // Conexão do BullMQ (usa REDIS_URL da env; em dev cai pro localhost)
@@ -28,6 +30,8 @@ const REPORTS_GENERATION_PERIOD_MS =
   Number(process.env.REPORTS_GENERATION_PERIOD_MS) || 900000; // 15min
 const WHATSAPP_AUTOMATION_PERIOD_MS =
   Number(process.env.WHATSAPP_AUTOMATION_PERIOD_MS) || 300000; // 5min
+const POSTS_PUBLISH_PERIOD_MS =
+  Number(process.env.POSTS_PUBLISH_PERIOD_MS) || 60000; // 1min
 
 // ------------------------------------------------------
 // Helper genérico para rodar pollOnce() dos módulos de job
@@ -92,6 +96,15 @@ const whatsappWorker = new Worker(
   { connection },
 );
 
+const publishingWorker = new Worker(
+  publishingQueue.name,
+  async (job) => {
+    console.log('[publish] processing job', job.id, job.name);
+    await runPollOnce(publishScheduledPostsJob, 'publishScheduledPostsJob');
+  },
+  { connection },
+);
+
 // ------------------------------------------------------
 // Logs de sucesso
 // ------------------------------------------------------
@@ -105,6 +118,10 @@ reportsWorker.on('completed', (job) => {
 
 whatsappWorker.on('completed', (job) => {
   console.log('[whatsapp] job completed', job.id);
+});
+
+publishingWorker.on('completed', (job) => {
+  console.log('[publish] job completed', job.id);
 });
 
 async function logJobFailure(queueName, job, err) {
@@ -139,6 +156,11 @@ whatsappWorker.on('failed', async (job, err) => {
   await logJobFailure(whatsappQueue.name, job, err);
 });
 
+publishingWorker.on('failed', async (job, err) => {
+  console.error('[publish] job failed', job?.id, err);
+  await logJobFailure(publishingQueue.name, job, err);
+});
+
 // ------------------------------------------------------
 // Agendamento de jobs recorrentes (repeatable jobs)
 // ------------------------------------------------------
@@ -147,11 +169,13 @@ async function ensureRepeatableJobs() {
     METRICS_AGG_PERIOD_MS,
     REPORTS_GENERATION_PERIOD_MS,
     WHATSAPP_AUTOMATION_PERIOD_MS,
+    POSTS_PUBLISH_PERIOD_MS,
   });
 
   await metricsSyncQueue.upsertJobScheduler('metrics-poll', { every: METRICS_AGG_PERIOD_MS });
   await reportsQueue.upsertJobScheduler('reports-poll', { every: REPORTS_GENERATION_PERIOD_MS });
   await whatsappQueue.upsertJobScheduler('whatsapp-poll', { every: WHATSAPP_AUTOMATION_PERIOD_MS });
+  await publishingQueue.upsertJobScheduler('posts-publish', { every: POSTS_PUBLISH_PERIOD_MS });
 
   console.log('[worker] repeatable jobs registrados com sucesso');
 }

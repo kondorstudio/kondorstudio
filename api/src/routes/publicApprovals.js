@@ -4,7 +4,9 @@
 //
 // Endpoints (montados em /api/public no server.js):
 //  - GET  /api/public/approvals/:token
-//  - POST /api/public/approvals/:token/confirm
+//  - POST /api/public/approvals/:token/confirm (alias /approve)
+//  - POST /api/public/approvals/:token/reject
+//  - POST /api/public/approvals/:token/request-changes
 //
 // Fluxo básico:
 //  1) Cliente recebe link com o token da approval (ex.: https://api.kondor.com/api/public/approvals/TOKEN)
@@ -117,6 +119,18 @@ async function loadApprovalContext(token) {
   return { approval, post, project, client };
 }
 
+function resolveApprovedPostStatus(post) {
+  if (!post) return 'APPROVED';
+  if (post.scheduledDate || post.scheduledAt) return 'SCHEDULED';
+  return 'APPROVED';
+}
+
+function normalizeFeedback(input) {
+  if (input === undefined || input === null) return null;
+  const trimmed = String(input).trim();
+  return trimmed ? trimmed : null;
+}
+
 /**
  * GET /api/public/approvals/:token
  * Retorna um snapshot seguro da approval para ser exibido em uma tela pública.
@@ -145,9 +159,15 @@ router.get('/approvals/:token', async (req, res) => {
             id: post.id,
             title: post.title,
             status: post.status,
-            scheduledAt: post.scheduledAt,
-            publishedAt: post.publishedAt,
+            scheduledAt: post.scheduledDate || post.scheduledAt || null,
+            scheduledDate: post.scheduledDate || post.scheduledAt || null,
+            publishedAt: post.publishedDate || post.publishedAt || null,
+            publishedDate: post.publishedDate || post.publishedAt || null,
             clientFeedback: post.clientFeedback || null,
+            mediaUrl: post.mediaUrl || null,
+            mediaType: post.mediaType || null,
+            caption: post.caption || post.content || null,
+            platform: post.platform || null,
           }
         : null,
       client: client
@@ -160,6 +180,130 @@ router.get('/approvals/:token', async (req, res) => {
   } catch (err) {
     console.error('GET /public/approvals/:token error:', err && err.stack ? err.stack : err);
     return res.status(500).json({ error: 'Erro ao carregar approval pública' });
+  }
+}
+
+router.post('/approvals/:token/confirm', approvePublic);
+router.post('/approvals/:token/approve', approvePublic);
+
+/**
+ * POST /api/public/approvals/:token/reject
+ *
+ * Rejeita a approval (status = REJECTED) e marca o post como CANCELLED.
+ * Body opcional:
+ *  - notes (string)
+ */
+router.post('/approvals/:token/reject', async (req, res) => {
+  try {
+    const { token } = req.params;
+    const ctx = await loadApprovalContext(token);
+    if (!ctx || !ctx.approval) {
+      return res.status(404).json({ error: 'Approval não encontrada ou link expirado' });
+    }
+
+    const { approval, post } = ctx;
+    if (approval.status === 'REJECTED') {
+      return res.json({ ok: true, status: approval.status, alreadyRejected: true });
+    }
+
+    if (approval.status !== 'PENDING') {
+      return res.status(400).json({
+        error: `Approval em estado inválido para rejeição: ${approval.status}`,
+      });
+    }
+
+    const notes = normalizeFeedback(req.body?.notes || req.body?.note);
+
+    if (post) {
+      const [approvalResult, postResult] = await prisma.$transaction([
+        prisma.approval.update({
+          where: { id: approval.id },
+          data: {
+            status: 'REJECTED',
+            notes: notes || approval.notes || null,
+          },
+        }),
+        prisma.post.update({
+          where: { id: post.id },
+          data: {
+            status: 'CANCELLED',
+            clientFeedback: notes || post.clientFeedback || null,
+          },
+        }),
+      ]);
+
+      return res.json({ ok: true, approval: approvalResult, post: postResult });
+    }
+
+    const updatedApproval = await prisma.approval.update({
+      where: { id: approval.id },
+      data: {
+        status: 'REJECTED',
+        notes: notes || approval.notes || null,
+      },
+    });
+
+    return res.json({ ok: true, approval: updatedApproval });
+  } catch (err) {
+    console.error('POST /public/approvals/:token/reject error:', err && err.stack ? err.stack : err);
+    return res.status(500).json({ error: 'Erro ao rejeitar approval pública' });
+  }
+}
+
+/**
+ * POST /api/public/approvals/:token/request-changes
+ *
+ * Solicita ajustes no post (status DRAFT + feedback) e rejeita a approval.
+ * Body:
+ *  - message | note | clientFeedback
+ */
+router.post('/approvals/:token/request-changes', async (req, res) => {
+  try {
+    const { token } = req.params;
+    const ctx = await loadApprovalContext(token);
+    if (!ctx || !ctx.approval) {
+      return res.status(404).json({ error: 'Approval não encontrada ou link expirado' });
+    }
+
+    const { approval, post } = ctx;
+    if (!post) {
+      return res.status(400).json({ error: 'Approval sem post vinculado' });
+    }
+
+    const note =
+      normalizeFeedback(req.body?.clientFeedback) ||
+      normalizeFeedback(req.body?.client_feedback) ||
+      normalizeFeedback(req.body?.message) ||
+      normalizeFeedback(req.body?.note);
+
+    if (!note || note.length < 3) {
+      return res.status(400).json({ error: 'Informe um motivo com pelo menos 3 caracteres' });
+    }
+
+    const [approvalResult, postResult] = await prisma.$transaction([
+      prisma.approval.update({
+        where: { id: approval.id },
+        data: {
+          status: 'REJECTED',
+          notes: note,
+        },
+      }),
+      prisma.post.update({
+        where: { id: post.id },
+        data: {
+          status: 'DRAFT',
+          clientFeedback: note,
+        },
+      }),
+    ]);
+
+    return res.json({ ok: true, approval: approvalResult, post: postResult });
+  } catch (err) {
+    console.error(
+      'POST /public/approvals/:token/request-changes error:',
+      err && err.stack ? err.stack : err,
+    );
+    return res.status(500).json({ error: 'Erro ao solicitar ajustes na approval pública' });
   }
 });
 
@@ -175,7 +319,7 @@ router.get('/approvals/:token', async (req, res) => {
  * Body opcional:
  *  - clientFeedback ou client_feedback (string)
  */
-router.post('/approvals/:token/confirm', async (req, res) => {
+async function approvePublic(req, res) {
   try {
     const { token } = req.params;
 
@@ -203,12 +347,13 @@ router.post('/approvals/:token/confirm', async (req, res) => {
     }
 
     const body = req.body || {};
-    const clientFeedback =
+    const clientFeedbackRaw =
       body.clientFeedback !== undefined
         ? body.clientFeedback
         : body.client_feedback !== undefined
         ? body.client_feedback
         : undefined;
+    const clientFeedback = normalizeFeedback(clientFeedbackRaw);
 
     // Atualiza approval + (se existir) post de forma consistente
     let updatedApproval = null;
@@ -216,7 +361,7 @@ router.post('/approvals/:token/confirm', async (req, res) => {
 
     if (post) {
       const postUpdateData = {
-        status: 'APPROVED',
+        status: resolveApprovedPostStatus(post),
       };
 
       if (clientFeedback !== undefined) {
@@ -288,6 +433,6 @@ router.post('/approvals/:token/confirm', async (req, res) => {
     console.error('POST /public/approvals/:token/confirm error:', err && err.stack ? err.stack : err);
     return res.status(500).json({ error: 'Erro ao confirmar approval pública' });
   }
-});
+}
 
 module.exports = router;
