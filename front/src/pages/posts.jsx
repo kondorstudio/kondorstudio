@@ -115,6 +115,7 @@ export default function Posts() {
         <Postkanban
           posts={posts}
           clients={clients}
+          integrations={integrations}
           onEdit={handleEdit}
           onStatusChange={handleStatusChange}
           isLoading={isLoading}

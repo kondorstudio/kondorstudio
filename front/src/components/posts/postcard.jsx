@@ -37,7 +37,35 @@ function formatDate(dt) {
   });
 }
 
-export default function Postcard({ post, client, onEdit, onStatusChange }) {
+function resolveNetworkLabel(post, integration) {
+  const kind =
+    integration?.settings?.kind ||
+    post?.metadata?.integrationKind ||
+    post?.metadata?.integration_kind ||
+    null;
+
+  if (kind === "meta_business") return "Meta Business";
+  if (kind === "instagram_only") return "Instagram";
+  if (kind === "tiktok") return "TikTok";
+
+  const platform = post?.platform || null;
+  if (platform === "instagram") return "Instagram";
+  if (platform === "tiktok") return "TikTok";
+  if (platform === "meta_business") return "Meta Business";
+
+  if (integration?.providerName) return integration.providerName;
+  if (integration?.provider) return integration.provider;
+
+  const providerMeta =
+    post?.metadata?.integrationProvider ||
+    post?.metadata?.integration_provider ||
+    null;
+  if (providerMeta) return String(providerMeta);
+
+  return null;
+}
+
+export default function Postcard({ post, client, integration, onEdit, onStatusChange }) {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [localStatus, setLocalStatus] = React.useState(post.status);
   const triggerRef = React.useRef(null);
@@ -74,6 +102,7 @@ export default function Postcard({ post, client, onEdit, onStatusChange }) {
   const scheduledLabel = formatDate(
     post.scheduledAt || post.scheduled_at || post.scheduledDate
   );
+  const networkLabel = resolveNetworkLabel(post, integration);
   const description = post.body || post.caption;
 
   React.useEffect(() => {
@@ -166,6 +195,11 @@ export default function Postcard({ post, client, onEdit, onStatusChange }) {
       )}
 
       <CardFooter className="pt-2 flex flex-col gap-3 pr-3">
+        {networkLabel && (
+          <div className="w-full text-[11px] text-gray-500">
+            Rede: <span className="font-medium">{networkLabel}</span>
+          </div>
+        )}
         {scheduledLabel && (
           <div className="w-full text-[11px] text-gray-500">
             Programado para: <span className="font-medium">{scheduledLabel}</span>

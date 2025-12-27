@@ -44,6 +44,7 @@ const COLUMNS = [
 export default function Postkanban({
   posts = [],
   clients = [],
+  integrations = [],
   onEdit,
   onStatusChange,
   isLoading,
@@ -59,6 +60,19 @@ export default function Postkanban({
   const getClientById = (clientId) => {
     if (!clientId) return null;
     return clientMap.get(clientId) || null;
+  };
+
+  const integrationMap = React.useMemo(() => {
+    const map = new Map();
+    (integrations || []).forEach((integration) => {
+      if (integration?.id) map.set(integration.id, integration);
+    });
+    return map;
+  }, [integrations]);
+
+  const getIntegrationById = (integrationId) => {
+    if (!integrationId) return null;
+    return integrationMap.get(integrationId) || null;
   };
 
   const renderSkeletonColumn = () => (
@@ -120,6 +134,12 @@ export default function Postkanban({
                           key={post.id}
                           post={post}
                           client={getClientById(post.clientId)}
+                          integration={getIntegrationById(
+                            post.integrationId ||
+                              post.integration_id ||
+                              post.metadata?.integrationId ||
+                              post.metadata?.integration_id
+                          )}
                           onEdit={onEdit}
                           onStatusChange={onStatusChange}
                         />
