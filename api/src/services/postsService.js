@@ -34,6 +34,79 @@ function sanitizeString(value) {
   return trimmed ? trimmed : null;
 }
 
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function normalizeMetadataInput(data = {}) {
+  const raw = data.metadata || data.meta || data.metadata_json || data.metadataJson;
+  if (isPlainObject(raw)) return { ...raw };
+  return null;
+}
+
+function applyIntegrationMetadata(base, data = {}) {
+  const next = base ? { ...base } : {};
+
+  const hasIntegrationId = data.integrationId !== undefined || data.integration_id !== undefined;
+  const hasIntegrationKind = data.integrationKind !== undefined || data.integration_kind !== undefined;
+  const hasIntegrationProvider =
+    data.integrationProvider !== undefined || data.integration_provider !== undefined;
+
+  if (hasIntegrationId) {
+    const value = sanitizeString(data.integrationId || data.integration_id);
+    if (value) next.integrationId = value;
+    else delete next.integrationId;
+  }
+
+  if (hasIntegrationKind) {
+    const value = sanitizeString(data.integrationKind || data.integration_kind);
+    if (value) next.integrationKind = value;
+    else delete next.integrationKind;
+  }
+
+  if (hasIntegrationProvider) {
+    const value = sanitizeString(data.integrationProvider || data.integration_provider);
+    if (value) next.integrationProvider = value;
+    else delete next.integrationProvider;
+  }
+
+  return Object.keys(next).length ? next : null;
+}
+
+function buildMetadataForCreate(data = {}) {
+  const base = normalizeMetadataInput(data);
+  const hasIntegrationFields =
+    data.integrationId !== undefined ||
+    data.integration_id !== undefined ||
+    data.integrationKind !== undefined ||
+    data.integration_kind !== undefined ||
+    data.integrationProvider !== undefined ||
+    data.integration_provider !== undefined;
+
+  if (!base && !hasIntegrationFields) return null;
+  const merged = base ? { ...base } : {};
+  return applyIntegrationMetadata(merged, data);
+}
+
+function buildMetadataForUpdate(existingMetadata, data = {}) {
+  const patch = normalizeMetadataInput(data);
+  const hasIntegrationFields =
+    data.integrationId !== undefined ||
+    data.integration_id !== undefined ||
+    data.integrationKind !== undefined ||
+    data.integration_kind !== undefined ||
+    data.integrationProvider !== undefined ||
+    data.integration_provider !== undefined;
+
+  if (!patch && !hasIntegrationFields) return { hasUpdate: false, metadata: null };
+
+  const base = isPlainObject(existingMetadata) ? { ...existingMetadata } : {};
+  const merged = patch ? { ...base, ...patch } : base;
+  const next = applyIntegrationMetadata(merged, data);
+
+  return { hasUpdate: true, metadata: next };
+}
+
 function getPublicAppUrl() {
   const base =
     process.env.APP_PUBLIC_URL ||
@@ -263,6 +336,8 @@ module.exports = {
     const title = sanitizeString(data.title);
     const clientId = sanitizeString(data.clientId || data.client_id);
     const mediaUrl = sanitizeString(data.mediaUrl || data.media_url);
+    const platform = sanitizeString(data.platform);
+    const metadata = buildMetadataForCreate(data);
 
     if (!title) throw new PostValidationError('Título é obrigatório');
     if (!clientId) throw new PostValidationError('Selecione um cliente antes de salvar o post');
@@ -282,6 +357,8 @@ module.exports = {
       status: postStatus,
       scheduledDate: toDateOrNull(scheduledDate),
       publishedDate: toDateOrNull(publishedDate),
+      platform,
+      metadata,
       clientFeedback: sanitizeString(data.clientFeedback || data.client_feedback),
       version: Number(data.version || 1),
       history: data.history || null,
@@ -350,6 +427,10 @@ module.exports = {
 
     if (data.cta !== undefined) updateData.cta = sanitizeString(data.cta);
 
+    if (data.platform !== undefined) {
+      updateData.platform = sanitizeString(data.platform);
+    }
+
     if (data.tags !== undefined) {
       updateData.tags = Array.isArray(data.tags) ? data.tags : (data.tags ? [data.tags] : []);
     }
@@ -387,6 +468,11 @@ module.exports = {
 
     if (data.version !== undefined) updateData.version = Number(data.version);
     if (data.history !== undefined) updateData.history = data.history;
+
+    const metadataUpdate = buildMetadataForUpdate(existing.metadata, data);
+    if (metadataUpdate.hasUpdate) {
+      updateData.metadata = metadataUpdate.metadata;
+    }
 
     const updated = await prisma.post.update({
       where: { id },

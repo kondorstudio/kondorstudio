@@ -18,6 +18,7 @@ export default function Postformdialog({
   onClose,
   post,
   clients = [],
+  integrations = [],
   onSubmit,
   isSaving,
   onDelete,
@@ -30,6 +31,7 @@ export default function Postformdialog({
     status: "DRAFT",
     media_url: "",
     media_type: "image",
+    integrationId: "",
   });
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -44,6 +46,12 @@ export default function Postformdialog({
           status: post.status || "DRAFT",
           media_url: post.media_url || post.mediaUrl || "",
           media_type: post.media_type || post.mediaType || "image",
+          integrationId:
+            post.integrationId ||
+            post.integration_id ||
+            post.metadata?.integrationId ||
+            post.metadata?.integration_id ||
+            "",
         }
       : {
           title: "",
@@ -52,6 +60,7 @@ export default function Postformdialog({
           status: "DRAFT",
           media_url: "",
           media_type: "image",
+          integrationId: "",
         };
 
     setFormData(payload);
@@ -83,6 +92,68 @@ export default function Postformdialog({
     }));
   };
 
+  const clientIntegrations = React.useMemo(() => {
+    if (!formData.clientId) return [];
+    return (integrations || []).filter(
+      (integration) =>
+        integration.ownerType === "CLIENT" &&
+        integration.clientId === formData.clientId
+    );
+  }, [integrations, formData.clientId]);
+
+  const postingIntegrations = React.useMemo(() => {
+    return clientIntegrations.filter((integration) => {
+      const kind = integration.settings?.kind || "";
+      if (kind === "meta_business" || kind === "instagram_only" || kind === "tiktok") {
+        return true;
+      }
+      if (integration.provider === "TIKTOK") return true;
+      return false;
+    });
+  }, [clientIntegrations]);
+
+  const selectedIntegration = React.useMemo(() => {
+    if (!formData.integrationId) return null;
+    return postingIntegrations.find((integration) => integration.id === formData.integrationId) || null;
+  }, [formData.integrationId, postingIntegrations]);
+
+  const resolveIntegrationLabel = (integration) => {
+    if (!integration) return "Selecione uma rede";
+    const kind = integration.settings?.kind;
+    if (kind === "meta_business") return "Meta Business (Facebook/Instagram)";
+    if (kind === "instagram_only") return "Instagram";
+    if (kind === "tiktok") return "TikTok";
+    return integration.providerName || integration.provider || "Integração";
+  };
+
+  const resolvePlatformValue = (integration) => {
+    if (!integration) return null;
+    const kind = integration.settings?.kind;
+    if (kind === "instagram_only") return "instagram";
+    if (kind === "tiktok") return "tiktok";
+    if (kind === "meta_business") return "meta_business";
+    return integration.provider || null;
+  };
+
+  useEffect(() => {
+    if (!formData.clientId) return;
+    if (formData.integrationId) return;
+    if (postingIntegrations.length === 1) {
+      setFormData((prev) => ({ ...prev, integrationId: postingIntegrations[0].id }));
+    }
+  }, [formData.clientId, formData.integrationId, postingIntegrations]);
+
+  useEffect(() => {
+    if (!formData.integrationId) return;
+    if (!integrations.length) return;
+    const stillValid = postingIntegrations.some(
+      (integration) => integration.id === formData.integrationId
+    );
+    if (!stillValid) {
+      setFormData((prev) => ({ ...prev, integrationId: "" }));
+    }
+  }, [formData.integrationId, postingIntegrations]);
+
   const handleFileChange = (e) => {
     const selected = e.target.files?.[0];
     if (!selected) return;
@@ -113,6 +184,10 @@ export default function Postformdialog({
       alert("Envie um arquivo de mídia antes de salvar.");
       return;
     }
+    if (postingIntegrations.length > 0 && !formData.integrationId) {
+      alert("Selecione a rede social do cliente antes de salvar.");
+      return;
+    }
 
     try {
       setIsUploading(true);
@@ -129,6 +204,10 @@ export default function Postformdialog({
       const payload = {
         ...formData,
         media_url: mediaUrlToSave,
+        integrationId: formData.integrationId || null,
+        integrationKind: selectedIntegration?.settings?.kind || null,
+        integrationProvider: selectedIntegration?.provider || null,
+        platform: resolvePlatformValue(selectedIntegration),
       };
 
       if (onSubmit) {
@@ -193,6 +272,35 @@ export default function Postformdialog({
                 </option>
               ))}
             </select>
+          </div>
+
+          {/* Rede social */}
+          <div className="space-y-2">
+            <Label>Rede social do cliente</Label>
+            <select
+              value={formData.integrationId}
+              onChange={handleChange("integrationId")}
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+              disabled={!formData.clientId || postingIntegrations.length === 0}
+            >
+              <option value="">
+                {formData.clientId
+                  ? postingIntegrations.length
+                    ? "Selecione uma rede"
+                    : "Nenhuma integração encontrada"
+                  : "Selecione um cliente primeiro"}
+              </option>
+              {postingIntegrations.map((integration) => (
+                <option key={integration.id} value={integration.id}>
+                  {resolveIntegrationLabel(integration)}
+                </option>
+              ))}
+            </select>
+            {formData.clientId && postingIntegrations.length === 0 ? (
+              <p className="text-[11px] text-amber-600">
+                Cadastre uma integração deste cliente antes de publicar.
+              </p>
+            ) : null}
           </div>
 
           {/* Status */}

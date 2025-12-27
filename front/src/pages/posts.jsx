@@ -26,6 +26,11 @@ export default function Posts() {
     queryFn: () => base44.entities.Client.list(),
   });
 
+  const { data: integrations = [] } = useQuery({
+    queryKey: ["integrations"],
+    queryFn: () => base44.entities.Integration.list(),
+  });
+
   const invalidatePosts = () =>
     queryClient.invalidateQueries({ queryKey: ["posts"] });
 
@@ -120,6 +125,7 @@ export default function Posts() {
           onClose={handleDialogClose}
           post={editingPost}
           clients={clients}
+          integrations={integrations}
           onSubmit={handleSubmit}
           isSaving={isSaving}
           onDelete={
