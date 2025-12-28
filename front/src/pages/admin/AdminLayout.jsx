@@ -12,18 +12,32 @@ import {
   LogOut,
   ArrowLeft,
   ShieldAlert,
+  Users,
+  CreditCard,
+  Plug,
+  BarChart3,
+  Database,
 } from "lucide-react";
 import { base44 } from "@/apiClient/base44Client";
 import {
   useImpersonationState,
   clearImpersonationState,
 } from "@/hooks/useImpersonation";
+import {
+  getAdminRoleLabel,
+  hasAdminPermission,
+} from "@/utils/adminPermissions";
 
 const navItems = [
-  { to: "/admin", label: "Visão Geral", icon: LayoutDashboard },
-  { to: "/admin/tenants", label: "Tenants", icon: Building2 },
-  { to: "/admin/logs", label: "Logs", icon: FileText },
-  { to: "/admin/jobs", label: "Jobs", icon: Server },
+  { to: "/admin", label: "Visao Geral", icon: LayoutDashboard, permission: "tenants.read" },
+  { to: "/admin/tenants", label: "Tenants", icon: Building2, permission: "tenants.read" },
+  { to: "/admin/users", label: "Usuarios", icon: Users, permission: "users.read" },
+  { to: "/admin/billing", label: "Billing", icon: CreditCard, permission: "billing.read" },
+  { to: "/admin/integrations", label: "Integracoes", icon: Plug, permission: "integrations.read" },
+  { to: "/admin/reports", label: "Relatorios", icon: BarChart3, permission: "reports.read" },
+  { to: "/admin/logs", label: "Logs", icon: FileText, permission: "logs.read" },
+  { to: "/admin/jobs", label: "Jobs", icon: Server, permission: "jobs.read" },
+  { to: "/admin/data", label: "Data Studio", icon: Database, permission: "data.query" },
 ];
 
 export default function AdminLayout() {
@@ -35,7 +49,9 @@ export default function AdminLayout() {
     [],
   );
   const currentUserName =
-    authData?.user?.name || authData?.user?.email || "Super Admin";
+    authData?.user?.name || authData?.user?.email || "Admin";
+  const currentRole = authData?.user?.role || null;
+  const roleLabel = getAdminRoleLabel(currentRole);
 
   const handleLogout = async () => {
     try {
@@ -55,6 +71,9 @@ export default function AdminLayout() {
     } catch (err) {
       console.error("Erro ao encerrar impersonate", err);
     } finally {
+      if (impersonation.originalAuth) {
+        base44.storage.saveAuthToStorage?.(impersonation.originalAuth);
+      }
       clearImpersonationState();
       window.location.reload();
     }
@@ -68,12 +87,14 @@ export default function AdminLayout() {
           <p className="text-sm font-semibold text-gray-900">
             Kondor Control Center
           </p>
-          <p className="text-xs text-gray-500">Super Admin</p>
+          <p className="text-xs text-gray-500">{roleLabel}</p>
         </div>
       </div>
 
       <nav className="flex-1 overflow-auto px-3 py-4 space-y-1">
-        {navItems.map((item) => (
+        {navItems
+          .filter((item) => hasAdminPermission(currentRole, item.permission))
+          .map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
@@ -97,7 +118,7 @@ export default function AdminLayout() {
       <div className="px-4 py-4 border-t border-gray-200 text-sm text-gray-600 space-y-2">
         <div>
           <p className="font-semibold text-gray-900">{currentUserName}</p>
-          <p className="text-xs text-gray-500">SUPER_ADMIN</p>
+          <p className="text-xs text-gray-500">{roleLabel}</p>
         </div>
         <button
           type="button"

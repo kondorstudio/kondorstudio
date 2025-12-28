@@ -12,6 +12,7 @@ const {
 const authMiddleware = require('../middleware/auth');
 const rateLimit = require('express-rate-limit');
 const { loginSchema, clientLoginSchema } = require('../validators/authValidator');
+const mfaService = require('../services/mfaService');
 
 /**
  * Helper: parse expires strings like "30d", "7d", "24h" into a Date
@@ -63,6 +64,39 @@ const loginRateLimiter = rateLimit({
   },
 });
 
+async function issueAuthTokens({ user, req }) {
+  const payload = {
+    userId: user.id,
+    role: user.role,
+    tenantId: user.tenantId,
+  };
+
+  const accessToken = createAccessToken(payload);
+  const rawRefreshToken = createRefreshToken();
+  const hashed = await hashPassword(rawRefreshToken);
+  const expiresAt = computeExpiryDateFromString(REFRESH_TOKEN_EXPIRES_IN);
+
+  const tokenRecord = await prisma.refreshToken.create({
+    data: {
+      userId: user.id,
+      tokenHash: hashed,
+      revoked: false,
+      expiresAt,
+      deviceName: req.body?.deviceName || null,
+      ip: req.ip || req.headers['x-forwarded-for'] || null,
+      userAgent: req.headers['user-agent'] || null,
+      tenantId: user.tenantId || null,
+    },
+  });
+
+  return {
+    accessToken,
+    refreshToken: rawRefreshToken,
+    tokenId: tokenRecord.id,
+    expiresAt: expiresAt.toISOString(),
+  };
+}
+
 /**
  * POST /auth/login
  */
@@ -80,50 +114,50 @@ router.post('/login', loginRateLimiter, async (req, res) => {
     const { email, password, deviceName } = parseResult.data;
 
     const user = await prisma.user.findFirst({
-  where: { email },
-  select: {
-    id: true,
-    email: true,
-    name: true,
-    passwordHash: true,
-    role: true,
-    tenantId: true,
-  },
-});
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        passwordHash: true,
+        role: true,
+        tenantId: true,
+        isActive: true,
+        mfaEnabled: true,
+      },
+    });
 
     if (!user) return res.status(401).json({ error: 'Credenciais inválidas' });
+    if (!user.isActive) return res.status(403).json({ error: 'Usuário inativo' });
 
     const passwordOk = await comparePassword(password, user.passwordHash);
     if (!passwordOk) return res.status(401).json({ error: 'Credenciais inválidas' });
 
-    const payload = {
-      userId: user.id,
-      role: user.role,
-      tenantId: user.tenantId,
-    };
-
-    const accessToken = createAccessToken(payload);
-    const rawRefreshToken = createRefreshToken();
-    const hashed = await hashPassword(rawRefreshToken);
-    const expiresAt = computeExpiryDateFromString(REFRESH_TOKEN_EXPIRES_IN);
-
-    const tokenRecord = await prisma.refreshToken.create({
-      data: {
-        userId: user.id,
-        tokenHash: hashed,
-        revoked: false,
-        expiresAt,
-        deviceName: deviceName || (req.body && req.body.deviceName) || null,
-        ip: req.ip || req.headers['x-forwarded-for'] || null,
+    if (mfaService.shouldRequireMfa(user)) {
+      const challenge = await mfaService.createChallenge(user, {
+        purpose: 'admin_login',
+        ip: req.ip || null,
         userAgent: req.headers['user-agent'] || null,
-        tenantId: user.tenantId || null,
-      },
-    });
+      });
+      return res.json({
+        mfaRequired: true,
+        challengeId: challenge.challengeId,
+        expiresAt: challenge.expiresAt,
+        maskedEmail: challenge.maskedEmail,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          tenantId: user.tenantId,
+        },
+      });
+    }
+
+    const tokens = await issueAuthTokens({ user, req });
 
     return res.json({
-      accessToken,
-      refreshToken: rawRefreshToken,
-      tokenId: tokenRecord.id,
+      ...tokens,
       user: {
         id: user.id,
         email: user.email,
@@ -131,7 +165,6 @@ router.post('/login', loginRateLimiter, async (req, res) => {
         role: user.role,
         tenantId: user.tenantId,
       },
-      expiresAt: expiresAt.toISOString(),
     });
   } catch (err) {
     console.error('POST /auth/login error', err);
@@ -263,6 +296,41 @@ router.post('/client-login', loginRateLimiter, async (req, res) => {
   } catch (err) {
     console.error('POST /auth/client-login error', err);
     return res.status(500).json({ error: 'Erro interno no login do cliente' });
+  }
+});
+
+/**
+ * POST /auth/mfa/verify
+ * Body: { challengeId, code }
+ */
+router.post('/mfa/verify', async (req, res) => {
+  try {
+    const { challengeId, code } = req.body || {};
+    const result = await mfaService.verifyChallenge(challengeId, code);
+    if (!result.ok) {
+      return res.status(401).json({ error: result.error || 'Código inválido' });
+    }
+
+    const user = result.user;
+    if (!user || !user.isActive) {
+      return res.status(403).json({ error: 'Usuário inativo' });
+    }
+
+    const tokens = await issueAuthTokens({ user, req });
+
+    return res.json({
+      ...tokens,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        tenantId: user.tenantId,
+      },
+    });
+  } catch (err) {
+    console.error('POST /auth/mfa/verify error', err);
+    return res.status(500).json({ error: 'Erro interno ao validar MFA' });
   }
 });
 

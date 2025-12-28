@@ -46,6 +46,11 @@ const AdminTenants = lazy(() => import("./pages/admin/AdminTenants.jsx"));
 const AdminTenantDetails = lazy(() => import("./pages/admin/AdminTenantDetails.jsx"));
 const AdminLogs = lazy(() => import("./pages/admin/AdminLogs.jsx"));
 const AdminJobs = lazy(() => import("./pages/admin/AdminJobs.jsx"));
+const AdminUsers = lazy(() => import("./pages/admin/AdminUsers.jsx"));
+const AdminBilling = lazy(() => import("./pages/admin/AdminBilling.jsx"));
+const AdminIntegrations = lazy(() => import("./pages/admin/AdminIntegrations.jsx"));
+const AdminReports = lazy(() => import("./pages/admin/AdminReports.jsx"));
+const AdminDataConsole = lazy(() => import("./pages/admin/AdminDataConsole.jsx"));
 const PublicApproval = lazy(() => import("./pages/publicApproval.jsx"));
 
 // ✅ Novas páginas públicas (Meta exige URLs públicas válidas)
@@ -112,8 +117,13 @@ export default function App() {
             <Route path="/admin" element={<AdminOverview />} />
             <Route path="/admin/tenants" element={<AdminTenants />} />
             <Route path="/admin/tenants/:tenantId" element={<AdminTenantDetails />} />
+            <Route path="/admin/users" element={<AdminUsers />} />
+            <Route path="/admin/billing" element={<AdminBilling />} />
+            <Route path="/admin/integrations" element={<AdminIntegrations />} />
+            <Route path="/admin/reports" element={<AdminReports />} />
             <Route path="/admin/logs" element={<AdminLogs />} />
             <Route path="/admin/jobs" element={<AdminJobs />} />
+            <Route path="/admin/data" element={<AdminDataConsole />} />
           </Route>
         </Route>
 

@@ -25,6 +25,9 @@ enum Role {
   CLIENT
   SUPER_ADMIN
   GUEST
+  SUPPORT
+  FINANCE
+  TECH
 }
 
 enum PostStatus {
@@ -165,6 +168,7 @@ model User {
   role          Role    @default(MEMBER)
   avatarUrl     String?
   isActive      Boolean @default(true)
+  mfaEnabled    Boolean @default(false)
 
   refreshTokens      RefreshToken[]
   sessionTokens      SessionToken[]
@@ -177,6 +181,7 @@ model User {
   uploads            Upload[]
   auditLogs          AuditLog[]
   supportNotes       TenantNote[]   @relation("TenantNoteAuthor")
+  mfaChallenges      MfaChallenge[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -185,6 +190,24 @@ model User {
   @@index([username])
   @@index([tenantId])
   @@map("users")
+}
+
+model MfaChallenge {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purpose   String   @default("admin_login")
+  codeHash  String
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  usedAt    DateTime?
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("mfa_challenges")
 }
 
 model RefreshToken {

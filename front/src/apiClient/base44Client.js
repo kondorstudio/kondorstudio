@@ -382,7 +382,31 @@ async function login({ email, password }) {
     throw error;
   }
 
-  saveAuthToStorage(data);
+  if (data?.accessToken) {
+    saveAuthToStorage(data);
+  }
+  return data;
+}
+
+async function verifyMfa(payload) {
+  const res = await rawFetch("/auth/mfa/verify", {
+    method: "POST",
+    body: JSON.stringify(payload || {}),
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    const error = new Error(data?.error || "Falha ao validar MFA");
+    error.status = res.status;
+    error.data = data;
+    throw error;
+  }
+
+  if (data?.accessToken) {
+    saveAuthToStorage(data);
+  }
+
   return data;
 }
 
@@ -797,6 +821,85 @@ const Admin = {
       body: JSON.stringify(payload || {}),
     });
   },
+
+  async users(params = {}) {
+    const qs = buildQuery(params);
+    return jsonFetch(`/admin/users${qs}`, { method: "GET" });
+  },
+
+  async updateUser(id, payload) {
+    if (!id) throw new Error("userId é obrigatório");
+    return jsonFetch(`/admin/users/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload || {}),
+    });
+  },
+
+  async resetUserPassword(id) {
+    if (!id) throw new Error("userId é obrigatório");
+    return jsonFetch(`/admin/users/${id}/reset-password`, { method: "POST" });
+  },
+
+  async forceUserLogout(id) {
+    if (!id) throw new Error("userId é obrigatório");
+    return jsonFetch(`/admin/users/${id}/force-logout`, { method: "POST" });
+  },
+
+  async integrations(params = {}) {
+    const qs = buildQuery(params);
+    return jsonFetch(`/admin/integrations${qs}`, { method: "GET" });
+  },
+
+  async updateIntegration(id, payload) {
+    if (!id) throw new Error("integrationId é obrigatório");
+    return jsonFetch(`/admin/integrations/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload || {}),
+    });
+  },
+
+  async disconnectIntegration(id) {
+    if (!id) throw new Error("integrationId é obrigatório");
+    return jsonFetch(`/admin/integrations/${id}/disconnect`, {
+      method: "POST",
+    });
+  },
+
+  async billingTenants(params = {}) {
+    const qs = buildQuery(params);
+    return jsonFetch(`/admin/billing/tenants${qs}`, { method: "GET" });
+  },
+
+  async syncTenantBilling(id) {
+    if (!id) throw new Error("tenantId é obrigatório");
+    return jsonFetch(`/admin/billing/tenants/${id}/sync`, { method: "POST" });
+  },
+
+  async cancelSubscription(id, payload = {}) {
+    if (!id) throw new Error("subscriptionId é obrigatório");
+    return jsonFetch(`/admin/billing/subscriptions/${id}/cancel`, {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    });
+  },
+
+  async dataTables() {
+    return jsonFetch("/admin/data/tables", { method: "GET" });
+  },
+
+  async dataQuery(payload) {
+    return jsonFetch("/admin/data/query", {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    });
+  },
+
+  async dataExecute(payload) {
+    return jsonFetch("/admin/data/execute", {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    });
+  },
 };
 
 // --------------------
@@ -810,6 +913,7 @@ export const base44 = {
   authedFetch,
   auth: {
     login,
+    verifyMfa,
     registerTenant,
     logout,
     tryRefreshToken,

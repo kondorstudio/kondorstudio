@@ -110,6 +110,7 @@ export function SelectTrigger({ children, className = "", onClick, ...props }) {
   const ctx = useContext(SelectContext);
 
   const handleClick = (e) => {
+    if (props.disabled) return;
     ctx?.setOpen?.(!ctx?.open);
     if (onClick) onClick(e);
   };

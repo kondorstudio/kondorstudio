@@ -14,34 +14,10 @@ import {
   Users,
   Activity,
   AlertTriangle,
+  CreditCard,
+  TrendingDown,
+  Plug,
 } from "lucide-react";
-
-const metricCards = [
-  {
-    key: "total",
-    label: "Tenants totais",
-    bg: "bg-purple-50",
-    icon: Building2,
-  },
-  {
-    key: "ativos",
-    label: "Tenants ativos",
-    bg: "bg-green-50",
-    icon: Activity,
-  },
-  {
-    key: "trial",
-    label: "Tenants em trial",
-    bg: "bg-blue-50",
-    icon: Users,
-  },
-  {
-    key: "suspensos",
-    label: "Suspensos",
-    bg: "bg-yellow-50",
-    icon: AlertTriangle,
-  },
-];
 
 export default function AdminOverview() {
   const { data, isLoading } = useQuery({
@@ -50,9 +26,79 @@ export default function AdminOverview() {
   });
 
   const tenantsData = data?.overview?.tenants || {};
-  const userTotal = data?.overview?.usuarios?.total ?? null;
+  const userData = data?.overview?.usuarios || {};
+  const billingData = data?.overview?.billing || {};
+  const integrationsData = data?.overview?.integrations || {};
   const errorHighlights = data?.highlights?.tenantsWithErrors || [];
   const jobHighlights = data?.highlights?.failingQueues || [];
+
+  const metricCards = [
+    {
+      key: "total",
+      label: "Tenants totais",
+      value: tenantsData.total,
+      icon: Building2,
+      bg: "bg-purple-50",
+    },
+    {
+      key: "ativos",
+      label: "Tenants ativos",
+      value: tenantsData.ativos,
+      icon: Activity,
+      bg: "bg-green-50",
+    },
+    {
+      key: "trial",
+      label: "Tenants em trial",
+      value: tenantsData.trial,
+      icon: Users,
+      bg: "bg-blue-50",
+    },
+    {
+      key: "suspensos",
+      label: "Suspensos",
+      value: tenantsData.suspensos,
+      icon: AlertTriangle,
+      bg: "bg-yellow-50",
+    },
+    {
+      key: "usuarios-ativos",
+      label: "Usuarios ativos",
+      value: userData.ativos,
+      icon: Users,
+      bg: "bg-slate-50",
+    },
+    {
+      key: "mrr",
+      label: "MRR estimado",
+      value: billingData.mrr,
+      icon: CreditCard,
+      bg: "bg-emerald-50",
+      format: (value) =>
+        typeof value === "number"
+          ? value.toLocaleString("pt-BR", {
+              style: "currency",
+              currency: "BRL",
+            })
+          : value,
+    },
+    {
+      key: "churn",
+      label: "Churn 30d",
+      value: billingData.churnRate,
+      icon: TrendingDown,
+      bg: "bg-rose-50",
+      format: (value) =>
+        typeof value === "number" ? `${value.toFixed(2)}%` : value,
+    },
+    {
+      key: "integracoes",
+      label: "Integracoes conectadas",
+      value: integrationsData.connected,
+      icon: Plug,
+      bg: "bg-amber-50",
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -71,7 +117,8 @@ export default function AdminOverview() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {metricCards.map((card) => {
           const Icon = card.icon;
-          const value = tenantsData?.[card.key];
+          const value = card.value;
+          const formattedValue = card.format ? card.format(value) : value;
           return (
             <Card key={card.key} className="border border-gray-100">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -84,7 +131,7 @@ export default function AdminOverview() {
               </CardHeader>
               <CardContent>
                 <p className="text-3xl font-semibold text-gray-900">
-                  {isLoading || typeof value === "undefined" ? "—" : value}
+                  {isLoading || typeof value === "undefined" ? "—" : formattedValue}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
                   Atualizado em tempo real
@@ -93,22 +140,6 @@ export default function AdminOverview() {
             </Card>
           );
         })}
-
-        <Card className="border border-gray-100">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-500">
-              Usuários totais
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-semibold text-gray-900">
-              {isLoading || userTotal === null ? "—" : userTotal}
-            </p>
-            <p className="text-xs text-gray-500 mt-1">
-              Soma de todos os usuários cadastrados
-            </p>
-          </CardContent>
-        </Card>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">

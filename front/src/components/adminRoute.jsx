@@ -2,6 +2,7 @@
 import React from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { base44 } from "@/apiClient/base44Client";
+import { ADMIN_ROLES } from "@/utils/adminPermissions";
 
 const AdminRoute = () => {
   const location = useLocation();
@@ -13,7 +14,7 @@ const AdminRoute = () => {
     return <Navigate to="/admin/login" replace state={{ from: location }} />;
   }
 
-  if (role !== "SUPER_ADMIN") {
+  if (!ADMIN_ROLES.includes(role)) {
     return (
       <Navigate
         to="/admin/login"

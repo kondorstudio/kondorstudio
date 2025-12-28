@@ -5,10 +5,12 @@ import { base44 } from "@/apiClient/base44Client";
 import { useSubscription } from "./SubscriptionContext.jsx";
 import SubscriptionExpiredModal from "./SubscriptionExpiredModal.jsx";
 import logoHeader from "@/assets/logoheader.png";
+import { clearImpersonationState, useImpersonationState } from "@/hooks/useImpersonation";
 
 export default function Navbar() {
   const navigate = useNavigate();
   const { status, openModal, isModalOpen, closeModal } = useSubscription();
+  const impersonation = useImpersonationState();
 
   async function handleLogout() {
     try {
@@ -17,6 +19,33 @@ export default function Navbar() {
       console.error("Erro ao fazer logout", err);
     } finally {
       navigate("/login", { replace: true });
+    }
+  }
+
+  async function handleStopImpersonation() {
+    if (!impersonation) return;
+    const adminToken = impersonation.originalAuth?.accessToken;
+    try {
+      if (adminToken) {
+        await base44.rawFetch("/admin/impersonate/stop", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${adminToken}`,
+          },
+          body: JSON.stringify({
+            sessionId: impersonation.sessionId,
+            impersonatedUserId: impersonation.userId,
+          }),
+        });
+      }
+    } catch (err) {
+      console.error("Erro ao encerrar impersonate", err);
+    } finally {
+      if (impersonation.originalAuth) {
+        base44.storage.saveAuthToStorage?.(impersonation.originalAuth);
+      }
+      clearImpersonationState();
+      navigate("/admin", { replace: true });
     }
   }
 
@@ -29,6 +58,23 @@ export default function Navbar() {
 
   return (
     <>
+      {impersonation && (
+        <div className="w-full bg-amber-50 border-b border-amber-200">
+          <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs text-amber-900">
+            <span>
+              Modo impersonate ativo: {impersonation.userName || impersonation.userEmail}
+            </span>
+            <button
+              type="button"
+              onClick={handleStopImpersonation}
+              className="inline-flex items-center rounded-md border border-amber-600 px-3 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100"
+            >
+              Encerrar impersonate
+            </button>
+          </div>
+        </div>
+      )}
+
       <header className="w-full border-b border-gray-200 bg-white">
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
           {/* Logo + nome */}

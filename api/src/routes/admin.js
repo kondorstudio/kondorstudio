@@ -2,9 +2,12 @@
 // Namespace /api/admin responsável pelo painel mestre (Control Center)
 
 const express = require('express');
-const ensureSuperAdmin = require('../middleware/ensureSuperAdmin');
+const ensureAdminAccess = require('../middleware/ensureAdminAccess');
+const requireAdminPermission = require('../middleware/requireAdminPermission');
 const { prisma } = require('../prisma');
 const { createAccessToken } = require('../utils/jwt');
+const { hashPassword } = require('../utils/hash');
+const stripeService = require('../services/stripeService');
 const crypto = require('crypto');
 
 const router = express.Router();
@@ -45,6 +48,9 @@ const ROLE_LABELS = {
   CLIENT: 'Cliente',
   GUEST: 'Convidado',
   SUPER_ADMIN: 'Super Admin',
+  SUPPORT: 'Suporte',
+  FINANCE: 'Financeiro',
+  TECH: 'Técnico',
 };
 
 const ROLE_ALIASES = {
@@ -62,6 +68,13 @@ const ROLE_ALIASES = {
   CONVIDADA: 'GUEST',
   SUPERADMIN: 'SUPER_ADMIN',
   SUPERADMINISTRADOR: 'SUPER_ADMIN',
+  SUPORTE: 'SUPPORT',
+  SUPORTE_TECNICO: 'SUPPORT',
+  FINANCEIRO: 'FINANCE',
+  FINANCAS: 'FINANCE',
+  TECNICO: 'TECH',
+  TÉCNICO: 'TECH',
+  TECHNICAL: 'TECH',
 };
 
 const USER_STATUS_ALIASES = {
@@ -287,28 +300,103 @@ function serializeUser(user, lastLoginAt) {
     role: user.role,
     roleLabel: ROLE_LABELS[user.role] || user.role,
     isActive: user.isActive,
+    mfaEnabled: user.mfaEnabled || false,
     lastLoginAt,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };
 }
 
-// Garante que todo endpoint abaixo exija SUPER_ADMIN
-router.use(ensureSuperAdmin);
+// Garante que todo endpoint abaixo exija acesso ao painel mestre
+router.use(ensureAdminAccess);
 
-// GET /api/admin/overview (placeholder até fase futura)
-router.get('/overview', (req, res) => {
-  return res.json({
-    overview: {
-      tenants: { total: 0, ativos: 0, trial: 0, suspensos: 0 },
-      usuarios: { total: 0 },
-    },
-    status: 'stub',
-  });
+// GET /api/admin/overview
+router.get('/overview', requireAdminPermission('tenants.read'), async (req, res) => {
+  try {
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    const [
+      totalTenants,
+      activeTenants,
+      trialTenants,
+      suspendedTenants,
+      activeUsers,
+      totalUsers,
+      activeSubscriptions,
+      connectedIntegrations,
+    ] = await Promise.all([
+      prisma.tenant.count(),
+      prisma.tenant.count({ where: { status: 'ACTIVE' } }),
+      prisma.tenant.count({ where: { status: 'TRIAL' } }),
+      prisma.tenant.count({ where: { status: 'SUSPENDED' } }),
+      prisma.user.count({ where: { isActive: true } }),
+      prisma.user.count(),
+      prisma.subscription.findMany({
+        where: {
+          status: 'SUCCEEDED',
+          currentPeriodEnd: { gte: now },
+        },
+        include: { plan: true },
+      }),
+      prisma.integration.count({ where: { status: 'CONNECTED' } }),
+    ]);
+
+    const mrrCents = activeSubscriptions.reduce((sum, sub) => {
+      const priceCents = sub.plan?.priceCents || 0;
+      const interval = String(sub.plan?.interval || '').toUpperCase();
+      if (interval === 'YEARLY') {
+        return sum + Math.round(priceCents / 12);
+      }
+      return sum + priceCents;
+    }, 0);
+
+    const churnedTenants = await prisma.tenant.count({
+      where: {
+        status: 'CANCELLED',
+        updatedAt: { gte: thirtyDaysAgo },
+      },
+    });
+
+    const churnRate =
+      activeTenants + churnedTenants > 0
+        ? Number(((churnedTenants / (activeTenants + churnedTenants)) * 100).toFixed(2))
+        : 0;
+
+    return res.json({
+      overview: {
+        tenants: {
+          total: totalTenants,
+          ativos: activeTenants,
+          trial: trialTenants,
+          suspensos: suspendedTenants,
+          cancelados30d: churnedTenants,
+        },
+        usuarios: {
+          total: totalUsers,
+          ativos: activeUsers,
+        },
+        billing: {
+          mrrCents,
+          mrr: mrrCents / 100,
+          churnRate,
+          activeSubscriptions: activeSubscriptions.length,
+        },
+        integrations: {
+          connected: connectedIntegrations,
+        },
+      },
+      status: 'ok',
+      generatedAt: now.toISOString(),
+    });
+  } catch (error) {
+    console.error('[ADMIN] GET /overview error', error);
+    return res.status(500).json({ error: 'Erro ao carregar overview' });
+  }
 });
 
 // GET /api/admin/tenants
-router.get('/tenants', async (req, res) => {
+router.get('/tenants', requireAdminPermission('tenants.read'), async (req, res) => {
   try {
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
     const pageSize = Math.min(
@@ -372,7 +460,7 @@ router.get('/tenants', async (req, res) => {
 });
 
 // GET /api/admin/tenants/:id
-router.get('/tenants/:id', async (req, res) => {
+router.get('/tenants/:id', requireAdminPermission('tenants.read'), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -419,7 +507,7 @@ router.get('/tenants/:id', async (req, res) => {
 });
 
 // GET /api/admin/tenants/:id/users
-router.get('/tenants/:id/users', async (req, res) => {
+router.get('/tenants/:id/users', requireAdminPermission('users.read'), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -472,6 +560,7 @@ router.get('/tenants/:id/users', async (req, res) => {
           email: true,
           role: true,
           isActive: true,
+          mfaEnabled: true,
           createdAt: true,
           updatedAt: true,
         },
@@ -529,7 +618,7 @@ router.get('/tenants/:id/users', async (req, res) => {
 });
 
 // PATCH /api/admin/tenants/:id
-router.patch('/tenants/:id', async (req, res) => {
+router.patch('/tenants/:id', requireAdminPermission('tenants.write'), async (req, res) => {
   try {
     const { id } = req.params;
     const { status: statusPayload, planKey, planId } = req.body || {};
@@ -581,13 +670,95 @@ router.patch('/tenants/:id', async (req, res) => {
   }
 });
 
+// GET /api/admin/users
+router.get('/users', requireAdminPermission('users.read'), async (req, res) => {
+  try {
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const pageSize = Math.min(
+      Math.max(parseInt(req.query.pageSize, 10) || DEFAULT_PAGE_SIZE, 1),
+      MAX_PAGE_SIZE
+    );
+    const search = req.query.search ? String(req.query.search).trim() : null;
+    const roleFilter = req.query.role ? normalizeRole(req.query.role) : null;
+    const statusFilter = normalizeUserStatus(req.query.status);
+    const tenantId = req.query.tenantId ? String(req.query.tenantId) : null;
+
+    const where = {};
+    if (tenantId) where.tenantId = tenantId;
+
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    if (roleFilter) {
+      where.role = roleFilter;
+    }
+
+    if (statusFilter !== null) {
+      where.isActive = statusFilter;
+    }
+
+    const [total, users] = await prisma.$transaction([
+      prisma.user.count({ where }),
+      prisma.user.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: {
+          id: true,
+          tenantId: true,
+          name: true,
+          email: true,
+          role: true,
+          isActive: true,
+          mfaEnabled: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+    ]);
+
+    return res.json({
+      users: users.map((user) => serializeUser(user, null)),
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: pageSize ? Math.ceil(total / pageSize) : 0,
+      },
+      filters: {
+        search: search || null,
+        role: roleFilter || null,
+        status:
+          statusFilter === null
+            ? null
+            : statusFilter
+            ? 'ACTIVE'
+            : 'INACTIVE',
+        tenantId: tenantId || null,
+      },
+    });
+  } catch (error) {
+    console.error('[ADMIN] GET /users error', error);
+    return res.status(500).json({ error: 'Erro ao listar usuários' });
+  }
+});
+
 // PATCH /api/admin/users/:id
-router.patch('/users/:id', async (req, res) => {
+router.patch('/users/:id', requireAdminPermission('users.update'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { role: rolePayload, isActive } = req.body || {};
+    const { role: rolePayload, isActive, mfaEnabled } = req.body || {};
 
-    if (typeof rolePayload === 'undefined' && typeof isActive === 'undefined') {
+    if (
+      typeof rolePayload === 'undefined' &&
+      typeof isActive === 'undefined' &&
+      typeof mfaEnabled === 'undefined'
+    ) {
       return res.status(400).json({ error: 'Nenhuma alteração enviada' });
     }
 
@@ -600,6 +771,7 @@ router.patch('/users/:id', async (req, res) => {
         email: true,
         role: true,
         isActive: true,
+        mfaEnabled: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -619,6 +791,10 @@ router.patch('/users/:id', async (req, res) => {
 
     if (typeof isActive === 'boolean') {
       updateData.isActive = isActive;
+    }
+
+    if (typeof mfaEnabled === 'boolean') {
+      updateData.mfaEnabled = mfaEnabled;
     }
 
     if (typeof rolePayload !== 'undefined') {
@@ -648,6 +824,7 @@ router.patch('/users/:id', async (req, res) => {
         email: true,
         role: true,
         isActive: true,
+        mfaEnabled: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -668,8 +845,100 @@ router.patch('/users/:id', async (req, res) => {
   }
 });
 
+// POST /api/admin/users/:id/reset-password
+router.post('/users/:id/reset-password', requireAdminPermission('users.update'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const tempPassword = crypto.randomBytes(6).toString('base64').replace(/[^a-zA-Z0-9]/g, '').slice(0, 10);
+
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, email: true, role: true, tenantId: true },
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    if (user.role === 'SUPER_ADMIN') {
+      return res.status(403).json({ error: 'Não é permitido resetar senha de SUPER_ADMIN por esta rota' });
+    }
+
+    const passwordHash = await hashPassword(tempPassword);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash,
+        emailVerified: false,
+      },
+    });
+
+    await prisma.refreshToken.updateMany({
+      where: { userId: user.id },
+      data: { revoked: true },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        tenantId: user.tenantId,
+        userId: req.user?.id || null,
+        action: 'ADMIN_RESET_PASSWORD',
+        resource: 'user',
+        resourceId: user.id,
+        ip: req.ip || null,
+        meta: { email: user.email },
+      },
+    });
+
+    return res.json({
+      ok: true,
+      userId: user.id,
+      tempPassword,
+    });
+  } catch (error) {
+    console.error('[ADMIN] POST /users/:id/reset-password error', error);
+    return res.status(500).json({ error: 'Erro ao resetar senha' });
+  }
+});
+
+// POST /api/admin/users/:id/force-logout
+router.post('/users/:id/force-logout', requireAdminPermission('users.update'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, tenantId: true },
+    });
+    if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
+
+    await prisma.refreshToken.updateMany({
+      where: { userId: user.id },
+      data: { revoked: true },
+    });
+    await prisma.sessionToken.deleteMany({
+      where: { userId: user.id },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        tenantId: user.tenantId,
+        userId: req.user?.id || null,
+        action: 'ADMIN_FORCE_LOGOUT',
+        resource: 'user',
+        resourceId: user.id,
+        ip: req.ip || null,
+      },
+    });
+
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error('[ADMIN] POST /users/:id/force-logout error', error);
+    return res.status(500).json({ error: 'Erro ao forçar logout' });
+  }
+});
+
 // POST /api/admin/impersonate
-router.post('/impersonate', async (req, res) => {
+router.post('/impersonate', requireAdminPermission('impersonate'), async (req, res) => {
   try {
     const { userId } = req.body || {};
 
@@ -770,7 +1039,7 @@ router.post('/impersonate', async (req, res) => {
 });
 
 // POST /api/admin/impersonate/stop
-router.post('/impersonate/stop', async (req, res) => {
+router.post('/impersonate/stop', requireAdminPermission('impersonate'), async (req, res) => {
   try {
     const { sessionId, impersonatedUserId } = req.body || {};
 
@@ -843,7 +1112,7 @@ router.post('/impersonate/stop', async (req, res) => {
 });
 
 // GET /api/admin/logs
-router.get('/logs', async (req, res) => {
+router.get('/logs', requireAdminPermission('logs.read'), async (req, res) => {
   try {
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
     const pageSize = Math.min(
@@ -917,7 +1186,7 @@ router.get('/logs', async (req, res) => {
 });
 
 // GET /api/admin/jobs
-router.get('/jobs', async (req, res) => {
+router.get('/jobs', requireAdminPermission('jobs.read'), async (req, res) => {
   try {
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
     const pageSize = Math.min(
@@ -972,7 +1241,7 @@ router.get('/jobs', async (req, res) => {
 });
 
 // GET /api/admin/tenants/:id/notes
-router.get('/tenants/:id/notes', async (req, res) => {
+router.get('/tenants/:id/notes', requireAdminPermission('notes.read'), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -1019,7 +1288,7 @@ router.get('/tenants/:id/notes', async (req, res) => {
 });
 
 // POST /api/admin/tenants/:id/notes
-router.post('/tenants/:id/notes', async (req, res) => {
+router.post('/tenants/:id/notes', requireAdminPermission('notes.write'), async (req, res) => {
   try {
     const { id } = req.params;
     const { title, body, severity } = req.body || {};
@@ -1086,6 +1355,372 @@ router.post('/tenants/:id/notes', async (req, res) => {
   } catch (error) {
     console.error('[ADMIN] POST /tenants/:id/notes error', error);
     return res.status(500).json({ error: 'Erro ao criar nota' });
+  }
+});
+
+// GET /api/admin/integrations
+router.get('/integrations', requireAdminPermission('integrations.read'), async (req, res) => {
+  try {
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const pageSize = Math.min(
+      Math.max(parseInt(req.query.pageSize, 10) || DEFAULT_PAGE_SIZE, 1),
+      MAX_PAGE_SIZE
+    );
+    const tenantId = req.query.tenantId ? String(req.query.tenantId) : null;
+    const provider = req.query.provider ? String(req.query.provider) : null;
+    const status = req.query.status ? String(req.query.status) : null;
+    const ownerType = req.query.ownerType ? String(req.query.ownerType) : null;
+    const ownerKey = req.query.ownerKey ? String(req.query.ownerKey) : null;
+    const clientId = req.query.clientId ? String(req.query.clientId) : null;
+
+    const where = {};
+    if (tenantId) where.tenantId = tenantId;
+    if (provider) where.provider = provider;
+    if (status) where.status = status;
+    if (ownerType) where.ownerType = ownerType;
+    if (ownerKey) where.ownerKey = ownerKey;
+    if (clientId) where.clientId = clientId;
+
+    const [total, items] = await Promise.all([
+      prisma.integration.count({ where }),
+      prisma.integration.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
+
+    return res.json({
+      items,
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: pageSize ? Math.ceil(total / pageSize) : 0,
+      },
+    });
+  } catch (error) {
+    console.error('[ADMIN] GET /integrations error', error);
+    return res.status(500).json({ error: 'Erro ao listar integrações' });
+  }
+});
+
+// PATCH /api/admin/integrations/:id
+router.patch('/integrations/:id', requireAdminPermission('integrations.write'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, settings, config } = req.body || {};
+
+    const updateData = {};
+    if (status) updateData.status = status;
+    if (settings !== undefined) updateData.settings = settings;
+    if (config !== undefined) updateData.config = config;
+
+    if (!Object.keys(updateData).length) {
+      return res.status(400).json({ error: 'Nenhuma alteração enviada' });
+    }
+
+    const updated = await prisma.integration.update({
+      where: { id },
+      data: updateData,
+    });
+
+    return res.json({ integration: updated });
+  } catch (error) {
+    console.error('[ADMIN] PATCH /integrations/:id error', error);
+    return res.status(500).json({ error: 'Erro ao atualizar integração' });
+  }
+});
+
+// POST /api/admin/integrations/:id/disconnect
+router.post('/integrations/:id/disconnect', requireAdminPermission('integrations.write'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updated = await prisma.integration.update({
+      where: { id },
+      data: {
+        status: 'DISCONNECTED',
+        accessToken: null,
+        refreshToken: null,
+        accessTokenEncrypted: null,
+      },
+    });
+    return res.json({ ok: true, integration: updated });
+  } catch (error) {
+    console.error('[ADMIN] POST /integrations/:id/disconnect error', error);
+    return res.status(500).json({ error: 'Erro ao desconectar integração' });
+  }
+});
+
+// GET /api/admin/billing/tenants
+router.get('/billing/tenants', requireAdminPermission('billing.read'), async (req, res) => {
+  try {
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const pageSize = Math.min(
+      Math.max(parseInt(req.query.pageSize, 10) || DEFAULT_PAGE_SIZE, 1),
+      MAX_PAGE_SIZE
+    );
+    const status = normalizeStatus(req.query.status);
+    const search = req.query.search ? String(req.query.search).trim() : null;
+
+    const where = {};
+    if (status) where.status = status;
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { slug: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    const [total, tenants] = await prisma.$transaction([
+      prisma.tenant.count({ where }),
+      prisma.tenant.findMany({
+        where,
+        include: { plan: true },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
+
+    const tenantIds = tenants.map((tenant) => tenant.id);
+    const subscriptions = await prisma.subscription.findMany({
+      where: { tenantId: { in: tenantIds } },
+      orderBy: [{ tenantId: 'asc' }, { createdAt: 'desc' }],
+    });
+
+    const subMap = {};
+    subscriptions.forEach((sub) => {
+      if (!subMap[sub.tenantId]) {
+        subMap[sub.tenantId] = sub;
+      }
+    });
+
+    return res.json({
+      items: tenants.map((tenant) => ({
+        ...serializeTenant(tenant, null, subMap[tenant.id]),
+        subscription: subMap[tenant.id] || null,
+      })),
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: pageSize ? Math.ceil(total / pageSize) : 0,
+      },
+    });
+  } catch (error) {
+    console.error('[ADMIN] GET /billing/tenants error', error);
+    return res.status(500).json({ error: 'Erro ao listar billing dos tenants' });
+  }
+});
+
+// POST /api/admin/billing/tenants/:id/sync
+router.post('/billing/tenants/:id/sync', requireAdminPermission('billing.write'), async (req, res) => {
+  try {
+    if (!stripeService.isConfigured()) {
+      return res.status(400).json({ error: 'Stripe não configurado' });
+    }
+
+    const { id } = req.params;
+    const tenant = await prisma.tenant.findUnique({
+      where: { id },
+      include: { plan: true },
+    });
+    if (!tenant) return res.status(404).json({ error: 'Tenant não encontrado' });
+
+    let subscription = await prisma.subscription.findFirst({
+      where: { tenantId: tenant.id },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    let stripeSubscription = null;
+    if (subscription?.externalSubscriptionId) {
+      stripeSubscription = await stripeService.retrieveSubscription(subscription.externalSubscriptionId);
+    } else if (tenant.billingCustomerId) {
+      const data = await stripeService.listCustomerSubscriptions(tenant.billingCustomerId);
+      stripeSubscription = data?.data?.[0] || null;
+    }
+
+    if (!stripeSubscription) {
+      return res.status(404).json({ error: 'Subscription Stripe não encontrada' });
+    }
+
+    const nextStatus =
+      stripeSubscription.status === 'active' || stripeSubscription.status === 'trialing'
+        ? 'SUCCEEDED'
+        : 'FAILED';
+    const periodStart = stripeSubscription.current_period_start
+      ? new Date(stripeSubscription.current_period_start * 1000)
+      : null;
+    const periodEnd = stripeSubscription.current_period_end
+      ? new Date(stripeSubscription.current_period_end * 1000)
+      : null;
+
+    if (subscription) {
+      subscription = await prisma.subscription.update({
+        where: { id: subscription.id },
+        data: {
+          externalSubscriptionId: stripeSubscription.id,
+          status: nextStatus,
+          currentPeriodStart: periodStart,
+          currentPeriodEnd: periodEnd,
+          cancelAtPeriodEnd: !!stripeSubscription.cancel_at_period_end,
+        },
+      });
+    } else {
+      subscription = await prisma.subscription.create({
+        data: {
+          tenantId: tenant.id,
+          planId: tenant.planId,
+          externalSubscriptionId: stripeSubscription.id,
+          status: nextStatus,
+          currentPeriodStart: periodStart,
+          currentPeriodEnd: periodEnd,
+          cancelAtPeriodEnd: !!stripeSubscription.cancel_at_period_end,
+        },
+      });
+    }
+
+    return res.json({
+      ok: true,
+      subscription,
+      stripe: {
+        id: stripeSubscription.id,
+        status: stripeSubscription.status,
+      },
+    });
+  } catch (error) {
+    console.error('[ADMIN] POST /billing/tenants/:id/sync error', error);
+    return res.status(500).json({ error: 'Erro ao sincronizar Stripe' });
+  }
+});
+
+// POST /api/admin/billing/subscriptions/:id/cancel
+router.post('/billing/subscriptions/:id/cancel', requireAdminPermission('billing.write'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { cancelAtPeriodEnd = true } = req.body || {};
+    const subscription = await prisma.subscription.findUnique({ where: { id } });
+    if (!subscription) return res.status(404).json({ error: 'Subscription não encontrada' });
+
+    if (stripeService.isConfigured() && subscription.externalSubscriptionId) {
+      await stripeService.cancelSubscription(subscription.externalSubscriptionId, {
+        cancelAtPeriodEnd: Boolean(cancelAtPeriodEnd),
+      });
+    }
+
+    const updated = await prisma.subscription.update({
+      where: { id },
+      data: {
+        cancelAtPeriodEnd: Boolean(cancelAtPeriodEnd),
+        status: cancelAtPeriodEnd ? subscription.status : 'FAILED',
+      },
+    });
+
+    return res.json({ ok: true, subscription: updated });
+  } catch (error) {
+    console.error('[ADMIN] POST /billing/subscriptions/:id/cancel error', error);
+    return res.status(500).json({ error: 'Erro ao cancelar subscription' });
+  }
+});
+
+// GET /api/admin/data/tables
+router.get('/data/tables', requireAdminPermission('data.query'), async (req, res) => {
+  try {
+    if (process.env.ADMIN_SQL_ENABLED !== 'true') {
+      return res.status(403).json({ error: 'SQL admin desabilitado' });
+    }
+
+    const tables = await prisma.$queryRawUnsafe(`
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+      ORDER BY table_name ASC
+    `);
+
+    return res.json({ items: tables });
+  } catch (error) {
+    console.error('[ADMIN] GET /data/tables error', error);
+    return res.status(500).json({ error: 'Erro ao listar tabelas' });
+  }
+});
+
+// POST /api/admin/data/query
+router.post('/data/query', requireAdminPermission('data.query'), async (req, res) => {
+  try {
+    if (process.env.ADMIN_SQL_ENABLED !== 'true') {
+      return res.status(403).json({ error: 'SQL admin desabilitado' });
+    }
+
+    const { sql } = req.body || {};
+    const trimmed = String(sql || '').trim();
+    const lower = trimmed.toLowerCase();
+    if (!trimmed) {
+      return res.status(400).json({ error: 'SQL é obrigatório' });
+    }
+    if (!(lower.startsWith('select') || lower.startsWith('with'))) {
+      return res.status(400).json({ error: 'Apenas SELECT/WITH são permitidos nesta rota' });
+    }
+
+    const result = await prisma.$queryRawUnsafe(trimmed);
+
+    await prisma.auditLog.create({
+      data: {
+        tenantId: req.tenantId,
+        userId: req.user?.id || null,
+        action: 'ADMIN_SQL_QUERY',
+        resource: 'sql',
+        ip: req.ip || null,
+        meta: {
+          sql: trimmed.slice(0, 1000),
+        },
+      },
+    });
+
+    return res.json({ ok: true, rows: result });
+  } catch (error) {
+    console.error('[ADMIN] POST /data/query error', error);
+    return res.status(500).json({ error: 'Erro ao executar query' });
+  }
+});
+
+// POST /api/admin/data/execute
+router.post('/data/execute', requireAdminPermission('data.write'), async (req, res) => {
+  try {
+    if (process.env.ADMIN_SQL_ENABLED !== 'true') {
+      return res.status(403).json({ error: 'SQL admin desabilitado' });
+    }
+
+    const { sql, confirm } = req.body || {};
+    const trimmed = String(sql || '').trim();
+    if (!trimmed) {
+      return res.status(400).json({ error: 'SQL é obrigatório' });
+    }
+    if (confirm !== true) {
+      return res.status(400).json({ error: 'Confirmação explícita necessária' });
+    }
+
+    const result = await prisma.$executeRawUnsafe(trimmed);
+
+    await prisma.auditLog.create({
+      data: {
+        tenantId: req.tenantId,
+        userId: req.user?.id || null,
+        action: 'ADMIN_SQL_EXECUTE',
+        resource: 'sql',
+        ip: req.ip || null,
+        meta: {
+          sql: trimmed.slice(0, 1000),
+          affectedRows: result,
+        },
+      },
+    });
+
+    return res.json({ ok: true, affectedRows: result });
+  } catch (error) {
+    console.error('[ADMIN] POST /data/execute error', error);
+    return res.status(500).json({ error: 'Erro ao executar SQL' });
   }
 });
 
