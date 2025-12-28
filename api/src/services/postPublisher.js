@@ -47,7 +47,11 @@ function resolveMediaType(post) {
 
 async function publishWithMeta({ post, integration, platform }) {
   const settings = isPlainObject(integration.settings) ? integration.settings : {};
-  const accessToken = resolveAccessToken(integration);
+  const baseToken = resolveAccessToken(integration);
+  const pageId = settings.pageId || settings.page_id;
+  const accessToken = pageId
+    ? await metaSocialService.resolvePageAccessToken(pageId, baseToken)
+    : baseToken;
   if (!accessToken) {
     throw new Error('Missing Meta access token');
   }
@@ -57,7 +61,6 @@ async function publishWithMeta({ post, integration, platform }) {
   const mediaType = resolveMediaType(post);
 
   if (platform === 'facebook') {
-    const pageId = settings.pageId || settings.page_id;
     return metaSocialService.publishFacebookPost({
       pageId,
       accessToken,

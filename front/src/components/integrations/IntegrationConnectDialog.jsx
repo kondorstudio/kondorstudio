@@ -52,8 +52,12 @@ export default function IntegrationConnectDialog({
   const queryClient = useQueryClient();
   const fields = definition?.fields || [];
   const isClientScope = definition?.scope === "client";
+  const isMetaProvider = definition?.provider === "META";
   const [selectedClientId, setSelectedClientId] = useState("");
   const [oauthError, setOauthError] = useState("");
+  const [metaSelectionError, setMetaSelectionError] = useState("");
+  const [selectedMetaAccountId, setSelectedMetaAccountId] = useState("");
+  const [selectedMetaPageId, setSelectedMetaPageId] = useState("");
 
   const effectiveExisting = useMemo(() => {
     if (!definition) return null;
@@ -80,10 +84,53 @@ export default function IntegrationConnectDialog({
 
   const [formData, setFormData] = useState(initialValues);
 
+  const metaAccounts = useMemo(() => {
+    if (!effectiveExisting?.config || typeof effectiveExisting.config !== "object") return [];
+    const accounts = effectiveExisting.config.accounts;
+    return Array.isArray(accounts) ? accounts : [];
+  }, [effectiveExisting]);
+
+  const metaKind = useMemo(() => {
+    if (definition?.kind) return String(definition.kind).toLowerCase();
+    if (effectiveExisting?.settings?.kind) return String(effectiveExisting.settings.kind).toLowerCase();
+    return "";
+  }, [definition, effectiveExisting]);
+
+  const isMetaAds = metaKind === "meta_ads";
+  const isInstagramOnly = metaKind === "instagram_only";
+
+  const metaAdOptions = useMemo(() => {
+    if (!metaAccounts.length) return [];
+    return metaAccounts
+      .filter((account) => account?.adAccountId)
+      .map((account) => ({
+        value: account.adAccountId,
+        label: account.name
+          ? `${account.name} (${account.adAccountId})`
+          : account.adAccountId,
+      }));
+  }, [metaAccounts]);
+
+  const metaPageOptions = useMemo(() => {
+    if (!metaAccounts.length) return [];
+    return metaAccounts
+      .filter((account) => account?.pageId)
+      .filter((account) => (isInstagramOnly ? account?.igBusinessAccountId : true))
+      .map((account) => ({
+        value: account.pageId,
+        label: account.pageName
+          ? `${account.pageName}${account.igUsername ? ` • @${account.igUsername}` : ""}`
+          : account.pageId,
+        igBusinessAccountId: account.igBusinessAccountId || null,
+        igUsername: account.igUsername || null,
+      }));
+  }, [metaAccounts, isInstagramOnly]);
+
   useEffect(() => {
     if (!open) {
       if (selectedClientId) setSelectedClientId("");
       if (oauthError) setOauthError("");
+      if (metaSelectionError) setMetaSelectionError("");
       return;
     }
     if (isClientScope && !selectedClientId && clients.length === 1) {
@@ -91,7 +138,22 @@ export default function IntegrationConnectDialog({
     }
     setFormData(initialValues);
     if (oauthError) setOauthError("");
-  }, [open, initialValues, isClientScope, clients, selectedClientId, oauthError]);
+    if (metaSelectionError) setMetaSelectionError("");
+  }, [open, initialValues, isClientScope, clients, selectedClientId, oauthError, metaSelectionError]);
+
+  useEffect(() => {
+    if (!effectiveExisting || !isMetaProvider) return;
+    if (isMetaAds) {
+      const current = effectiveExisting.settings?.adAccountId || "";
+      const fallback = metaAdOptions[0]?.value || "";
+      setSelectedMetaAccountId(current || fallback);
+      return;
+    }
+
+    const currentPage = effectiveExisting.settings?.pageId || "";
+    const fallbackPage = metaPageOptions[0]?.value || "";
+    setSelectedMetaPageId(currentPage || fallbackPage);
+  }, [effectiveExisting, isMetaProvider, isMetaAds, metaAdOptions, metaPageOptions]);
 
   const connectMutation = useMutation({
     mutationFn: async () => {
@@ -177,6 +239,59 @@ export default function IntegrationConnectDialog({
     },
   });
 
+  const metaSelectionMutation = useMutation({
+    mutationFn: async () => {
+      if (!effectiveExisting?.id) {
+        throw new Error("Conexão não encontrada.");
+      }
+      if (!isMetaProvider) {
+        throw new Error("Seleção disponível apenas para Meta.");
+      }
+
+      const currentSettings =
+        effectiveExisting.settings && typeof effectiveExisting.settings === "object"
+          ? effectiveExisting.settings
+          : {};
+
+      const nextSettings = { ...currentSettings, kind: metaKind || currentSettings.kind };
+
+      if (isMetaAds) {
+        if (!selectedMetaAccountId) {
+          throw new Error("Selecione uma conta de anúncios.");
+        }
+        const account = metaAccounts.find(
+          (item) => item?.adAccountId === selectedMetaAccountId
+        );
+        nextSettings.adAccountId = selectedMetaAccountId;
+        nextSettings.accountId = selectedMetaAccountId;
+        nextSettings.adAccountName = account?.name || null;
+      } else {
+        if (!selectedMetaPageId) {
+          throw new Error("Selecione uma página do Facebook.");
+        }
+        const page = metaAccounts.find(
+          (item) => item?.pageId === selectedMetaPageId
+        );
+        nextSettings.pageId = selectedMetaPageId;
+        nextSettings.pageName = page?.pageName || null;
+        nextSettings.igBusinessId = page?.igBusinessAccountId || null;
+        nextSettings.igUsername = page?.igUsername || null;
+      }
+
+      return base44.entities.Integration.update(effectiveExisting.id, {
+        status: "CONNECTED",
+        settings: nextSettings,
+      });
+    },
+    onSuccess: () => {
+      setMetaSelectionError("");
+      queryClient.invalidateQueries({ queryKey: ["integrations"] });
+    },
+    onError: (err) => {
+      setMetaSelectionError(err?.message || "Falha ao salvar seleção.");
+    },
+  });
+
   if (!definition) return null;
 
   return (
@@ -215,6 +330,79 @@ export default function IntegrationConnectDialog({
                   Selecione um cliente para conectar esta integração.
                 </p>
               ) : null}
+            </div>
+          ) : null}
+
+          {isMetaProvider && effectiveExisting && metaAccounts.length ? (
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
+              <div>
+                <p className="text-sm font-semibold text-gray-900">
+                  Selecionar conta principal
+                </p>
+                <p className="text-xs text-gray-600">
+                  Defina a página ou conta de anúncios usada nas automações.
+                </p>
+              </div>
+
+              {isMetaAds ? (
+                <div className="space-y-2">
+                  <Label>Conta de anúncios</Label>
+                  <select
+                    value={selectedMetaAccountId}
+                    onChange={(event) => setSelectedMetaAccountId(event.target.value)}
+                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  >
+                    {metaAdOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  {metaAdOptions.length === 0 ? (
+                    <p className="text-[11px] text-amber-600">
+                      Nenhuma conta de anúncios disponível para este usuário.
+                    </p>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label>Página do Facebook</Label>
+                  <select
+                    value={selectedMetaPageId}
+                    onChange={(event) => setSelectedMetaPageId(event.target.value)}
+                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  >
+                    {metaPageOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  {metaPageOptions.length === 0 ? (
+                    <p className="text-[11px] text-amber-600">
+                      Nenhuma página com Instagram Business vinculada.
+                    </p>
+                  ) : null}
+                </div>
+              )}
+
+              <div className="flex items-center justify-between">
+                {metaSelectionError ? (
+                  <p className="text-[11px] text-red-600">{metaSelectionError}</p>
+                ) : (
+                  <span className="text-[11px] text-gray-500">
+                    Você pode alterar essa escolha quando quiser.
+                  </span>
+                )}
+                <Button
+                  type="button"
+                  onClick={() => metaSelectionMutation.mutate()}
+                  disabled={metaSelectionMutation.isPending}
+                  className="bg-slate-900 hover:bg-slate-800"
+                >
+                  {metaSelectionMutation.isPending ? "Salvando..." : "Salvar seleção"}
+                </Button>
+              </div>
             </div>
           ) : null}
 

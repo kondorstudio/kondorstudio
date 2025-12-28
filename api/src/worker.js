@@ -11,6 +11,7 @@ const {
 const { prisma } = require('./prisma');
 
 const updateMetricsJob = require('./jobs/updateMetricsJob');
+const refreshMetaTokensJob = require('./jobs/refreshMetaTokensJob');
 const reportGenerationJob = require('./jobs/reportGenerationJob');
 const automationWhatsAppJob = require('./jobs/automationWhatsAppJob');
 const whatsappApprovalJob = require('./jobs/whatsappApprovalRequestJob');
@@ -66,6 +67,7 @@ const metricsWorker = new Worker(
   async (job) => {
     console.log('[metricsSync] processing job', job.id, job.name);
     await runPollOnce(updateMetricsJob, 'updateMetricsJob');
+    await runPollOnce(refreshMetaTokensJob, 'refreshMetaTokensJob');
   },
   { connection },
 );

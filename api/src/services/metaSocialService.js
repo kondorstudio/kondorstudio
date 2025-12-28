@@ -246,8 +246,29 @@ function pickDefaultPage(accounts, kind) {
   return accounts.find((acc) => acc.igBusinessAccountId) || accounts[0];
 }
 
+async function resolvePageAccessToken(pageId, userAccessToken) {
+  if (!pageId || !userAccessToken) return userAccessToken || null;
+  const base = getGraphBaseUrl();
+  const url = new URL(`${base}/${pageId}`);
+  url.searchParams.set('fields', 'access_token');
+  url.searchParams.set('access_token', userAccessToken);
+
+  try {
+    const res = await fetch(url.toString());
+    const json = await res.json().catch(() => ({}));
+    if (res.ok && json?.access_token) {
+      return String(json.access_token);
+    }
+  } catch (_) {
+    return userAccessToken;
+  }
+
+  return userAccessToken;
+}
+
 module.exports = {
   normalizeKind,
+  resolvePageAccessToken,
 
   /**
    * Gera a URL de conexão OAuth do Meta
@@ -369,8 +390,8 @@ module.exports = {
     let accounts = [];
     let settings = { kind };
     let providerName = 'Meta (Facebook/Instagram)';
-    let tokenToStore = longToken;
-    let tokenSource = 'user';
+    const tokenToStore = longToken;
+    const tokenSource = 'user';
 
     if (kind === 'meta_ads') {
       providerName = 'Meta Ads';
@@ -411,7 +432,6 @@ module.exports = {
       accounts = pages.map((page) => ({
         pageId: page?.id ? String(page.id) : null,
         pageName: page?.name ? String(page.name) : null,
-        pageAccessToken: page?.access_token || null,
         igBusinessAccountId: page?.instagram_business_account?.id
           ? String(page.instagram_business_account.id)
           : null,
@@ -432,11 +452,6 @@ module.exports = {
         igBusinessId: defaultPage.igBusinessAccountId || null,
         igUsername: defaultPage.igUsername || null,
       };
-
-      if (defaultPage.pageAccessToken) {
-        tokenToStore = defaultPage.pageAccessToken;
-        tokenSource = 'page';
-      }
 
       if (kind === 'instagram_only' && !settings.igBusinessId) {
         throw new Error('Nenhuma conta Instagram Business conectada às páginas autorizadas');
