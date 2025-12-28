@@ -17,7 +17,7 @@ async function pollOnce() {
 
   const posts = await prisma.post.findMany({
     where: {
-      status: 'SCHEDULED',
+      status: { in: ['SCHEDULED', 'APPROVED'] },
       scheduledDate: { lte: now },
     },
     orderBy: { scheduledDate: 'asc' },
