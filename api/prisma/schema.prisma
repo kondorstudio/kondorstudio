@@ -291,6 +291,7 @@ model Client {
   posts            Post[]
   financialRecords FinancialRecord[]
   integrations     Integration[]
+  metrics          Metric[]   @relation("ClientMetrics")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -448,9 +449,9 @@ model Metric {
   postId      String?
   post        Post?    @relation(fields: [postId], references: [id], onDelete: SetNull)
   clientId    String?
-  client      Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  client      Client?  @relation("ClientMetrics", fields: [clientId], references: [id], onDelete: SetNull)
   integrationId String?
-  integration Integration? @relation(fields: [integrationId], references: [id], onDelete: SetNull)
+  integration Integration? @relation("IntegrationMetrics", fields: [integrationId], references: [id], onDelete: SetNull)
   name        String
   value       Float
   provider    String?
@@ -675,6 +676,7 @@ model Integration {
   ownerKey             String               @default("AGENCY")
 
   integrationJobs IntegrationJob[]
+  metrics         Metric[]   @relation("IntegrationMetrics")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
