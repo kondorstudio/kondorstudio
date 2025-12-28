@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const authMiddleware = require('../middleware/auth');
 const tenantMiddleware = require('../middleware/tenant');
 const integrationsController = require('../controllers/integrationsController');
+const metaSocialService = require('../services/metaSocialService');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'changeme_local_secret';
 
@@ -51,6 +52,42 @@ router.get('/whatsapp/connect-url', async (req, res) => {
     return res.json({ url: url.toString() });
   } catch (err) {
     return res.status(500).json({ error: 'server error' });
+  }
+});
+
+// =========================
+// Meta (Business / Ads) - OAuth
+// =========================
+
+// GET /api/integrations/meta/connect-url?clientId=...&kind=meta_business|meta_ads|instagram_only
+router.get('/meta/connect-url', async (req, res) => {
+  try {
+    const tenantId = req.tenantId || (req.user && req.user.tenantId);
+    if (!tenantId) return res.status(400).json({ error: 'tenantId missing' });
+
+    const clientId = req.query?.clientId ? String(req.query.clientId) : null;
+    const kind = req.query?.kind ? String(req.query.kind) : undefined;
+
+    if (clientId) {
+      const client = await req.db.client.findFirst({
+        where: { id: clientId, tenantId: String(tenantId) },
+        select: { id: true },
+      });
+      if (!client) {
+        return res.status(404).json({ error: 'Cliente não encontrado' });
+      }
+    }
+
+    const url = metaSocialService.buildConnectUrl({
+      tenantId,
+      clientId,
+      kind,
+    });
+
+    return res.json({ url });
+  } catch (err) {
+    console.error('GET /integrations/meta/connect-url error:', err);
+    return res.status(500).json({ error: err.message || 'server error' });
   }
 });
 

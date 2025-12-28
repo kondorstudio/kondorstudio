@@ -1,6 +1,6 @@
 // api/src/services/metaSocialService.js
-// Serviço responsável pela integração Meta Social
-// (Facebook Pages + Instagram Graph API)
+// Serviço responsável pela integração Meta
+// (Facebook Pages + Instagram Graph API + Meta Ads OAuth)
 
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
@@ -25,6 +25,70 @@ function assertEnv(name) {
     throw new Error(`Missing env var: ${name}`);
   }
   return String(v);
+}
+
+function normalizeKind(kind) {
+  const raw = String(kind || '').trim().toLowerCase();
+  if (!raw) return 'meta_business';
+  if (raw === 'instagram') return 'instagram_only';
+  return raw;
+}
+
+function splitCsv(value) {
+  if (!value) return [];
+  return String(value)
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function resolveRedirectUri(kind) {
+  const normalized = normalizeKind(kind);
+  const candidates = [];
+
+  if (normalized === 'meta_ads') {
+    candidates.push(process.env.META_ADS_REDIRECT_URI);
+  }
+
+  candidates.push(process.env.META_SOCIAL_REDIRECT_URI);
+  candidates.push(process.env.META_OAUTH_REDIRECT_URI);
+
+  const redirectUri = candidates.find((value) => value && String(value).trim());
+  if (!redirectUri) {
+    throw new Error(
+      'Missing Meta redirect URI env (META_SOCIAL_REDIRECT_URI or META_OAUTH_REDIRECT_URI)',
+    );
+  }
+
+  return String(redirectUri);
+}
+
+function resolveScopes(kind) {
+  const normalized = normalizeKind(kind);
+
+  if (normalized === 'meta_ads') {
+    const envScopes = splitCsv(process.env.META_ADS_SCOPES);
+    if (envScopes.length) return envScopes;
+    return ['public_profile', 'email', 'ads_read', 'business_management'];
+  }
+
+  const envScopes = splitCsv(process.env.META_SOCIAL_SCOPES);
+  if (envScopes.length) return envScopes;
+
+  return [
+    'public_profile',
+    'email',
+    'pages_show_list',
+    'pages_read_engagement',
+    'pages_manage_posts',
+    'instagram_basic',
+    'instagram_content_publish',
+  ];
+}
+
+function buildOwnerKey(clientId, kind) {
+  if (!clientId) return 'AGENCY';
+  return `${clientId}:${normalizeKind(kind)}`;
 }
 
 function buildGraphGet(oauthVersion) {
@@ -167,39 +231,51 @@ async function publishFacebookPost({ pageId, accessToken, mediaUrl, caption, med
   };
 }
 
+function parseGrantedScopes(permsResp) {
+  const data = Array.isArray(permsResp?.data) ? permsResp.data : [];
+  return data
+    .filter((item) => item?.status === 'granted' && item?.permission)
+    .map((item) => String(item.permission));
+}
+
+function pickDefaultPage(accounts, kind) {
+  if (!accounts.length) return null;
+  if (kind === 'instagram_only') {
+    return accounts.find((acc) => acc.igBusinessAccountId) || accounts[0];
+  }
+  return accounts.find((acc) => acc.igBusinessAccountId) || accounts[0];
+}
+
 module.exports = {
+  normalizeKind,
+
   /**
    * Gera a URL de conexão OAuth do Meta
    */
-  buildConnectUrl({ tenantId }) {
+  buildConnectUrl({ tenantId, clientId, kind }) {
     if (!tenantId) {
       throw new Error('tenantId is required to build Meta OAuth URL');
     }
 
     const appId = assertEnv('META_APP_ID');
-    const redirectUri = assertEnv('META_SOCIAL_REDIRECT_URI');
+    const redirectUri = resolveRedirectUri(kind);
     const oauthVersion = getOauthVersion();
+    const normalizedKind = normalizeKind(kind);
 
     const nonce = crypto.randomBytes(16).toString('hex');
     const state = jwt.sign(
       {
         tenantId: String(tenantId),
+        clientId: clientId ? String(clientId) : null,
+        kind: normalizedKind,
         nonce,
-        purpose: 'meta_social_oauth_state',
+        purpose: 'meta_oauth_state',
       },
       JWT_SECRET,
       { expiresIn: '10m' }
     );
 
-    const scope = [
-      'public_profile',
-      'email',
-      'pages_show_list',
-      'pages_read_engagement',
-      'pages_manage_posts',
-      'instagram_basic',
-      'instagram_content_publish',
-    ].join(',');
+    const scope = resolveScopes(normalizedKind).join(',');
 
     const url = new URL(`https://www.facebook.com/${oauthVersion}/dialog/oauth`);
     url.searchParams.set('client_id', appId);
@@ -218,7 +294,6 @@ module.exports = {
     if (!code) throw new Error('Missing OAuth code');
     if (!state) throw new Error('Missing OAuth state');
 
-    // 1) Validar state (JWT + purpose + tenantId)
     let payload;
     try {
       payload = jwt.verify(String(state), JWT_SECRET);
@@ -226,7 +301,7 @@ module.exports = {
       throw new Error('Invalid OAuth state');
     }
 
-    if (!payload || payload.purpose !== 'meta_social_oauth_state') {
+    if (!payload || payload.purpose !== 'meta_oauth_state') {
       throw new Error('Invalid OAuth state purpose');
     }
 
@@ -235,10 +310,12 @@ module.exports = {
       throw new Error('OAuth state missing tenantId');
     }
 
-    // 2) Env obrigatórias
+    const clientId = payload.clientId ? String(payload.clientId) : null;
+    const kind = normalizeKind(payload.kind || 'meta_business');
+
     const appId = assertEnv('META_APP_ID');
     const appSecret = assertEnv('META_APP_SECRET');
-    const redirectUri = assertEnv('META_SOCIAL_REDIRECT_URI');
+    const redirectUri = resolveRedirectUri(kind);
     const oauthVersion = getOauthVersion();
 
     if (typeof fetch !== 'function') {
@@ -247,7 +324,6 @@ module.exports = {
 
     const graphGet = buildGraphGet(oauthVersion);
 
-    // 3) code → short-lived token
     const shortTokenResp = await graphGet('oauth/access_token', {
       client_id: appId,
       client_secret: appSecret,
@@ -260,7 +336,6 @@ module.exports = {
       throw new Error('Meta did not return short-lived access token');
     }
 
-    // 4) short → long-lived token
     const longTokenResp = await graphGet('oauth/access_token', {
       grant_type: 'fb_exchange_token',
       client_id: appId,
@@ -275,72 +350,122 @@ module.exports = {
       throw new Error('Meta did not return long-lived access token');
     }
 
-    // 5) Buscar Pages
-    const pagesResp = await graphGet('me/accounts', {
-      access_token: longToken,
-      fields: 'id,name',
-      limit: 200,
-    });
-
-    const pages = Array.isArray(pagesResp?.data) ? pagesResp.data : [];
-
-    // 6) Para cada Page, buscar Instagram Business conectado
-    const accounts = [];
-
-    for (const page of pages) {
-      const pageId = page?.id ? String(page.id) : null;
-      const pageName = page?.name ? String(page.name) : null;
-      if (!pageId) continue;
-
-      let igBusinessAccountId = null;
-      let igUsername = null;
-
-      try {
-        const pageInfo = await graphGet(pageId, {
-          access_token: longToken,
-          fields: 'instagram_business_account{id,username}',
-        });
-
-        const ig = pageInfo?.instagram_business_account;
-        if (ig?.id) igBusinessAccountId = String(ig.id);
-        if (ig?.username) igUsername = String(ig.username);
-      } catch (_) {
-        // não falha a integração inteira por erro numa page
-      }
-
-      accounts.push({
-        pageId,
-        pageName,
-        igBusinessAccountId,
-        igUsername,
-      });
+    let grantedScopes = [];
+    try {
+      const permsResp = await graphGet('me/permissions', { access_token: longToken });
+      grantedScopes = parseGrantedScopes(permsResp);
+    } catch (_) {
+      grantedScopes = [];
     }
 
-    // 7) Persistir integração no banco (multi-tenant)
-    const db = useTenant(String(tenantId));
+    let metaUserId = null;
+    try {
+      const meResp = await graphGet('me', { access_token: longToken, fields: 'id,name' });
+      metaUserId = meResp?.id ? String(meResp.id) : null;
+    } catch (_) {
+      metaUserId = null;
+    }
+
+    let accounts = [];
+    let settings = { kind };
+    let providerName = 'Meta (Facebook/Instagram)';
+    let tokenToStore = longToken;
+    let tokenSource = 'user';
+
+    if (kind === 'meta_ads') {
+      providerName = 'Meta Ads';
+      const adResp = await graphGet('me/adaccounts', {
+        access_token: longToken,
+        fields: 'id,name,account_status,currency,timezone_name',
+        limit: 200,
+      });
+
+      const adAccounts = Array.isArray(adResp?.data) ? adResp.data : [];
+      accounts = adAccounts.map((acc) => ({
+        adAccountId: acc?.id ? String(acc.id) : null,
+        name: acc?.name ? String(acc.name) : null,
+        currency: acc?.currency ? String(acc.currency) : null,
+        timezone: acc?.timezone_name ? String(acc.timezone_name) : null,
+        status: acc?.account_status ?? null,
+      }));
+
+      const defaultAccount = accounts.find((acc) => acc.adAccountId) || null;
+      if (!defaultAccount?.adAccountId) {
+        throw new Error('Nenhuma conta de anúncios encontrada');
+      }
+
+      settings = {
+        kind,
+        adAccountId: defaultAccount.adAccountId,
+        accountId: defaultAccount.adAccountId,
+        adAccountName: defaultAccount.name || null,
+      };
+    } else {
+      const pagesResp = await graphGet('me/accounts', {
+        access_token: longToken,
+        fields: 'id,name,access_token,instagram_business_account{id,username}',
+        limit: 200,
+      });
+
+      const pages = Array.isArray(pagesResp?.data) ? pagesResp.data : [];
+      accounts = pages.map((page) => ({
+        pageId: page?.id ? String(page.id) : null,
+        pageName: page?.name ? String(page.name) : null,
+        pageAccessToken: page?.access_token || null,
+        igBusinessAccountId: page?.instagram_business_account?.id
+          ? String(page.instagram_business_account.id)
+          : null,
+        igUsername: page?.instagram_business_account?.username
+          ? String(page.instagram_business_account.username)
+          : null,
+      }));
+
+      const defaultPage = pickDefaultPage(accounts, kind);
+      if (!defaultPage?.pageId) {
+        throw new Error('Nenhuma página encontrada');
+      }
+
+      settings = {
+        kind,
+        pageId: defaultPage.pageId,
+        pageName: defaultPage.pageName || null,
+        igBusinessId: defaultPage.igBusinessAccountId || null,
+        igUsername: defaultPage.igUsername || null,
+      };
+
+      if (defaultPage.pageAccessToken) {
+        tokenToStore = defaultPage.pageAccessToken;
+        tokenSource = 'page';
+      }
+
+      if (kind === 'instagram_only' && !settings.igBusinessId) {
+        throw new Error('Nenhuma conta Instagram Business conectada às páginas autorizadas');
+      }
+    }
+
+    const encryptedToken = encrypt(String(tokenToStore));
     const now = new Date();
-
-    const encryptedToken = encrypt(String(longToken));
-
-    const scopes = [
-      'pages_show_list',
-      'pages_read_engagement',
-      'pages_manage_posts',
-      'instagram_basic',
-      'instagram_content_publish',
-    ];
+    const scopesToSave = grantedScopes.length ? grantedScopes : resolveScopes(kind);
 
     const config = {
       connectedAt: now.toISOString(),
       expiresIn,
+      kind,
+      tokenSource,
       accounts,
+      metaUserId,
+      scopes: scopesToSave,
     };
+
+    const db = useTenant(String(tenantId));
+    const ownerType = clientId ? 'CLIENT' : 'AGENCY';
+    const ownerKey = buildOwnerKey(clientId, kind);
 
     const existing = await db.integration.findFirst({
       where: {
         provider: 'META',
-        ownerType: 'AGENCY',
-        ownerKey: 'AGENCY',
+        ownerType,
+        ownerKey,
       },
       select: { id: true },
     });
@@ -350,10 +475,12 @@ module.exports = {
         where: { id: existing.id },
         data: {
           status: 'CONNECTED',
-          providerName: 'Meta (Facebook/Instagram)',
+          providerName,
           accessTokenEncrypted: encryptedToken,
-          scopes,
+          scopes: scopesToSave,
+          settings,
           config,
+          clientId: clientId || null,
           lastSyncedAt: now,
         },
       });
@@ -361,12 +488,14 @@ module.exports = {
       await db.integration.create({
         data: {
           provider: 'META',
-          providerName: 'Meta (Facebook/Instagram)',
+          providerName,
           status: 'CONNECTED',
-          ownerType: 'AGENCY',
-          ownerKey: 'AGENCY',
+          ownerType,
+          ownerKey,
+          clientId: clientId || null,
           accessTokenEncrypted: encryptedToken,
-          scopes,
+          scopes: scopesToSave,
+          settings,
           config,
           lastSyncedAt: now,
         },
@@ -375,6 +504,8 @@ module.exports = {
 
     return {
       tenantId,
+      clientId,
+      kind,
       accounts,
       expiresIn,
     };

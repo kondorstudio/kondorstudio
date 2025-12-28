@@ -24,6 +24,8 @@
 //   - metricTypes: ["impressions","clicks",...]
 //   - granularity: "day" (default)
 
+const { decrypt } = require('../utils/crypto');
+
 function safeLog(...args) {
   if (process.env.NODE_ENV === 'test') return;
   // eslint-disable-next-line no-console
@@ -94,6 +96,20 @@ function buildTimeRangeParams(range) {
  *
  * Retorna: Array<{ name: string, value: number, collectedAt?: string }>
  */
+function resolveAccessToken(credentials, integration) {
+  if (credentials?.accessToken) return credentials.accessToken;
+  if (integration?.accessToken) return integration.accessToken;
+  if (integration?.accessTokenEncrypted) {
+    try {
+      return decrypt(integration.accessTokenEncrypted);
+    } catch (err) {
+      safeLog('Falha ao decrypt accessTokenEncrypted', err?.message || err);
+    }
+  }
+  if (integration?.settings?.accessToken) return integration.settings.accessToken;
+  return null;
+}
+
 async function fetchAccountMetrics(integration, options = {}) {
   if (!integration) {
     safeLog('fetchAccountMetrics chamado sem integration');
@@ -115,7 +131,7 @@ async function fetchAccountMetrics(integration, options = {}) {
     return [];
   }
 
-  const accessToken = credentials.accessToken || integration.accessToken;
+  const accessToken = resolveAccessToken(credentials, integration);
   const accountId =
     credentials.accountId ||
     credentials.adAccountId ||

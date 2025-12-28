@@ -33,6 +33,12 @@ const INTEGRATION_CATALOG = [
     icon: Briefcase,
     dialogDescription:
       "Informe os dados da conta Meta Business que será usada para publicar.",
+    oauth: {
+      title: "Conexão oficial via Meta",
+      subtitle: "Recomendado para páginas e Instagram Business.",
+      label: "Conectar via Meta",
+      endpoint: "/integrations/meta/connect-url",
+    },
     fields: [
       {
         name: "pageId",
@@ -69,6 +75,12 @@ const INTEGRATION_CATALOG = [
     icon: Megaphone,
     dialogDescription:
       "Configure a conta de anúncios usada para coletar métricas.",
+    oauth: {
+      title: "Conexão oficial via Meta Ads",
+      subtitle: "Recomendado para acesso contínuo às campanhas.",
+      label: "Conectar via Meta",
+      endpoint: "/integrations/meta/connect-url",
+    },
     fields: [
       {
         name: "adAccountId",
@@ -229,6 +241,12 @@ const INTEGRATION_CATALOG = [
     icon: Camera,
     dialogDescription:
       "Conecte uma conta Instagram Business para publicar.",
+    oauth: {
+      title: "Conexão oficial via Meta",
+      subtitle: "Use o login Meta para conectar o Instagram Business.",
+      label: "Conectar via Meta",
+      endpoint: "/integrations/meta/connect-url",
+    },
     fields: [
       {
         name: "igBusinessId",
@@ -326,7 +344,7 @@ export default function Integrations() {
 
   useEffect(() => {
     const params = new URLSearchParams(location.search || "");
-    if (params.get("whatsapp") === "connected") {
+    if (params.get("whatsapp") === "connected" || params.get("meta") === "connected") {
       queryClient.invalidateQueries({ queryKey: ["integrations"] });
     }
   }, [location.search, queryClient]);

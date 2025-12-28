@@ -282,6 +282,8 @@ const whatsappWebhookRoutes = require("./routes/webhooks/whatsapp");
 
 // ✅ WHATSAPP INTEGRATION CALLBACK (rota pública - redirecionamento OAuth)
 const whatsappIntegrationPublicRoutes = require("./routes/integrationsWhatsAppPublic");
+// ✅ META (Facebook/Instagram/Ads) OAuth callback
+const metaIntegrationPublicRoutes = require("./routes/integrationsMetaPublic");
 
 let publicRoutes;
 try {
@@ -303,6 +305,7 @@ if (publicRoutes) safeMount("/api/public", publicRoutes);
 // ✅ Monta o webhook e o callback ANTES de proteger /api com auth/tenant/subscription
 safeMount("/api/webhooks/whatsapp", whatsappWebhookRoutes);
 safeMount("/api/integrations/whatsapp", whatsappIntegrationPublicRoutes);
+safeMount("/api/integrations/meta", metaIntegrationPublicRoutes);
 
 // =========================
 // Rotas internas (protegidas)

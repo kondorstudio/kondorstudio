@@ -35,6 +35,12 @@ function buildSettings(fields, formData, kind) {
   return settings;
 }
 
+function buildClientOwnerKey(clientId, definition) {
+  if (!clientId || !definition) return clientId || "";
+  const suffix = definition.kind || definition.ownerKey || definition.provider || "CLIENT";
+  return `${clientId}:${suffix}`;
+}
+
 export default function IntegrationConnectDialog({
   open,
   onOpenChange,
@@ -47,6 +53,7 @@ export default function IntegrationConnectDialog({
   const fields = definition?.fields || [];
   const isClientScope = definition?.scope === "client";
   const [selectedClientId, setSelectedClientId] = useState("");
+  const [oauthError, setOauthError] = useState("");
 
   const effectiveExisting = useMemo(() => {
     if (!definition) return null;
@@ -76,13 +83,15 @@ export default function IntegrationConnectDialog({
   useEffect(() => {
     if (!open) {
       if (selectedClientId) setSelectedClientId("");
+      if (oauthError) setOauthError("");
       return;
     }
     if (isClientScope && !selectedClientId && clients.length === 1) {
       setSelectedClientId(clients[0].id);
     }
     setFormData(initialValues);
-  }, [open, initialValues, isClientScope, clients, selectedClientId]);
+    if (oauthError) setOauthError("");
+  }, [open, initialValues, isClientScope, clients, selectedClientId, oauthError]);
 
   const connectMutation = useMutation({
     mutationFn: async () => {
@@ -106,6 +115,7 @@ export default function IntegrationConnectDialog({
               providerName: definition.title,
               status: "CONNECTED",
               settings,
+              ownerKey: buildClientOwnerKey(selectedClientId, definition),
             }),
           }
         );
@@ -134,12 +144,36 @@ export default function IntegrationConnectDialog({
 
   const oauthMutation = useMutation({
     mutationFn: async () => {
-      const data = await base44.jsonFetch(definition.oauth?.endpoint, { method: "GET" });
+      if (!definition?.oauth?.endpoint) {
+        throw new Error("Conexão OAuth indisponível.");
+      }
+      if (isClientScope && !selectedClientId) {
+        throw new Error("Selecione um cliente antes de conectar.");
+      }
+
+      const params = new URLSearchParams();
+      if (isClientScope && selectedClientId) {
+        params.set("clientId", selectedClientId);
+      }
+      if (definition.kind) {
+        params.set("kind", definition.kind);
+      }
+
+      const endpoint = params.toString()
+        ? `${definition.oauth.endpoint}${
+            definition.oauth.endpoint.includes("?") ? "&" : "?"
+          }${params.toString()}`
+        : definition.oauth.endpoint;
+
+      const data = await base44.jsonFetch(endpoint, { method: "GET" });
       if (!data?.url) throw new Error("Resposta inválida do servidor (faltou url).");
       return data.url;
     },
     onSuccess: (url) => {
       window.location.href = url;
+    },
+    onError: (err) => {
+      setOauthError(err?.message || "Erro ao iniciar conexão OAuth.");
     },
   });
 
@@ -167,12 +201,20 @@ export default function IntegrationConnectDialog({
                 <Button
                   type="button"
                   onClick={() => oauthMutation.mutate()}
-                  disabled={oauthMutation.isPending}
+                  disabled={oauthMutation.isPending || (isClientScope && !selectedClientId)}
                   className="bg-purple-600 hover:bg-purple-700"
                 >
                   {oauthMutation.isPending ? "Conectando..." : definition.oauth.label}
                 </Button>
               </div>
+              {oauthError ? (
+                <p className="mt-3 text-[11px] text-red-600">{oauthError}</p>
+              ) : null}
+              {isClientScope && !selectedClientId ? (
+                <p className="mt-2 text-[11px] text-amber-600">
+                  Selecione um cliente para conectar esta integração.
+                </p>
+              ) : null}
             </div>
           ) : null}
 
