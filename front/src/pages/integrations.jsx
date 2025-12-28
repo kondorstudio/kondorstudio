@@ -280,8 +280,16 @@ function isConnectedStatus(status) {
   return value === "connected" || value === "active";
 }
 
+function resolveMetaKey(kind) {
+  const normalized = String(kind || "").toLowerCase();
+  if (normalized === "meta_ads") return "meta-ads";
+  if (normalized === "instagram_only") return "instagram";
+  return "meta-business";
+}
+
 export default function Integrations() {
   const [activeKey, setActiveKey] = useState(null);
+  const [initialClientId, setInitialClientId] = useState("");
   const location = useLocation();
   const queryClient = useQueryClient();
 
@@ -344,10 +352,39 @@ export default function Integrations() {
 
   useEffect(() => {
     const params = new URLSearchParams(location.search || "");
-    if (params.get("whatsapp") === "connected" || params.get("meta") === "connected") {
+    const metaStatus = params.get("meta");
+    if (params.get("whatsapp") === "connected" || metaStatus === "connected") {
       queryClient.invalidateQueries({ queryKey: ["integrations"] });
     }
+
+    if (metaStatus === "connected") {
+      const kind = params.get("kind");
+      const clientId = params.get("clientId");
+      setActiveKey(resolveMetaKey(kind));
+      setInitialClientId(clientId || "");
+    }
   }, [location.search, queryClient]);
+
+  const metaBanner = useMemo(() => {
+    const params = new URLSearchParams(location.search || "");
+    const metaStatus = params.get("meta");
+    if (!metaStatus) return null;
+    if (metaStatus === "connected") {
+      return {
+        tone: "success",
+        title: "Meta conectado com sucesso.",
+        detail: "Selecione a conta principal antes de seguir.",
+      };
+    }
+    if (metaStatus === "error") {
+      return {
+        tone: "error",
+        title: "Não foi possível conectar a Meta.",
+        detail: "Revise as permissões do app e tente novamente.",
+      };
+    }
+    return null;
+  }, [location.search]);
 
   return (
     <div className="p-6 md:p-8">
@@ -375,6 +412,19 @@ export default function Integrations() {
             </Button>
           </div>
         </div>
+
+        {metaBanner ? (
+          <div
+            className={`rounded-2xl border px-4 py-3 text-sm ${
+              metaBanner.tone === "success"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                : "border-rose-200 bg-rose-50 text-rose-900"
+            }`}
+          >
+            <p className="font-semibold">{metaBanner.title}</p>
+            <p className="text-xs mt-1">{metaBanner.detail}</p>
+          </div>
+        ) : null}
 
         <section className="rounded-3xl bg-white px-6 py-8 md:px-10 md:py-10 shadow-sm shadow-slate-200/70 border border-slate-200/70">
           <div className="flex flex-col gap-2 mb-8">
@@ -446,7 +496,10 @@ export default function Integrations() {
                     actionLabel={
                       isConnectedStatus(tileStatus) ? "Gerenciar conexão" : "Conectar"
                     }
-                    onConnect={() => setActiveKey(integration.key)}
+                    onConnect={() => {
+                      setActiveKey(integration.key);
+                      setInitialClientId("");
+                    }}
                   />
                 );
               })}
@@ -463,6 +516,7 @@ export default function Integrations() {
           existing={activeIntegration}
           integrations={integrations}
           clients={clients}
+          initialClientId={initialClientId}
         />
       </div>
     </div>

@@ -48,6 +48,7 @@ export default function IntegrationConnectDialog({
   existing,
   integrations = [],
   clients = [],
+  initialClientId = "",
 }) {
   const queryClient = useQueryClient();
   const fields = definition?.fields || [];
@@ -133,13 +134,24 @@ export default function IntegrationConnectDialog({
       if (metaSelectionError) setMetaSelectionError("");
       return;
     }
-    if (isClientScope && !selectedClientId && clients.length === 1) {
+    if (isClientScope && initialClientId) {
+      setSelectedClientId(initialClientId);
+    } else if (isClientScope && !selectedClientId && clients.length === 1) {
       setSelectedClientId(clients[0].id);
     }
     setFormData(initialValues);
     if (oauthError) setOauthError("");
     if (metaSelectionError) setMetaSelectionError("");
-  }, [open, initialValues, isClientScope, clients, selectedClientId, oauthError, metaSelectionError]);
+  }, [
+    open,
+    initialValues,
+    isClientScope,
+    clients,
+    selectedClientId,
+    initialClientId,
+    oauthError,
+    metaSelectionError,
+  ]);
 
   useEffect(() => {
     if (!effectiveExisting || !isMetaProvider) return;
@@ -294,6 +306,10 @@ export default function IntegrationConnectDialog({
 
   if (!definition) return null;
 
+  const metaSelectedLabel = isMetaAds
+    ? metaAdOptions.find((item) => item.value === selectedMetaAccountId)?.label
+    : metaPageOptions.find((item) => item.value === selectedMetaPageId)?.label;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -330,6 +346,17 @@ export default function IntegrationConnectDialog({
                   Selecione um cliente para conectar esta integração.
                 </p>
               ) : null}
+            </div>
+          ) : null}
+
+          {isMetaProvider && effectiveExisting && !metaAccounts.length ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+              <p className="text-sm font-semibold text-amber-900">
+                Conexão feita, mas sem contas disponíveis
+              </p>
+              <p className="text-xs text-amber-700 mt-1">
+                Verifique permissões do app Meta ou conecte outro usuário com acesso às contas.
+              </p>
             </div>
           ) : null}
 
@@ -391,7 +418,9 @@ export default function IntegrationConnectDialog({
                   <p className="text-[11px] text-red-600">{metaSelectionError}</p>
                 ) : (
                   <span className="text-[11px] text-gray-500">
-                    Você pode alterar essa escolha quando quiser.
+                    {metaSelectedLabel
+                      ? `Selecionado: ${metaSelectedLabel}`
+                      : "Você pode alterar essa escolha quando quiser."}
                   </span>
                 )}
                 <Button
