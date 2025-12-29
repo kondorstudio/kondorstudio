@@ -116,10 +116,11 @@ async function fetchTeamAccess(user) {
     },
   });
 
-  return normalizePermissions(
-    teamMember ? teamMember.permissions : null,
-    teamMember?.role || role
-  );
+  if (!teamMember || !teamMember.permissions) {
+    return normalizePermissions(null, 'ADMIN');
+  }
+
+  return normalizePermissions(teamMember.permissions, teamMember.role || role);
 }
 
 /**

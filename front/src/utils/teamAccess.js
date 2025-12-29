@@ -12,6 +12,20 @@ export const DEFAULT_MODULES = {
   settings: false,
 };
 
+function buildFullModules() {
+  return Object.keys(DEFAULT_MODULES).reduce((acc, key) => {
+    acc[key] = true;
+    return acc;
+  }, {});
+}
+
+function buildFullAccess() {
+  return {
+    modules: buildFullModules(),
+    clientAccess: { scope: "all", clientIds: [] },
+  };
+}
+
 function normalizeClientAccess(raw) {
   if (!raw) {
     return { scope: "all", clientIds: [] };
@@ -40,11 +54,7 @@ function normalizeModules(rawModules) {
 export function normalizeTeamAccess(rawAccess, role) {
   const roleValue = String(role || "").toUpperCase();
   if (roleValue === "OWNER" || roleValue === "ADMIN") {
-    const modules = Object.keys(DEFAULT_MODULES).reduce((acc, key) => {
-      acc[key] = true;
-      return acc;
-    }, {});
-    return { modules, clientAccess: { scope: "all", clientIds: [] } };
+    return buildFullAccess();
   }
 
   if (!rawAccess) {
@@ -70,7 +80,10 @@ export function normalizeTeamAccess(rawAccess, role) {
 export function getUserAccess(authData) {
   const user = authData?.user;
   if (!user) {
-    return { modules: { ...DEFAULT_MODULES }, clientAccess: { scope: "all", clientIds: [] } };
+    return buildFullAccess();
+  }
+  if (!user.access && !user.permissions) {
+    return buildFullAccess();
   }
   return normalizeTeamAccess(user.access || user.permissions, user.role);
 }

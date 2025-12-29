@@ -34,11 +34,15 @@ async function loadTeamAccess(req, res, next) {
     });
 
     if (!member) {
-      req.teamAccess = normalizePermissions(null, role);
+      req.teamAccess = buildFullAccess();
       return next();
     }
 
     const memberRole = member.role || role;
+    if (!member.permissions) {
+      req.teamAccess = buildFullAccess();
+      return next();
+    }
     req.teamAccess = normalizePermissions(member.permissions, memberRole);
     return next();
   } catch (error) {
