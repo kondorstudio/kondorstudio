@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { base44 } from "@/apiClient/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button.jsx";
@@ -9,6 +9,9 @@ import Postformdialog from "../components/posts/postformdialog.jsx";
 export default function Posts() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPost, setEditingPost] = useState(null);
+  const [selectedClientId, setSelectedClientId] = useState("");
+  const [dateStart, setDateStart] = useState("");
+  const [dateEnd, setDateEnd] = useState("");
   const queryClient = useQueryClient();
 
   const handleDialogClose = React.useCallback(() => {
@@ -106,6 +109,24 @@ export default function Posts() {
     updateMutation.isPending ||
     sendToApprovalMutation.isPending;
 
+  const filteredPosts = useMemo(() => {
+    if (!selectedClientId) return [];
+    const start = dateStart ? new Date(`${dateStart}T00:00:00`) : null;
+    const end = dateEnd ? new Date(`${dateEnd}T23:59:59`) : null;
+
+    return (posts || []).filter((post) => {
+      if (post.clientId !== selectedClientId) return false;
+      if (!start && !end) return true;
+
+      const postDateValue = post.scheduledDate || post.createdAt;
+      if (!postDateValue) return false;
+      const postDate = new Date(postDateValue);
+      if (start && postDate < start) return false;
+      if (end && postDate > end) return false;
+      return true;
+    });
+  }, [posts, selectedClientId, dateStart, dateEnd]);
+
   return (
     <div className="p-6 md:p-8">
       <div className="max-w-[1600px] mx-auto">
@@ -125,16 +146,73 @@ export default function Posts() {
               Novo Post
             </Button>
           </div>
+
+          <div className="grid gap-4 md:grid-cols-[minmax(260px,360px)_minmax(160px,200px)_minmax(160px,200px)] items-end">
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-slate-700">
+                Cliente
+              </label>
+              <select
+                value={selectedClientId}
+                onChange={(event) => setSelectedClientId(event.target.value)}
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+              >
+                <option value="">Selecione um cliente</option>
+                {clients.map((client) => (
+                  <option key={client.id} value={client.id}>
+                    {client.name}
+                  </option>
+                ))}
+              </select>
+              {clients.length === 0 ? (
+                <p className="text-[11px] text-amber-600">
+                  Cadastre um cliente antes de visualizar posts.
+                </p>
+              ) : null}
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-slate-700">
+                Data inicial
+              </label>
+              <input
+                type="date"
+                value={dateStart}
+                onChange={(event) => setDateStart(event.target.value)}
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                disabled={!selectedClientId}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-slate-700">
+                Data final
+              </label>
+              <input
+                type="date"
+                value={dateEnd}
+                onChange={(event) => setDateEnd(event.target.value)}
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                disabled={!selectedClientId}
+              />
+            </div>
+          </div>
         </div>
 
-        <Postkanban
-          posts={posts}
-          clients={clients}
-          integrations={integrations}
-          onEdit={handleEdit}
-          onStatusChange={handleStatusChange}
-          isLoading={isLoading}
-        />
+        {!selectedClientId ? (
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 px-6 py-10 text-center text-sm text-slate-500">
+            Selecione um cliente para visualizar os posts.
+          </div>
+        ) : (
+          <Postkanban
+            posts={filteredPosts}
+            clients={clients}
+            integrations={integrations}
+            onEdit={handleEdit}
+            onStatusChange={handleStatusChange}
+            isLoading={isLoading}
+          />
+        )}
 
         <Postformdialog
           open={dialogOpen}
