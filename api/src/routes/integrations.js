@@ -5,6 +5,11 @@ const crypto = require('crypto');
 
 const authMiddleware = require('../middleware/auth');
 const tenantMiddleware = require('../middleware/tenant');
+const {
+  loadTeamAccess,
+  requireTeamPermission,
+  isClientAllowed,
+} = require('../middleware/teamAccess');
 const integrationsController = require('../controllers/integrationsController');
 const metaSocialService = require('../services/metaSocialService');
 
@@ -13,6 +18,8 @@ const JWT_SECRET = process.env.JWT_SECRET || 'changeme_local_secret';
 // Todas as rotas de integração exigem auth + tenant
 router.use(authMiddleware);
 router.use(tenantMiddleware);
+router.use(loadTeamAccess);
+router.use(requireTeamPermission('integrations'));
 
 // =========================
 // WhatsApp (Meta Cloud) - Onboarding/OAuth (placeholder)
@@ -68,6 +75,9 @@ router.get('/meta/connect-url', async (req, res) => {
     const clientId = req.query?.clientId ? String(req.query.clientId) : null;
     const kind = req.query?.kind ? String(req.query.kind) : undefined;
 
+    if (clientId && !isClientAllowed(req, clientId)) {
+      return res.status(403).json({ error: 'Sem acesso a este cliente' });
+    }
     if (clientId) {
       const client = await req.db.client.findFirst({
         where: { id: clientId, tenantId: String(tenantId) },

@@ -1,6 +1,7 @@
 // Arquivo atualizado: api/src/services/teamMembersService.js
 const { prisma } = require('../prisma');
 const { hashPassword } = require('../utils/hash');
+const { normalizePermissions } = require('../utils/teamPermissions');
 
 function toArray(value) {
   if (!value) return [];
@@ -22,16 +23,7 @@ function mapRoleToPrisma(role) {
 }
 
 function buildPermissionsFromRole(userRole) {
-  const isAdmin = userRole === 'OWNER' || userRole === 'ADMIN';
-  return {
-    clients: true,
-    posts: true,
-    approvals: true,
-    tasks: true,
-    metrics: isAdmin,
-    team: isAdmin,
-    settings: isAdmin,
-  };
+  return normalizePermissions(null, userRole);
 }
 
 function parseAmountToCents(value) {
@@ -48,6 +40,7 @@ function mapTeamMemberToDto(member) {
   if (!member) return null;
   const user = member.user || {};
   const roleEnum = user.role || member.role || 'MEMBER';
+  const permissions = normalizePermissions(member.permissions, roleEnum);
 
   return {
     id: member.id,
@@ -60,7 +53,7 @@ function mapTeamMemberToDto(member) {
     role: mapRoleToFrontend(roleEnum),
     status: user.isActive ? 'active' : 'suspended',
     avatar_url: user.avatarUrl || null,
-    permissions: member.permissions || buildPermissionsFromRole(roleEnum),
+    permissions,
     salaryCents: member.salaryCents || null,
     salary:
       typeof member.salaryCents === 'number'
@@ -281,7 +274,10 @@ module.exports = {
     if (existing) return mapTeamMemberToDto(existing);
 
     const prismaRole = mapRoleToPrisma(data.role);
-    const permissions = data.permissions || buildPermissionsFromRole(prismaRole);
+    const permissions = normalizePermissions(
+      data.permissions || buildPermissionsFromRole(prismaRole),
+      prismaRole
+    );
 
     const created = await prisma.teamMember.create({
       data: {
@@ -326,7 +322,10 @@ module.exports = {
     const salaryCents =
       data.salaryCents ?? parseAmountToCents(data.salary);
     const prismaRole = data.role ? mapRoleToPrisma(data.role) : existing.role;
-    const permissions = data.permissions || existing.permissions;
+    const permissions = normalizePermissions(
+      data.permissions || existing.permissions || buildPermissionsFromRole(prismaRole),
+      prismaRole
+    );
 
     await prisma.user.update({
       where: { id: existing.userId },

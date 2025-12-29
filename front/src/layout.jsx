@@ -5,12 +5,14 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Menu, X } from "lucide-react";
 import { base44 } from "@/apiClient/base44Client";
+import { canAccessModule, getUserAccess } from "@/utils/teamAccess";
 import logoHeader from "@/assets/logoheader.png";
 
 const navItems = [
   {
     to: "/dashboard",
     label: "Dashboard",
+    permission: "dashboard",
     prefetch: {
       key: ["dashboard-overview"],
       fn: () => base44.entities.Dashboard.overview(),
@@ -19,6 +21,7 @@ const navItems = [
   {
     to: "/clients",
     label: "Clientes",
+    permission: "clients",
     prefetch: {
       key: ["clients"],
       fn: () => base44.entities.Clients?.list?.(),
@@ -27,6 +30,7 @@ const navItems = [
   {
     to: "/posts",
     label: "posts",
+    permission: "posts",
     prefetch: {
       key: ["posts"],
       fn: () => base44.entities.Posts?.list?.(),
@@ -35,15 +39,17 @@ const navItems = [
   {
     to: "/tasks",
     label: "Tarefas",
+    permission: "tasks",
     prefetch: {
       key: ["tasks"],
       fn: () => base44.entities.Tasks?.list?.(),
     },
   },
-  { to: "/biblioteca", label: "Biblioteca" },
+  { to: "/biblioteca", label: "Biblioteca", permission: "library" },
   {
     to: "/financeiro",
     label: "Financeiro",
+    permission: "finance",
     prefetch: {
       key: ["finance"],
       fn: () => base44.entities.FinancialRecord?.list?.(),
@@ -52,6 +58,7 @@ const navItems = [
   {
     to: "/team",
     label: "Equipe",
+    permission: "team",
     prefetch: {
       key: ["team"],
       fn: () => base44.entities.TeamMember?.list?.(),
@@ -60,19 +67,25 @@ const navItems = [
   {
     to: "/metrics",
     label: "Métricas",
+    permission: "metrics",
     prefetch: {
       key: ["metrics-overview"],
       fn: () => base44.entities.Metrics?.overview?.(),
     },
   },
-  { to: "/integrations", label: "Integrações" },
-  { to: "/settings", label: "Configurações" },
+  { to: "/integrations", label: "Integrações", permission: "integrations" },
+  { to: "/settings", label: "Configurações", permission: "settings" },
 ];
 
 export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [currentUserName, setCurrentUserName] = useState("");
+  const [access, setAccess] = useState(() =>
+    getUserAccess(base44?.storage?.loadAuthFromStorage?.())
+  );
+  const authData = base44?.storage?.loadAuthFromStorage?.();
+  const currentRole = authData?.user?.role;
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -111,6 +124,7 @@ export default function Layout() {
   useEffect(() => {
     const updateUserName = () => {
       const authData = base44?.storage?.loadAuthFromStorage?.();
+      setAccess(getUserAccess(authData));
       const name =
         authData?.user?.name ||
         authData?.user?.fullName ||
@@ -154,7 +168,14 @@ export default function Layout() {
             Principal
           </p>
           <nav className="space-y-1">
-            {navItems.map((item) => (
+            {navItems
+              .filter((item) =>
+                canAccessModule(
+                  { user: { access, role: currentRole } },
+                  item.permission
+                )
+              )
+              .map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
@@ -251,7 +272,14 @@ export default function Layout() {
                     Principal
                   </p>
                   <div className="flex-1 overflow-y-auto space-y-1">
-                    {navItems.map((item) => (
+                    {navItems
+                      .filter((item) =>
+                        canAccessModule(
+                          { user: { access, role: currentRole } },
+                          item.permission
+                        )
+                      )
+                      .map((item) => (
                       <NavLink
                         key={item.to}
                         to={item.to}

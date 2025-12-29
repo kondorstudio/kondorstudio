@@ -15,6 +15,9 @@ const TENANT_OPTIONAL_PATHS = [
   '/api/healthz',
   '/api/public', // prefixo para rotas públicas (se existirem)
   '/api/admin', // painel mestre não exige tenantId fixo
+
+  // ✅ Meta OAuth callback precisa ser público e sem X-Tenant
+  '/api/integrations/meta/callback',
 ];
 
 // Extrai tenant de:

@@ -3,6 +3,12 @@ const router = express.Router();
 
 const authMiddleware = require("../middleware/auth");
 const tenantMiddleware = require("../middleware/tenant");
+const {
+  loadTeamAccess,
+  requireTeamPermission,
+  getClientScope,
+  isClientAllowed,
+} = require("../middleware/teamAccess");
 const postsService = require("../services/postsService");
 const { PostValidationError } = postsService;
 const postsController = require("../controllers/postsController");
@@ -11,6 +17,8 @@ const { Prisma } = require("@prisma/client");
 //const { whatsappQueue } = require("../queues/whatsappQueue"); //TODO: Reativar automações WhatsApp quando a fila estiver configurada.
 router.use(authMiddleware);
 router.use(tenantMiddleware);
+router.use(loadTeamAccess);
+router.use(requireTeamPermission("posts"));
 
 /**
  * GET /posts
@@ -18,12 +26,17 @@ router.use(tenantMiddleware);
 router.get("/", async (req, res) => {
   try {
     const { status, clientId, q, page, perPage } = req.query;
+    const scope = getClientScope(req);
+    if (clientId && !isClientAllowed(req, clientId)) {
+      return res.status(403).json({ error: "Sem acesso a este cliente" });
+    }
     const result = await postsService.list(req.tenantId, {
       status,
       clientId,
       q,
       page: page ? Number(page) : undefined,
       perPage: perPage ? Number(perPage) : undefined,
+      clientIds: scope.all || clientId ? null : scope.clientIds,
     });
     return res.json(result);
   } catch (err) {
@@ -57,6 +70,9 @@ router.get("/:id", async (req, res) => {
   try {
     const post = await postsService.getById(req.tenantId, req.params.id);
     if (!post) return res.status(404).json({ error: "Post não encontrado" });
+    if (post.clientId && !isClientAllowed(req, post.clientId)) {
+      return res.status(403).json({ error: "Sem acesso a este post" });
+    }
     return res.json(post);
   } catch (err) {
     console.error("GET /posts/:id error:", err);
@@ -70,6 +86,10 @@ router.get("/:id", async (req, res) => {
 router.post("/", async (req, res) => {
   try {
     const userId = req.user?.id || null;
+    const clientId = req.body?.clientId || req.body?.client_id;
+    if (clientId && !isClientAllowed(req, clientId)) {
+      return res.status(403).json({ error: "Sem acesso a este cliente" });
+    }
     const newPost = await postsService.create(req.tenantId, userId, req.body);
     return res.status(201).json(newPost);
   } catch (err) {
@@ -93,12 +113,16 @@ router.post("/", async (req, res) => {
  */
 router.put("/:id", async (req, res) => {
   try {
+    const existing = await postsService.getById(req.tenantId, req.params.id);
+    if (!existing) return res.status(404).json({ error: "Post não encontrado" });
+    if (existing.clientId && !isClientAllowed(req, existing.clientId)) {
+      return res.status(403).json({ error: "Sem acesso a este post" });
+    }
     const updated = await postsService.update(
       req.tenantId,
       req.params.id,
       req.body
     );
-    if (!updated) return res.status(404).json({ error: "Post não encontrado" });
     return res.json(updated);
   } catch (err) {
     console.error("PUT /posts/:id error:", err);
@@ -112,6 +136,11 @@ router.put("/:id", async (req, res) => {
 router.post("/:id/request-changes", async (req, res) => {
   try {
     const userId = req.user?.id || null;
+    const existing = await postsService.getById(req.tenantId, req.params.id);
+    if (!existing) return res.status(404).json({ error: "Post não encontrado" });
+    if (existing.clientId && !isClientAllowed(req, existing.clientId)) {
+      return res.status(403).json({ error: "Sem acesso a este post" });
+    }
     const body = req.body || {};
     const noteInput =
       typeof body.note === "string"
@@ -143,6 +172,11 @@ router.post("/:id/request-changes", async (req, res) => {
  * Solicita aprovação do cliente e enfileira WhatsApp
  */
 router.post("/:id/request-approval", async (req, res) => {
+  const existing = await postsService.getById(req.tenantId, req.params.id);
+  if (!existing) return res.status(404).json({ error: "Post não encontrado" });
+  if (existing.clientId && !isClientAllowed(req, existing.clientId)) {
+    return res.status(403).json({ error: "Sem acesso a este post" });
+  }
   return postsController.requestApproval(req, res);
 });
 
@@ -151,8 +185,12 @@ router.post("/:id/request-approval", async (req, res) => {
  */
 router.delete("/:id", async (req, res) => {
   try {
+    const existing = await postsService.getById(req.tenantId, req.params.id);
+    if (!existing) return res.status(404).json({ error: "Post não encontrado" });
+    if (existing.clientId && !isClientAllowed(req, existing.clientId)) {
+      return res.status(403).json({ error: "Sem acesso a este post" });
+    }
     const removed = await postsService.remove(req.tenantId, req.params.id);
-    if (!removed) return res.status(404).json({ error: "Post não encontrado" });
     return res.json({ ok: true });
   } catch (err) {
     console.error("DELETE /posts/:id error:", err);
@@ -169,6 +207,11 @@ router.post("/:id/send-to-approval", async (req, res) => {
     const postId = req.params.id;
     const userId = req.user?.id || null;
     const forceNewLink = Boolean(req.body?.forceNewLink || false);
+    const existing = await postsService.getById(req.tenantId, postId);
+    if (!existing) return res.status(404).json({ error: "Post não encontrado" });
+    if (existing.clientId && !isClientAllowed(req, existing.clientId)) {
+      return res.status(403).json({ error: "Sem acesso a este post" });
+    }
 
     const approvalResult = await postsService.requestApproval(req.tenantId, postId, {
       userId,

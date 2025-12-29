@@ -14,6 +14,9 @@ const PUBLIC_PATHS = [
   '/api/health',
   '/api/healthz',
   '/api/tenants/register', // <- registro de tenant + admin deve ser público
+
+  // ✅ Meta OAuth callback precisa ser público (Meta chama sem Bearer token)
+  '/api/integrations/meta/callback',
 ];
 
 // Suporte simples a token em header "Authorization: Bearer <token>"

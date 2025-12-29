@@ -15,13 +15,29 @@ function parseRange(range) {
 }
 
 module.exports = {
-  async getSummary(tenantId, { range, clientId } = {}) {
+  async getSummary(tenantId, { range, clientId, clientIds } = {}) {
     const days = parseRange(range);
     const sinceDate = new Date();
     sinceDate.setDate(sinceDate.getDate() - days);
 
     // Filtros base
-    const clientFilter = clientId ? { clientId } : {};
+    let clientFilter = {};
+    if (clientId) {
+      clientFilter = { clientId };
+    } else if (Array.isArray(clientIds)) {
+      if (clientIds.length === 0) {
+        return {
+          rangeDays: days,
+          totals: { clients: 0, posts: 0, tasks: 0 },
+          postsByStatus: {},
+          tasksByStatus: {},
+          upcomingTasks: [],
+          finance: [],
+          metrics: {},
+        };
+      }
+      clientFilter = { clientId: { in: clientIds } };
+    }
 
     // Promises em paralelo para otimizar
     const [
@@ -35,7 +51,10 @@ module.exports = {
     ] = await Promise.all([
       // total de clientes
       prisma.client.count({
-        where: { tenantId },
+        where: {
+          tenantId,
+          ...(clientFilter.clientId ? clientFilter : {}),
+        },
       }),
 
       // total de posts (opcional filtragem por client)
@@ -108,6 +127,7 @@ module.exports = {
       days,
       metricTypes: ['impressions', 'clicks', 'conversions', 'spend', 'revenue'],
       clientId,
+      clientIds: clientId ? null : clientIds || null,
     });
 
     // Transformar financeByType em estrutura amigável (com valor em reais)

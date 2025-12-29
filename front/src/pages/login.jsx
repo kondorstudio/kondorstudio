@@ -168,6 +168,12 @@ export default function Login() {
           >
             Acessar como cliente do portal
           </Link>
+          <Link
+            to="/team-login"
+            className="inline-flex items-center justify-center text-xs text-gray-500 underline decoration-gray-300/60 underline-offset-4 hover:text-gray-700 hover:decoration-purple-200 transition-opacity duration-200"
+          >
+            Sou membro da equipe
+          </Link>
         </div>
       </div>
     </div>

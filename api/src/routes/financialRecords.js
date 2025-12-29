@@ -3,9 +3,12 @@ const router = express.Router();
 
 const auth = require('../middleware/auth');
 const financialRecordsController = require('../controllers/financialRecordsController');
+const { loadTeamAccess, requireTeamPermission } = require('../middleware/teamAccess');
 
 // todas as rotas financeiras exigem autenticação
 router.use(auth);
+router.use(loadTeamAccess);
+router.use(requireTeamPermission('finance'));
 
 // GET /finance  -> lista registros financeiros do tenant
 router.get('/', financialRecordsController.list);

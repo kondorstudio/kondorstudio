@@ -1,14 +1,20 @@
 const dashboardService = require('../services/dashboardService');
 const { prisma } = require('../prisma');
+const { getClientScope, isClientAllowed } = require('../middleware/teamAccess');
 
 module.exports = {
   async summary(req, res) {
     try {
       const { range, clientId } = req.query;
+      const scope = getClientScope(req);
+      if (clientId && !isClientAllowed(req, clientId)) {
+        return res.status(403).json({ error: 'Sem acesso a este cliente' });
+      }
 
       const data = await dashboardService.getSummary(req.tenantId, {
         range,
         clientId,
+        clientIds: scope.all || clientId ? null : scope.clientIds,
       });
 
       return res.json(data);

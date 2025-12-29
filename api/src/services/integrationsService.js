@@ -74,6 +74,7 @@ module.exports = {
       ownerType,
       ownerKey,
       clientId,
+      clientIds,
       kind,
       page = 1,
       perPage = 50,
@@ -88,6 +89,14 @@ module.exports = {
       where.OR = [
         { clientId },
         { ownerKey: String(clientId), ownerType: 'CLIENT' },
+      ];
+    } else if (Array.isArray(clientIds)) {
+      if (clientIds.length === 0) {
+        return { items: [], total: 0, page: 1, perPage, totalPages: 0 };
+      }
+      where.OR = [
+        { clientId: { in: clientIds } },
+        { ownerKey: { in: clientIds }, ownerType: 'CLIENT' },
       ];
     }
     if (kind) {

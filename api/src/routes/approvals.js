@@ -11,6 +11,12 @@ const router = express.Router();
 
 const authMiddleware = require('../middleware/auth');
 const tenantMiddleware = require('../middleware/tenant');
+const {
+  loadTeamAccess,
+  requireTeamPermission,
+  getClientScope,
+  isClientAllowed,
+} = require('../middleware/teamAccess');
 const { prisma } = require('../prisma');
 const automationEngine = require('../services/automationEngine');
 const approvalsService = require('../services/approvalsService');
@@ -18,6 +24,8 @@ const approvalsService = require('../services/approvalsService');
 // aplicar auth + tenant
 router.use(authMiddleware);
 router.use(tenantMiddleware);
+router.use(loadTeamAccess);
+router.use(requireTeamPermission('approvals'));
 
 /**
  * Helper para obter tenantId de forma segura
@@ -80,6 +88,7 @@ router.get('/', async (req, res) => {
       page = 1,
       perPage = 50,
     } = req.query || {};
+    const scope = getClientScope(req);
 
     const pageNumber = Math.max(Number(page) || 1, 1);
     const perPageNumber = Math.min(Number(perPage) || 50, 100);
@@ -88,6 +97,12 @@ router.get('/', async (req, res) => {
     const where = { tenantId };
     if (status) where.status = status;
     if (postId) where.postId = postId;
+    if (!scope.all) {
+      if (scope.clientIds.length === 0) {
+        return res.json({ items: [], total: 0, page: pageNumber, perPage: perPageNumber });
+      }
+      where.post = { clientId: { in: scope.clientIds } };
+    }
 
     const [items, total] = await Promise.all([
       prisma.approval.findMany({
@@ -140,6 +155,10 @@ router.post('/', async (req, res) => {
 
     if (!post) {
       return res.status(404).json({ error: 'Post não encontrado para este tenant' });
+    }
+    const clientId = post.clientId || post.project?.clientId;
+    if (clientId && !isClientAllowed(req, clientId)) {
+      return res.status(403).json({ error: 'Sem acesso a este cliente' });
     }
 
     const approval = await prisma.approval.create({
@@ -201,6 +220,10 @@ router.post('/:id/status', async (req, res) => {
     }
 
     const { approval, post, client } = ctx;
+    const clientId = client?.id || post?.clientId || null;
+    if (clientId && !isClientAllowed(req, clientId)) {
+      return res.status(403).json({ error: 'Sem acesso a este cliente' });
+    }
 
     const approverId = req.user && req.user.id ? req.user.id : approval.approverId || null;
 

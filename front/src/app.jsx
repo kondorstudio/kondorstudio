@@ -20,6 +20,7 @@ const Settings = lazy(() => import("./pages/settings.jsx"));
 const Home = lazy(() => import("./pages/home.jsx"));
 const Checkout = lazy(() => import("./pages/checkout.jsx"));
 const Login = lazy(() => import("./pages/login.jsx"));
+const TeamLogin = lazy(() => import("./pages/teamlogin.jsx"));
 const Register = lazy(() => import("./pages/register.jsx"));
 const Onboarding = lazy(() => import("./pages/onboarding.jsx"));
 
@@ -70,6 +71,7 @@ export default function App() {
         {/* Rotas públicas */}
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/team-login" element={<TeamLogin />} />
         <Route path="/pricing" element={<Pricing />} />
         <Route path="/modules" element={<ModulesPage />} />
         <Route path="/demo" element={<DemoPage />} />

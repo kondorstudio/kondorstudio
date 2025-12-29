@@ -276,10 +276,10 @@ module.exports = {
   /**
    * Lista posts do tenant com filtros e paginação
    * @param {String} tenantId
-   * @param {Object} opts - { status, clientId, q, page, perPage }
+   * @param {Object} opts - { status, clientId, clientIds, q, page, perPage }
    */
   async list(tenantId, opts = {}) {
-    const { status, clientId, q } = opts;
+    const { status, clientId, clientIds, q } = opts;
 
     const page = Math.max(1, Number(opts.page || 1));
     const perPage = Math.min(100, Math.max(1, Number(opts.perPage || 50)));
@@ -292,7 +292,14 @@ module.exports = {
       where.status = postStatus;
     }
 
-    if (clientId) where.clientId = clientId;
+    if (clientId) {
+      where.clientId = clientId;
+    } else if (Array.isArray(clientIds)) {
+      if (clientIds.length === 0) {
+        return { items: [], total: 0, page, perPage, totalPages: 0 };
+      }
+      where.clientId = { in: clientIds };
+    }
 
     if (q) {
       where.OR = [

@@ -5,10 +5,13 @@ const router = express.Router();
 const authMiddleware = require("../middleware/auth");
 const tenantMiddleware = require("../middleware/tenant");
 const tasksService = require("../services/tasksService");
+const { loadTeamAccess, requireTeamPermission } = require("../middleware/teamAccess");
 
 // Todas as rotas são protegidas
 router.use(authMiddleware);
 router.use(tenantMiddleware);
+router.use(loadTeamAccess);
+router.use(requireTeamPermission("tasks"));
 
 /**
  * GET /tasks

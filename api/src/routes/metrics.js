@@ -3,12 +3,20 @@ const router = express.Router();
 
 const authMiddleware = require("../middleware/auth");
 const tenantMiddleware = require("../middleware/tenant");
+const {
+  loadTeamAccess,
+  requireTeamPermission,
+  getClientScope,
+  isClientAllowed,
+} = require("../middleware/teamAccess");
 const metricsService = require("../services/metricsService");
 const automationEngine = require("../services/automationEngine");
 const { prisma } = require("../prisma");
 
 router.use(authMiddleware);
 router.use(tenantMiddleware);
+router.use(loadTeamAccess);
+router.use(requireTeamPermission("metrics"));
 
 /**
  * GET /metrics
@@ -27,6 +35,10 @@ router.get("/", async (req, res) => {
       order,
     } = req.query;
 
+    const scope = getClientScope(req);
+    if (clientId && !isClientAllowed(req, clientId)) {
+      return res.status(403).json({ error: "Sem acesso a este cliente" });
+    }
     const result = await metricsService.list(req.tenantId, {
       metricType,
       clientId,
@@ -37,6 +49,7 @@ router.get("/", async (req, res) => {
       order,
       page: page ? Number(page) : undefined,
       perPage: perPage ? Number(perPage) : undefined,
+      clientIds: scope.all || clientId ? null : scope.clientIds,
     });
 
     return res.json(result);
@@ -51,6 +64,10 @@ router.get("/", async (req, res) => {
  */
 router.post("/", async (req, res) => {
   try {
+    const clientId = req.body?.clientId || req.body?.client_id;
+    if (clientId && !isClientAllowed(req, clientId)) {
+      return res.status(403).json({ error: "Sem acesso a este cliente" });
+    }
     const metric = await metricsService.ingest(req.tenantId, req.body);
     return res.status(201).json(metric);
   } catch (err) {
@@ -66,6 +83,22 @@ router.get("/:id", async (req, res) => {
   try {
     const item = await metricsService.getById(req.tenantId, req.params.id);
     if (!item) return res.status(404).json({ error: "Métrica não encontrada" });
+    const scope = getClientScope(req);
+    if (!scope.all) {
+      const metric = await prisma.metric.findFirst({
+        where: { id: req.params.id, tenantId: req.tenantId },
+        select: {
+          clientId: true,
+          post: { select: { clientId: true } },
+          integration: { select: { clientId: true } },
+        },
+      });
+      const clientRef =
+        metric?.clientId || metric?.post?.clientId || metric?.integration?.clientId;
+      if (clientRef && !isClientAllowed(req, clientRef)) {
+        return res.status(403).json({ error: "Sem acesso a esta métrica" });
+      }
+    }
     return res.json(item);
   } catch (err) {
     console.error("GET /metrics/:id error:", err);
@@ -78,6 +111,24 @@ router.get("/:id", async (req, res) => {
  */
 router.put("/:id", async (req, res) => {
   try {
+    const existing = await metricsService.getById(req.tenantId, req.params.id);
+    if (!existing) return res.status(404).json({ error: "Métrica não encontrada" });
+    const scope = getClientScope(req);
+    if (!scope.all) {
+      const metric = await prisma.metric.findFirst({
+        where: { id: req.params.id, tenantId: req.tenantId },
+        select: {
+          clientId: true,
+          post: { select: { clientId: true } },
+          integration: { select: { clientId: true } },
+        },
+      });
+      const clientRef =
+        metric?.clientId || metric?.post?.clientId || metric?.integration?.clientId;
+      if (clientRef && !isClientAllowed(req, clientRef)) {
+        return res.status(403).json({ error: "Sem acesso a esta métrica" });
+      }
+    }
     const updated = await metricsService.update(
       req.tenantId,
       req.params.id,
@@ -96,6 +147,24 @@ router.put("/:id", async (req, res) => {
  */
 router.delete("/:id", async (req, res) => {
   try {
+    const existing = await metricsService.getById(req.tenantId, req.params.id);
+    if (!existing) return res.status(404).json({ error: "Métrica não encontrada" });
+    const scope = getClientScope(req);
+    if (!scope.all) {
+      const metric = await prisma.metric.findFirst({
+        where: { id: req.params.id, tenantId: req.tenantId },
+        select: {
+          clientId: true,
+          post: { select: { clientId: true } },
+          integration: { select: { clientId: true } },
+        },
+      });
+      const clientRef =
+        metric?.clientId || metric?.post?.clientId || metric?.integration?.clientId;
+      if (clientRef && !isClientAllowed(req, clientRef)) {
+        return res.status(403).json({ error: "Sem acesso a esta métrica" });
+      }
+    }
     const removed = await metricsService.remove(req.tenantId, req.params.id);
     if (!removed) return res.status(404).json({ error: "Métrica não encontrada" });
     return res.json({ ok: true });
@@ -110,6 +179,14 @@ router.delete("/:id", async (req, res) => {
  */
 router.post("/aggregate", async (req, res) => {
   try {
+    const clientId = req.body?.clientId || req.body?.client_id;
+    if (clientId && !isClientAllowed(req, clientId)) {
+      return res.status(403).json({ error: "Sem acesso a este cliente" });
+    }
+    const scope = getClientScope(req);
+    if (!scope.all) {
+      req.body.clientIds = scope.clientIds;
+    }
     const result = await metricsService.aggregate(req.tenantId, req.body);
     return res.json(result);
   } catch (err) {
@@ -124,6 +201,10 @@ router.post("/aggregate", async (req, res) => {
 router.get("/summary/quick", async (req, res) => {
   try {
     const { days, metricTypes, clientId, integrationId, provider, source, startDate, endDate } = req.query;
+    const scope = getClientScope(req);
+    if (clientId && !isClientAllowed(req, clientId)) {
+      return res.status(403).json({ error: "Sem acesso a este cliente" });
+    }
 
     const result = await metricsService.quickSummary(req.tenantId, {
       days: days ? Number(days) : undefined,
@@ -135,6 +216,7 @@ router.get("/summary/quick", async (req, res) => {
       provider: provider || source || undefined,
       startDate: startDate || undefined,
       endDate: endDate || undefined,
+      clientIds: scope.all || clientId ? null : scope.clientIds,
     });
 
     return res.json(result);
@@ -159,6 +241,9 @@ router.post("/sync", async (req, res) => {
 
     if (!integrationId) {
       return res.status(400).json({ error: "integrationId é obrigatório" });
+    }
+    if (clientId && !isClientAllowed(req, clientId)) {
+      return res.status(403).json({ error: "Sem acesso a este cliente" });
     }
 
     const integration = await prisma.integration.findFirst({
