@@ -170,6 +170,45 @@ const WORKFLOW_STATUS_KEYS = new Set([
   'DONE',
 ]);
 
+const WORKFLOW_STATUS_ORDER = [
+  'DRAFT',
+  'CONTENT',
+  'INTERNAL_APPROVAL',
+  'CLIENT_APPROVAL',
+  'CHANGES',
+  'SCHEDULING',
+  'SCHEDULED',
+  'DONE',
+];
+
+const LEGACY_STATUS_ALIASES = {
+  IDEA: 'CONTENT',
+  PRODUCTION: 'CONTENT',
+  EDITING: 'INTERNAL_APPROVAL',
+  PENDING_APPROVAL: 'CLIENT_APPROVAL',
+  APPROVED: 'SCHEDULING',
+  SCHEDULED: 'SCHEDULED',
+  PUBLISHED: 'DONE',
+  ARCHIVED: 'DONE',
+  FAILED: 'DONE',
+  CANCELLED: 'DONE',
+};
+
+const POST_SUMMARY_SELECT = {
+  id: true,
+  title: true,
+  caption: true,
+  mediaType: true,
+  platform: true,
+  status: true,
+  scheduledDate: true,
+  publishedDate: true,
+  createdAt: true,
+  clientId: true,
+  metadata: true,
+  clientFeedback: true,
+};
+
 function normalizePostStatusInput(inputStatus) {
   const raw = sanitizeString(inputStatus);
   if (!raw) return { postStatus: 'DRAFT', approvalOverride: null, workflowStatus: null };
@@ -189,6 +228,129 @@ function normalizePostStatusInput(inputStatus) {
 
   const workflowStatus = WORKFLOW_STATUS_KEYS.has(normalized) ? normalized : null;
   return { postStatus: mapped, approvalOverride: null, workflowStatus };
+}
+
+function normalizePostStatusFilterValue(inputStatus) {
+  const raw = sanitizeString(inputStatus);
+  if (!raw) return null;
+  const normalized = raw.replace(/\s+/g, '_').toUpperCase();
+  if (normalized === 'REJECTED') return 'DRAFT';
+  const mapped = WORKFLOW_STATUS_ALIASES[normalized] || normalized;
+  if (!POST_STATUSES.has(mapped)) return null;
+  return mapped;
+}
+
+function normalizeWorkflowStatus(value) {
+  if (!value) return null;
+  const raw = String(value).trim().replace(/\s+/g, '_').toUpperCase();
+  if (WORKFLOW_STATUS_KEYS.has(raw)) return raw;
+  if (LEGACY_STATUS_ALIASES[raw]) return LEGACY_STATUS_ALIASES[raw];
+  return null;
+}
+
+function resolveWorkflowStatusFromPost(post) {
+  const explicit = normalizeWorkflowStatus(post?.metadata?.workflowStatus);
+  if (explicit) return explicit;
+
+  const base = normalizeWorkflowStatus(post?.status);
+  if (base === 'DRAFT') {
+    const feedback = sanitizeString(post?.clientFeedback || post?.client_feedback);
+    return feedback ? 'CHANGES' : 'DRAFT';
+  }
+
+  return base || 'DRAFT';
+}
+
+function resolvePostDate(post) {
+  return (
+    post?.scheduledDate ||
+    post?.publishedDate ||
+    post?.createdAt ||
+    null
+  );
+}
+
+function buildDateRangeFilter(startDate, endDate) {
+  const start = toDateOrNull(startDate);
+  const end = toDateOrNull(endDate);
+  if (!start && !end) return null;
+
+  const range = {};
+  if (start) range.gte = start;
+  if (end) range.lte = end;
+
+  return {
+    OR: [
+      { scheduledDate: range },
+      { scheduledDate: null, publishedDate: range },
+      { scheduledDate: null, publishedDate: null, createdAt: range },
+    ],
+  };
+}
+
+function normalizeStatusFilters(rawStatus) {
+  if (!rawStatus) return [];
+  const rawList = Array.isArray(rawStatus)
+    ? rawStatus
+    : String(rawStatus).split(',').map((value) => value.trim()).filter(Boolean);
+
+  const normalized = rawList
+    .map((value) => normalizeWorkflowStatus(value))
+    .filter(Boolean);
+
+  return normalized;
+}
+
+function buildPostsWhere(tenantId, opts = {}) {
+  const where = { tenantId };
+  const andFilters = [];
+
+  if (opts.clientId) {
+    andFilters.push({ clientId: opts.clientId });
+  }
+
+  if (opts.q) {
+    andFilters.push({
+      OR: [
+        { title: { contains: opts.q, mode: 'insensitive' } },
+        { caption: { contains: opts.q, mode: 'insensitive' } },
+        { content: { contains: opts.q, mode: 'insensitive' } },
+      ],
+    });
+  }
+
+  const dateFilter = buildDateRangeFilter(opts.startDate, opts.endDate);
+  if (dateFilter) andFilters.push(dateFilter);
+
+  if (andFilters.length) {
+    where.AND = andFilters;
+  }
+
+  return where;
+}
+
+function applyWorkflowStatusFilter(items, statusFilters) {
+  if (!statusFilters || statusFilters.length === 0) return items;
+  const allowed = new Set(statusFilters);
+  return (items || []).filter((post) => allowed.has(resolveWorkflowStatusFromPost(post)));
+}
+
+function mapPostSummary(post) {
+  if (!post) return null;
+  return {
+    id: post.id,
+    title: post.title,
+    caption: post.caption,
+    mediaType: post.mediaType,
+    platform: post.platform,
+    status: post.status,
+    scheduledDate: post.scheduledDate,
+    publishedDate: post.publishedDate,
+    createdAt: post.createdAt,
+    clientId: post.clientId,
+    metadata: post.metadata,
+    clientFeedback: post.clientFeedback,
+  };
 }
 
 function mergeWorkflowStatus(metadata, workflowStatus) {
@@ -312,26 +474,30 @@ module.exports = {
    * @param {Object} opts - { status, clientId, q, page, perPage }
    */
   async list(tenantId, opts = {}) {
-    const { status, clientId, q } = opts;
+    const { status, clientId, q, startDate, endDate } = opts;
 
     const page = Math.max(1, Number(opts.page || 1));
     const perPage = Math.min(100, Math.max(1, Number(opts.perPage || 50)));
 
-    const where = { tenantId };
+    const where = buildPostsWhere(tenantId, {
+      clientId,
+      q,
+      startDate,
+      endDate,
+    });
 
     if (status) {
-      // aceita alias REJECTED sem quebrar; REJECTED no post vira DRAFT.
-      const { postStatus } = normalizePostStatusInput(status);
-      where.status = postStatus;
-    }
-
-    if (clientId) where.clientId = clientId;
-
-    if (q) {
-      where.OR = [
-        { title: { contains: q, mode: 'insensitive' } },
-        { caption: { contains: q, mode: 'insensitive' } },
-      ];
+      const rawList = Array.isArray(status)
+        ? status
+        : String(status).split(',').map((value) => value.trim()).filter(Boolean);
+      const normalizedList = rawList
+        .map((value) => normalizePostStatusFilterValue(value))
+        .filter(Boolean);
+      if (normalizedList.length === 1) {
+        where.status = normalizedList[0];
+      } else if (normalizedList.length > 1) {
+        where.status = { in: normalizedList };
+      }
     }
 
     const skip = (page - 1) * perPage;
@@ -353,6 +519,64 @@ module.exports = {
       page,
       perPage,
       totalPages: Math.ceil(total / perPage),
+    };
+  },
+
+  /**
+   * Lista posts agrupados por status de workflow (Kanban)
+   */
+  async listKanban(tenantId, opts = {}) {
+    const where = buildPostsWhere(tenantId, opts);
+
+    const items = await prisma.post.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      select: POST_SUMMARY_SELECT,
+    });
+
+    const statusFilters = normalizeStatusFilters(opts.status);
+    const filtered = applyWorkflowStatusFilter(items, statusFilters);
+
+    const columns = {};
+    WORKFLOW_STATUS_ORDER.forEach((key) => {
+      columns[key] = { count: 0, items: [] };
+    });
+
+    filtered.forEach((post) => {
+      const statusKey = resolveWorkflowStatusFromPost(post);
+      if (!columns[statusKey]) {
+        columns[statusKey] = { count: 0, items: [] };
+      }
+      columns[statusKey].items.push(mapPostSummary(post));
+      columns[statusKey].count += 1;
+    });
+
+    return {
+      columns,
+      totals: { all: filtered.length },
+    };
+  },
+
+  /**
+   * Lista posts para visualizacao de calendario (mensal/semanal)
+   */
+  async listCalendar(tenantId, opts = {}) {
+    const where = buildPostsWhere(tenantId, opts);
+
+    const items = await prisma.post.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      select: POST_SUMMARY_SELECT,
+    });
+
+    const statusFilters = normalizeStatusFilters(opts.status);
+    const filtered = applyWorkflowStatusFilter(items, statusFilters);
+
+    return {
+      items: filtered.map((post) => ({
+        ...mapPostSummary(post),
+        date: resolvePostDate(post),
+      })),
     };
   },
 

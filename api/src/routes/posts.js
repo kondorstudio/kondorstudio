@@ -17,14 +17,30 @@ router.use(tenantMiddleware);
  */
 router.get("/", async (req, res) => {
   try {
-    const { status, clientId, q, page, perPage } = req.query;
-    const result = await postsService.list(req.tenantId, {
+    const { status, clientId, q, page, perPage, view, startDate, endDate } =
+      req.query;
+
+    const listOptions = {
       status,
       clientId,
       q,
+      startDate,
+      endDate,
       page: page ? Number(page) : undefined,
       perPage: perPage ? Number(perPage) : undefined,
-    });
+    };
+
+    const normalizedView = typeof view === "string" ? view.toLowerCase() : null;
+    if (normalizedView === "kanban") {
+      const result = await postsService.listKanban(req.tenantId, listOptions);
+      return res.json(result);
+    }
+    if (normalizedView === "calendar") {
+      const result = await postsService.listCalendar(req.tenantId, listOptions);
+      return res.json(result);
+    }
+
+    const result = await postsService.list(req.tenantId, listOptions);
     return res.json(result);
   } catch (err) {
     console.error("GET /posts error:", err);
