@@ -8,14 +8,29 @@ import FilterBar from "@/components/ui/filter-bar.jsx";
 import EmptyState from "@/components/ui/empty-state.jsx";
 import { Label } from "@/components/ui/label.jsx";
 import { Input } from "@/components/ui/input.jsx";
+import { Checkbox } from "@/components/ui/checkbox.jsx";
 import {
   buildStatusPayload,
+  getWorkflowStatuses,
   isClientApprovalStatus,
   resolveWorkflowStatus,
 } from "@/utils/postStatus.js";
-import { Plus } from "lucide-react";
+import { ChevronDown, Plus, Search } from "lucide-react";
 import Postkanban from "../components/posts/postkanban.jsx";
+import Postcalendar from "../components/posts/postcalendar.jsx";
 import Postformdialog from "../components/posts/postformdialog.jsx";
+
+const VIEW_STORAGE_KEY = "kondor_posts_view_mode";
+
+const loadViewMode = () => {
+  if (typeof window === "undefined") return "kanban";
+  try {
+    const raw = window.localStorage.getItem(VIEW_STORAGE_KEY);
+    return raw === "calendar" || raw === "kanban" ? raw : "kanban";
+  } catch (err) {
+    return "kanban";
+  }
+};
 
 export default function Posts() {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -23,7 +38,13 @@ export default function Posts() {
   const [selectedClientId, setSelectedClientId] = useState("");
   const [dateStart, setDateStart] = useState("");
   const [dateEnd, setDateEnd] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedStatuses, setSelectedStatuses] = useState([]);
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const [viewMode, setViewMode] = useState(() => loadViewMode());
+  const statusMenuRef = React.useRef(null);
   const queryClient = useQueryClient();
+  const statusOptions = React.useMemo(() => getWorkflowStatuses(), []);
 
   const handleDialogClose = React.useCallback(() => {
     setDialogOpen(false);
@@ -132,45 +153,137 @@ export default function Posts() {
     updateMutation.isPending ||
     sendToApprovalMutation.isPending;
 
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(VIEW_STORAGE_KEY, viewMode);
+    } catch (err) {
+      return;
+    }
+  }, [viewMode]);
+
+  React.useEffect(() => {
+    if (!statusMenuOpen) return;
+
+    const handleClickOutside = (event) => {
+      if (!statusMenuRef.current) return;
+      if (!statusMenuRef.current.contains(event.target)) {
+        setStatusMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [statusMenuOpen]);
+
+  const toggleStatus = (key) => {
+    setSelectedStatuses((prev) =>
+      prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]
+    );
+  };
+
+  const clearStatuses = () => {
+    setSelectedStatuses([]);
+  };
+
+  const statusLabel = React.useMemo(() => {
+    if (selectedStatuses.length === 0) return "Todos os status";
+    if (selectedStatuses.length === 1) {
+      const option = statusOptions.find((item) => item.key === selectedStatuses[0]);
+      return option?.label || "1 status";
+    }
+    return `${selectedStatuses.length} status`;
+  }, [selectedStatuses, statusOptions]);
+
+  const clientMap = useMemo(() => {
+    const map = new Map();
+    (clients || []).forEach((client) => {
+      if (client?.id) map.set(client.id, client);
+    });
+    return map;
+  }, [clients]);
+
   const filteredPosts = useMemo(() => {
-    if (!selectedClientId) return [];
     const start = dateStart ? new Date(`${dateStart}T00:00:00`) : null;
     const end = dateEnd ? new Date(`${dateEnd}T23:59:59`) : null;
+    const query = searchTerm.trim().toLowerCase();
+    const statusSet = selectedStatuses.length ? new Set(selectedStatuses) : null;
 
     return (posts || []).filter((post) => {
-      if (post.clientId !== selectedClientId) return false;
+      const postClientId = post.clientId || post.client_id;
+      if (selectedClientId && postClientId !== selectedClientId) return false;
+
+      if (statusSet) {
+        const statusKey = resolveWorkflowStatus(post);
+        if (!statusSet.has(statusKey)) return false;
+      }
+
+      if (query) {
+        const clientName = clientMap.get(postClientId)?.name || "";
+        const haystack = [
+          post.title,
+          post.body,
+          post.caption,
+          post.clientFeedback,
+          post.client_feedback,
+          clientName,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
+
       if (!start && !end) return true;
 
-      const postDateValue = post.scheduledDate || post.createdAt;
+      const postDateValue =
+        post.scheduledDate ||
+        post.scheduledAt ||
+        post.scheduled_at ||
+        post.publishedDate ||
+        post.published_at ||
+        post.createdAt;
       if (!postDateValue) return false;
       const postDate = new Date(postDateValue);
+      if (isNaN(postDate.getTime())) return false;
       if (start && postDate < start) return false;
       if (end && postDate > end) return false;
       return true;
     });
-  }, [posts, selectedClientId, dateStart, dateEnd]);
+  }, [
+    posts,
+    selectedClientId,
+    dateStart,
+    dateEnd,
+    searchTerm,
+    selectedStatuses,
+    clientMap,
+  ]);
+
+  const hasFilters = Boolean(
+    selectedClientId ||
+      dateStart ||
+      dateEnd ||
+      searchTerm.trim() ||
+      selectedStatuses.length
+  );
 
   return (
     <PageShell>
       <PageHeader
         title="Posts"
         subtitle="Gerencie o fluxo de criacao e aprovacao."
-        actions={
-          <Button leftIcon={Plus} onClick={() => setDialogOpen(true)}>
-            Novo post
-          </Button>
-        }
       />
 
       <FilterBar className="mt-6">
         <div className="min-w-[220px] flex-1">
-          <Label>Cliente</Label>
+          <Label>Perfil/cliente</Label>
           <select
             value={selectedClientId}
             onChange={(event) => setSelectedClientId(event.target.value)}
             className="w-full h-10 rounded-[10px] border border-[var(--border)] bg-white px-3 text-sm text-[var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[rgba(109,40,217,0.2)]"
           >
-            <option value="">Selecione um cliente</option>
+            <option value="">Todos os clientes</option>
             {clients.map((client) => (
               <option key={client.id} value={client.id}>
                 {client.name}
@@ -185,32 +298,139 @@ export default function Posts() {
         </div>
 
         <div className="min-w-[160px]">
-          <Label>Data inicial</Label>
+          <Label>Periodo inicial</Label>
           <Input
             type="date"
             value={dateStart}
             onChange={(event) => setDateStart(event.target.value)}
-            disabled={!selectedClientId}
           />
         </div>
 
         <div className="min-w-[160px]">
-          <Label>Data final</Label>
+          <Label>Periodo final</Label>
           <Input
             type="date"
             value={dateEnd}
             onChange={(event) => setDateEnd(event.target.value)}
-            disabled={!selectedClientId}
           />
+        </div>
+
+        <div className="relative min-w-[200px]" ref={statusMenuRef}>
+          <Label>Status</Label>
+          <button
+            type="button"
+            onClick={() => setStatusMenuOpen((prev) => !prev)}
+            className="flex h-10 w-full items-center justify-between rounded-[10px] border border-[var(--border)] bg-white px-3 text-sm text-[var(--text)] shadow-sm hover:bg-gray-50"
+            aria-expanded={statusMenuOpen}
+          >
+            <span className="text-[var(--text-muted)]">{statusLabel}</span>
+            <ChevronDown className="h-4 w-4 text-[var(--text-muted)]" />
+          </button>
+          {statusMenuOpen ? (
+            <div className="absolute z-40 mt-2 w-[260px] rounded-[12px] border border-[var(--border)] bg-white shadow-[var(--shadow-md)]">
+              <div className="flex items-center justify-between border-b border-[var(--border)] px-3 py-2">
+                <span className="text-xs font-semibold text-[var(--text-muted)]">
+                  Selecionar status
+                </span>
+                {selectedStatuses.length ? (
+                  <button
+                    type="button"
+                    onClick={clearStatuses}
+                    className="text-xs font-semibold text-[var(--primary)] hover:underline"
+                  >
+                    Limpar
+                  </button>
+                ) : null}
+              </div>
+              <div className="max-h-56 overflow-auto p-2">
+                {statusOptions.map((option) => {
+                  const Icon = option.icon;
+                  const checked = selectedStatuses.includes(option.key);
+                  return (
+                    <label
+                      key={option.key}
+                      className="flex cursor-pointer items-center gap-2 rounded-[10px] px-2 py-2 text-sm text-[var(--text)] hover:bg-[var(--surface-muted)]"
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={() => toggleStatus(option.key)}
+                      />
+                      {Icon ? (
+                        <Icon className={`h-4 w-4 ${option.tone || "text-slate-500"}`} />
+                      ) : null}
+                      <span>{option.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="min-w-[220px] flex-1">
+          <Label>Busca</Label>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
+            <Input
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Buscar por titulo ou texto"
+              className="pl-9"
+            />
+          </div>
+        </div>
+
+        <div className="flex w-full flex-wrap items-center gap-2 md:ml-auto md:w-auto">
+          <div className="flex items-center rounded-[10px] border border-[var(--border)] bg-white p-1">
+            {[
+              { key: "kanban", label: "Kanban" },
+              { key: "calendar", label: "Calendario" },
+            ].map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => setViewMode(option.key)}
+                className={`h-8 rounded-[8px] px-3 text-xs font-semibold transition ${
+                  viewMode === option.key
+                    ? "bg-[var(--primary-light)] text-[var(--primary)]"
+                    : "text-[var(--text-muted)] hover:bg-[var(--surface-muted)]"
+                }`}
+                aria-pressed={viewMode === option.key}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <Button leftIcon={Plus} onClick={() => setDialogOpen(true)}>
+            Novo post
+          </Button>
         </div>
       </FilterBar>
 
       <div className="mt-6">
-        {!selectedClientId ? (
-          <EmptyState
-            title="Selecione um cliente"
-            description="Escolha um cliente para visualizar os posts."
-          />
+        {viewMode === "calendar" ? (
+          isLoading ? (
+            <EmptyState
+              title="Carregando posts"
+              description="Aguarde enquanto carregamos o calendario."
+            />
+          ) : filteredPosts.length === 0 ? (
+            <EmptyState
+              title={hasFilters ? "Nenhum post encontrado" : "Nenhum post criado"}
+              description={
+                hasFilters
+                  ? "Ajuste os filtros para encontrar posts neste periodo."
+                  : "Crie seu primeiro post para iniciar o fluxo."
+              }
+              action={
+                <Button leftIcon={Plus} onClick={() => setDialogOpen(true)}>
+                  Novo post
+                </Button>
+              }
+            />
+          ) : (
+            <Postcalendar posts={filteredPosts} onPostClick={handleEdit} />
+          )
         ) : (
           <Postkanban
             posts={filteredPosts}
