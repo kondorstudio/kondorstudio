@@ -21,6 +21,7 @@ import Postcalendar from "../components/posts/postcalendar.jsx";
 import Postformdialog from "../components/posts/postformdialog.jsx";
 
 const VIEW_STORAGE_KEY = "kondor_posts_view_mode";
+const KANBAN_STORAGE_KEY = "kondor_posts_kanban_collapsed";
 
 const loadViewMode = () => {
   if (typeof window === "undefined") return "kanban";
@@ -29,6 +30,33 @@ const loadViewMode = () => {
     return raw === "calendar" || raw === "kanban" ? raw : "kanban";
   } catch (err) {
     return "kanban";
+  }
+};
+
+const loadCollapsedColumns = () => {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(KANBAN_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (err) {
+    return {};
+  }
+};
+
+const persistCollapsedColumns = (value) => {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(KANBAN_STORAGE_KEY, JSON.stringify(value || {}));
+  } catch (err) {
+    return;
+  }
+};
+
+const serializePreferences = (payload) => {
+  try {
+    return JSON.stringify(payload || {});
+  } catch (err) {
+    return "";
   }
 };
 
@@ -42,7 +70,13 @@ export default function Posts() {
   const [selectedStatuses, setSelectedStatuses] = useState([]);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const [viewMode, setViewMode] = useState(() => loadViewMode());
+  const [collapsedColumns, setCollapsedColumns] = useState(() =>
+    loadCollapsedColumns()
+  );
+  const [preferencesHydrated, setPreferencesHydrated] = useState(false);
   const statusMenuRef = React.useRef(null);
+  const lastSavedRef = React.useRef("");
+  const saveTimeoutRef = React.useRef(null);
   const queryClient = useQueryClient();
   const statusOptions = React.useMemo(() => getWorkflowStatuses(), []);
 
@@ -65,6 +99,13 @@ export default function Posts() {
     queryKey: ["integrations"],
     queryFn: () => base44.entities.Integration.list(),
   });
+
+  const preferencesQuery = useQuery({
+    queryKey: ["me-preferences"],
+    queryFn: () => base44.me.getPreferences(),
+  });
+
+  const preferences = preferencesQuery.data?.preferences || null;
 
   const invalidatePosts = () =>
     queryClient.invalidateQueries({ queryKey: ["posts"] });
@@ -110,6 +151,13 @@ export default function Posts() {
       invalidatePosts();
     },
     onError: showError,
+  });
+
+  const preferencesMutation = useMutation({
+    mutationFn: (payload) => base44.me.updatePreferences(payload),
+    onError: (error) => {
+      console.error("Erro ao salvar preferencias", error);
+    },
   });
 
   const handleEdit = (post) => {
@@ -163,6 +211,78 @@ export default function Posts() {
   }, [viewMode]);
 
   React.useEffect(() => {
+    persistCollapsedColumns(collapsedColumns);
+  }, [collapsedColumns]);
+
+  React.useEffect(() => {
+    if (!preferencesQuery.isFetched || preferencesHydrated) return;
+
+    if (preferences?.postsViewMode) {
+      setViewMode(preferences.postsViewMode);
+    }
+    if (preferences?.kanbanCollapsedColumns) {
+      setCollapsedColumns(preferences.kanbanCollapsedColumns);
+    }
+
+    const filtersEmpty =
+      !selectedClientId &&
+      !dateStart &&
+      !dateEnd &&
+      !searchTerm.trim() &&
+      selectedStatuses.length === 0;
+
+    const lastFilters = preferences?.lastFilters;
+    const hasSavedFilters =
+      lastFilters && typeof lastFilters === "object" && Object.keys(lastFilters).length > 0;
+
+    if (hasSavedFilters && filtersEmpty) {
+      if (typeof lastFilters.clientId === "string") {
+        setSelectedClientId(lastFilters.clientId);
+      }
+      if (typeof lastFilters.dateStart === "string") {
+        setDateStart(lastFilters.dateStart);
+      }
+      if (typeof lastFilters.dateEnd === "string") {
+        setDateEnd(lastFilters.dateEnd);
+      }
+      if (typeof lastFilters.search === "string") {
+        setSearchTerm(lastFilters.search);
+      }
+      if (Array.isArray(lastFilters.status)) {
+        setSelectedStatuses(lastFilters.status);
+      }
+    }
+
+    const seedFilters = hasSavedFilters && filtersEmpty
+      ? lastFilters
+      : {
+          clientId: selectedClientId || null,
+          dateStart: dateStart || null,
+          dateEnd: dateEnd || null,
+          status: selectedStatuses,
+          search: searchTerm.trim() || null,
+        };
+
+    lastSavedRef.current = serializePreferences({
+      postsViewMode: preferences?.postsViewMode || viewMode,
+      kanbanCollapsedColumns: preferences?.kanbanCollapsedColumns || collapsedColumns,
+      lastFilters: seedFilters || {},
+    });
+    setPreferencesHydrated(true);
+  }, [
+    preferencesQuery.isFetched,
+    preferencesHydrated,
+    preferences,
+    viewMode,
+    collapsedColumns,
+    selectedClientId,
+    dateStart,
+    dateEnd,
+    searchTerm,
+    selectedStatuses,
+  ]);
+
+  React.useEffect(() => {
     if (!statusMenuOpen) return;
 
     const handleClickOutside = (event) => {
@@ -194,6 +314,51 @@ export default function Posts() {
     }
     return `${selectedStatuses.length} status`;
   }, [selectedStatuses, statusOptions]);
+
+  const preferencesPayload = useMemo(() => {
+    const trimmedSearch = searchTerm.trim();
+    return {
+      postsViewMode: viewMode,
+      kanbanCollapsedColumns: collapsedColumns,
+      lastFilters: {
+        clientId: selectedClientId || null,
+        dateStart: dateStart || null,
+        dateEnd: dateEnd || null,
+        status: selectedStatuses,
+        search: trimmedSearch || null,
+      },
+    };
+  }, [
+    viewMode,
+    collapsedColumns,
+    selectedClientId,
+    dateStart,
+    dateEnd,
+    selectedStatuses,
+    searchTerm,
+  ]);
+
+  React.useEffect(() => {
+    if (!preferencesHydrated) return;
+
+    const serialized = serializePreferences(preferencesPayload);
+    if (serialized === lastSavedRef.current) return;
+
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = setTimeout(() => {
+      preferencesMutation.mutate(preferencesPayload);
+      lastSavedRef.current = serialized;
+    }, 600);
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [preferencesHydrated, preferencesPayload, preferencesMutation]);
 
   const clientMap = useMemo(() => {
     const map = new Map();
@@ -439,6 +604,8 @@ export default function Posts() {
             onEdit={handleEdit}
             onStatusChange={handleStatusChange}
             isLoading={isLoading}
+            collapsedColumns={collapsedColumns}
+            onCollapsedChange={setCollapsedColumns}
           />
         )}
       </div>

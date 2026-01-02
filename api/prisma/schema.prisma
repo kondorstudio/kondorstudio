@@ -126,6 +126,7 @@ model Tenant {
 
   // Relações 1:N
   users            User[]            @relation("TenantUsers")
+  userPreferences  UserPreference[]
   teams            Team[]
   teamMembers      TeamMember[]
   clients          Client[]
@@ -182,6 +183,7 @@ model User {
   auditLogs          AuditLog[]
   supportNotes       TenantNote[]   @relation("TenantNoteAuthor")
   mfaChallenges      MfaChallenge[]
+  preferences        UserPreference[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -190,6 +192,26 @@ model User {
   @@index([username])
   @@index([tenantId])
   @@map("users")
+}
+
+model UserPreference {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  postsViewMode          String?
+  kanbanCollapsedColumns Json?
+  lastFilters            Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, tenantId])
+  @@index([tenantId])
+  @@index([userId])
+  @@map("user_preferences")
 }
 
 model MfaChallenge {

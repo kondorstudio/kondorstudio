@@ -7,27 +7,6 @@ import {
   resolveWorkflowStatus,
 } from "@/utils/postStatus.js";
 
-const STORAGE_KEY = "kondor_posts_kanban_collapsed";
-
-function loadCollapsedState() {
-  if (typeof window === "undefined") return {};
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch (err) {
-    return {};
-  }
-}
-
-function persistCollapsedState(state) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch (err) {
-    return;
-  }
-}
-
 export default function Postkanban({
   posts = [],
   clients = [],
@@ -35,12 +14,20 @@ export default function Postkanban({
   onEdit,
   onStatusChange,
   isLoading,
+  collapsedColumns,
+  onCollapsedChange,
 }) {
-  const [collapsed, setCollapsed] = React.useState(() => loadCollapsedState());
+  const isControlled = collapsedColumns !== undefined;
+  const [internalCollapsed, setInternalCollapsed] = React.useState(
+    () => collapsedColumns || {}
+  );
 
   React.useEffect(() => {
-    persistCollapsedState(collapsed);
-  }, [collapsed]);
+    if (!isControlled) return;
+    setInternalCollapsed(collapsedColumns || {});
+  }, [collapsedColumns, isControlled]);
+
+  const collapsed = isControlled ? collapsedColumns || internalCollapsed : internalCollapsed;
 
   const groupedPosts = React.useMemo(() => {
     const next = {};
@@ -86,10 +73,12 @@ export default function Postkanban({
   );
 
   const toggleColumn = (key) => {
-    setCollapsed((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }));
+    const next = {
+      ...collapsed,
+      [key]: !collapsed?.[key],
+    };
+    setInternalCollapsed(next);
+    if (onCollapsedChange) onCollapsedChange(next);
   };
 
   return (
@@ -98,7 +87,7 @@ export default function Postkanban({
         {WORKFLOW_STATUS_ORDER.map((key) => {
           const config = WORKFLOW_STATUS_CONFIG[key];
           const Icon = config?.icon;
-          const isCollapsed = Boolean(collapsed[key]);
+          const isCollapsed = Boolean(collapsed?.[key]);
           const items = groupedPosts[key] || [];
 
           return (
@@ -109,10 +98,18 @@ export default function Postkanban({
               }`}
             >
               <div className="flex h-full flex-col rounded-[16px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-sm)]">
-                <header className={`flex items-start justify-between gap-2 ${isCollapsed ? "flex-col" : ""}`}>
-                  <div className={`flex items-start gap-2 ${isCollapsed ? "flex-col" : ""}`}>
+                <header
+                  className={`flex items-start justify-between gap-2 ${
+                    isCollapsed ? "flex-col" : ""
+                  }`}
+                >
+                  <div
+                    className={`flex items-start gap-2 ${isCollapsed ? "flex-col" : ""}`}
+                  >
                     {Icon ? (
-                      <Icon className={`h-5 w-5 ${config?.tone || "text-slate-500"}`} />
+                      <Icon
+                        className={`h-5 w-5 ${config?.tone || "text-slate-500"}`}
+                      />
                     ) : null}
                     {!isCollapsed ? (
                       <div>
@@ -126,7 +123,9 @@ export default function Postkanban({
                     ) : null}
                   </div>
 
-                  <div className={`flex items-center gap-2 ${isCollapsed ? "flex-col" : ""}`}>
+                  <div
+                    className={`flex items-center gap-2 ${isCollapsed ? "flex-col" : ""}`}
+                  >
                     <span className="rounded-full border border-[var(--border)] bg-[var(--surface-muted)] px-2.5 py-1 text-xs font-semibold text-[var(--text)]">
                       {items.length}
                     </span>

@@ -902,6 +902,19 @@ const Admin = {
   },
 };
 
+const Me = {
+  async getPreferences() {
+    return jsonFetch("/me/preferences", { method: "GET" });
+  },
+
+  async updatePreferences(payload) {
+    return jsonFetch("/me/preferences", {
+      method: "PATCH",
+      body: JSON.stringify(payload || {}),
+    });
+  },
+};
+
 // --------------------
 // Export principal
 // --------------------
@@ -948,5 +961,6 @@ export const base44 = {
     getAccessToken,
     getRefreshToken,
   },
+  me: Me,
   admin: Admin,
 };
