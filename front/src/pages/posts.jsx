@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { base44 } from "@/apiClient/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button.jsx";
@@ -63,9 +64,9 @@ const serializePreferences = (payload) => {
 };
 
 export default function Posts() {
+  const navigate = useNavigate();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPost, setEditingPost] = useState(null);
-  const [prefillDate, setPrefillDate] = useState(null);
   const [activeClientId, setActiveClientId] = useActiveClient();
   const [selectedClientId, setSelectedClientId] = useState(activeClientId || "");
   const [dateStart, setDateStart] = useState("");
@@ -93,14 +94,22 @@ export default function Posts() {
   const handleDialogClose = React.useCallback(() => {
     setDialogOpen(false);
     setEditingPost(null);
-    setPrefillDate(null);
   }, []);
 
-  const handleNewPost = React.useCallback((date) => {
-    setEditingPost(null);
-    setPrefillDate(date || null);
-    setDialogOpen(true);
-  }, []);
+  const handleNewPost = React.useCallback(
+    (date) => {
+      const params = new URLSearchParams();
+      if (selectedClientId) {
+        params.set("clientId", selectedClientId);
+      }
+      if (date instanceof Date && !Number.isNaN(date.getTime())) {
+        params.set("date", date.toLocaleDateString("en-CA"));
+      }
+      const query = params.toString();
+      navigate(`/posts/new${query ? `?${query}` : ""}`);
+    },
+    [navigate, selectedClientId]
+  );
 
   const { data: clients = [] } = useQuery({
     queryKey: ["clients"],
@@ -620,7 +629,6 @@ export default function Posts() {
         open={dialogOpen}
         onClose={handleDialogClose}
         post={editingPost}
-        initialScheduleDate={prefillDate}
         defaultClientId={selectedClientId}
         clients={clients}
         integrations={integrations}

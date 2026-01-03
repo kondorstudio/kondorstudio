@@ -9,6 +9,7 @@ const AdminRoute = lazy(() => import("./components/adminRoute.jsx"));
 const Dashboard = lazy(() => import("./pages/dashboard.jsx"));
 const Clients = lazy(() => import("./pages/clients.jsx"));
 const Posts = lazy(() => import("./pages/posts.jsx"));
+const PostCreate = lazy(() => import("./pages/post-create.jsx"));
 const Tasks = lazy(() => import("./pages/tasks.jsx"));
 const Financeiro = lazy(() => import("./pages/financeiro.jsx"));
 const Team = lazy(() => import("./pages/team.jsx"));
@@ -99,6 +100,7 @@ export default function App() {
           <Route element={<Layout />}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/clients" element={<Clients />} />
+            <Route path="/posts/new" element={<PostCreate />} />
             <Route path="/posts" element={<Posts />} />
             <Route path="/tasks" element={<Tasks />} />
             <Route path="/financeiro" element={<Financeiro />} />

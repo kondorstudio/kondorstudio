@@ -77,9 +77,12 @@ function parseTags(value) {
     .map((tag) => (tag.startsWith("#") ? tag : `#${tag}`));
 }
 
-export default function Postformdialog({
-  open,
-  onClose,
+export function PostForm({
+  open = true,
+  onCancel,
+  showHeader = true,
+  containerClassName = "",
+  headerClassName = "",
   post,
   defaultClientId = "",
   initialScheduleDate = null,
@@ -116,6 +119,7 @@ export default function Postformdialog({
     disableComments: false,
   });
   const fileInputRef = useRef(null);
+  const isActive = open !== false;
 
   const resetState = () => {
     const metadata = post?.metadata || {};
@@ -195,9 +199,9 @@ export default function Postformdialog({
   };
 
   useEffect(() => {
-    if (!open) return;
+    if (!isActive) return;
     resetState();
-  }, [post, open, defaultClientId, initialScheduleDate]);
+  }, [post, isActive, defaultClientId, initialScheduleDate]);
 
   useEffect(() => {
     return () => {
@@ -477,44 +481,47 @@ export default function Postformdialog({
   );
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[92vh] overflow-hidden p-0">
-        <DialogHeader className="border-b border-[var(--border)] px-6 py-4">
+    <div className={`flex h-full flex-col ${containerClassName}`}>
+      {showHeader ? (
+        <DialogHeader
+          className={`border-b border-[var(--border)] px-6 py-4 ${headerClassName}`}
+        >
           <DialogTitle>{post ? "Editar post" : "Novo post"}</DialogTitle>
           <p className="text-xs text-[var(--text-muted)]">
             Configure perfis, canais, conteudo e agendamento no mesmo fluxo.
           </p>
         </DialogHeader>
+      ) : null}
 
-        <form onSubmit={handleSubmit} className="flex h-full flex-col">
-          <div className="grid flex-1 gap-6 overflow-y-auto px-6 py-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-            <div className="space-y-6">
-              <StepCard
-                step="1"
-                title="Selecione perfis"
-                subtitle="Escolha o perfil e um grupo (opcional)."
-              >
-                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
-                  <div className="space-y-2">
-                    <Label>Perfil</Label>
-                    <select
-                      value={formData.clientId}
-                      onChange={handleChange("clientId")}
-                      className="w-full h-10 rounded-[10px] border border-[var(--border)] bg-white px-3 text-sm text-[var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[rgba(109,40,217,0.2)]"
-                    >
-                      <option value="">Selecione um cliente</option>
-                      {clients.map((client) => (
-                        <option key={client.id} value={client.id}>
-                          {client.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <Button type="button" variant="outline" size="sm" className="self-end">
-                    Selecionar um grupo
-                  </Button>
+      <form onSubmit={handleSubmit} className="flex h-full flex-col">
+        <div className="grid flex-1 gap-6 overflow-y-auto px-6 py-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="space-y-6">
+            <StepCard
+              step="1"
+              title="Selecione perfis"
+              subtitle="Escolha o perfil e um grupo (opcional)."
+            >
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+                <div className="space-y-2">
+                  <Label>Perfil</Label>
+                  <select
+                    value={formData.clientId}
+                    onChange={handleChange("clientId")}
+                    className="w-full h-10 rounded-[10px] border border-[var(--border)] bg-white px-3 text-sm text-[var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[rgba(109,40,217,0.2)]"
+                  >
+                    <option value="">Selecione um cliente</option>
+                    {clients.map((client) => (
+                      <option key={client.id} value={client.id}>
+                        {client.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              </StepCard>
+                <Button type="button" variant="outline" size="sm" className="self-end">
+                  Selecionar um grupo
+                </Button>
+              </div>
+            </StepCard>
 
               <StepCard
                 step="2"
@@ -911,65 +918,85 @@ export default function Postformdialog({
             </aside>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] bg-white px-6 py-4">
-            {post && onDelete ? (
-              <Button
-                type="button"
-                variant="danger"
-                onClick={() => {
-                  if (
-                    !isDeleting &&
-                    window.confirm("Tem certeza que deseja excluir este post?")
-                  ) {
-                    onDelete();
-                  }
-                }}
-                disabled={isSaving || isUploading || isDeleting}
-              >
-                {isDeleting ? "Excluindo..." : "Excluir post"}
-              </Button>
-            ) : (
-              <div />
-            )}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] bg-white px-6 py-4">
+          {post && onDelete ? (
+            <Button
+              type="button"
+              variant="danger"
+              onClick={() => {
+                if (
+                  !isDeleting &&
+                  window.confirm("Tem certeza que deseja excluir este post?")
+                ) {
+                  onDelete();
+                }
+              }}
+              disabled={isSaving || isUploading || isDeleting}
+            >
+              {isDeleting ? "Excluindo..." : "Excluir post"}
+            </Button>
+          ) : (
+            <div />
+          )}
 
-            <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" variant="ghost" onClick={onClose}>
-                Cancelar
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => submitPost("DRAFT")}
-                disabled={isSaving || isUploading || isDeleting}
-              >
-                Salvar rascunho
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => submitPost("CLIENT_APPROVAL")}
-                disabled={isSaving || isUploading || isDeleting}
-              >
-                Enviar para aprovacao
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => submitPost("DONE")}
-                disabled={isSaving || isUploading || isDeleting}
-              >
-                Publicar agora
-              </Button>
-              <Button
-                type="button"
-                onClick={() => submitPost("SCHEDULED")}
-                disabled={isSaving || isUploading || isDeleting}
-              >
-                {isSaving ? "Salvando..." : "Agendar"}
-              </Button>
-            </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                if (onCancel) onCancel();
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => submitPost("DRAFT")}
+              disabled={isSaving || isUploading || isDeleting}
+            >
+              Salvar rascunho
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => submitPost("CLIENT_APPROVAL")}
+              disabled={isSaving || isUploading || isDeleting}
+            >
+              Enviar para aprovacao
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => submitPost("DONE")}
+              disabled={isSaving || isUploading || isDeleting}
+            >
+              Publicar agora
+            </Button>
+            <Button
+              type="button"
+              onClick={() => submitPost("SCHEDULED")}
+              disabled={isSaving || isUploading || isDeleting}
+            >
+              {isSaving ? "Salvando..." : "Agendar"}
+            </Button>
           </div>
-        </form>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+export default function Postformdialog({ open, onClose, ...props }) {
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-6xl max-h-[92vh] overflow-hidden p-0">
+        <PostForm
+          {...props}
+          open={open}
+          onCancel={onClose}
+          containerClassName="h-full"
+        />
       </DialogContent>
     </Dialog>
   );
