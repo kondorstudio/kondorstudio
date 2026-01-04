@@ -624,6 +624,30 @@ const Creative = createEntityClient("/creatives");
 const Integration = createEntityClient("/integrations");
 
 // --------------------
+// Competitors
+// --------------------
+
+const Competitor = {
+  ...createEntityClient("/competitors"),
+
+  async listSnapshots(id, params) {
+    const qs = buildQuery(params);
+    return jsonFetch(`/competitors/${id}/snapshots${qs}`, { method: "GET" });
+  },
+
+  async createSnapshot(id, payload) {
+    return jsonFetch(`/competitors/${id}/snapshots`, {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    });
+  },
+
+  async sync(id) {
+    return jsonFetch(`/competitors/${id}/sync`, { method: "POST" });
+  },
+};
+
+// --------------------
 // Metrics (CRUD + filtros customizados)
 // --------------------
 
@@ -960,6 +984,7 @@ export const base44 = {
     FinancialRecord,
     Creative,
     Integration,
+    Competitor,
   },
   uploads: {
     uploadFile,

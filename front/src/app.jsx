@@ -15,6 +15,7 @@ const Financeiro = lazy(() => import("./pages/financeiro.jsx"));
 const Team = lazy(() => import("./pages/team.jsx"));
 const Biblioteca = lazy(() => import("./pages/biblioteca.jsx"));
 const Metrics = lazy(() => import("./pages/metrics.jsx"));
+const Competitors = lazy(() => import("./pages/competitors.jsx"));
 const Integrations = lazy(() => import("./pages/integrations.jsx"));
 const Settings = lazy(() => import("./pages/settings.jsx"));
 
@@ -107,6 +108,7 @@ export default function App() {
             <Route path="/team" element={<Team />} />
             <Route path="/biblioteca" element={<Biblioteca />} />
             <Route path="/metrics" element={<Metrics />} />
+            <Route path="/competitors" element={<Competitors />} />
             <Route path="/integrations" element={<Integrations />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/onboarding" element={<Onboarding />} />

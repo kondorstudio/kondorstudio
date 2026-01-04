@@ -143,6 +143,8 @@ model Tenant {
   tasks            Task[]
   metrics          Metric[]
   creatives        Creative[]
+  competitors      Competitor[]
+  competitorSnapshots CompetitorSnapshot[]
   invoices         Invoice[]
   payments         Payment[]
   jobHistory       JobHistory[]
@@ -337,6 +339,7 @@ model Client {
   financialRecords FinancialRecord[]
   integrations     Integration[]
   metrics          Metric[]   @relation("ClientMetrics")
+  competitors      Competitor[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -511,6 +514,57 @@ model Metric {
   @@index([integrationId])
   @@index([collectedAt])
   @@map("metrics")
+}
+
+model Competitor {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clientId  String?
+  client    Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  platform  String   @default("instagram")
+  username  String
+  name      String?
+  profileUrl String?
+  avatarUrl  String?
+  status    String   @default("ACTIVE")
+  notes     String?
+  metadata  Json?
+
+  snapshots CompetitorSnapshot[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, clientId, platform, username])
+  @@index([tenantId])
+  @@index([clientId])
+  @@index([platform])
+  @@map("competitors")
+}
+
+model CompetitorSnapshot {
+  id           String   @id @default(uuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  competitorId String
+  competitor   Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+  platform     String?
+  followers    Int?
+  postsCount   Int?
+  engagementRate Float?
+  interactions Int?
+  likes        Int?
+  comments     Int?
+  rangeFrom    DateTime?
+  rangeTo      DateTime?
+  collectedAt  DateTime @default(now())
+  meta         Json?
+
+  @@index([tenantId])
+  @@index([competitorId])
+  @@index([collectedAt])
+  @@map("competitor_snapshots")
 }
 
 model Creative {

@@ -83,6 +83,12 @@ const navGroups = [
     label: "Insights",
     items: [
       { to: "/metrics", label: "Metricas", icon: BarChart3 },
+      {
+        to: "/competitors",
+        label: "Concorrentes",
+        icon: Users,
+        prefetch: { key: ["competitors"], fn: () => base44.entities.Competitor.list() },
+      },
     ],
   },
   {
