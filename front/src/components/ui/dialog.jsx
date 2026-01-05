@@ -1,5 +1,6 @@
 // front/src/components/ui/dialog.jsx
 import React from "react";
+import { createPortal } from "react-dom";
 
 /**
  * Implementação simples de Dialog no estilo shadcn/ui
@@ -15,7 +16,7 @@ export function Dialog({ open, onOpenChange, children }) {
     if (onOpenChange) onOpenChange(false);
   };
 
-  return (
+  const dialogContent = (
     <div className="fixed inset-0 z-50">
       {/* Overlay */}
       <div
@@ -29,6 +30,9 @@ export function Dialog({ open, onOpenChange, children }) {
       </div>
     </div>
   );
+
+  if (typeof document === "undefined") return dialogContent;
+  return createPortal(dialogContent, document.body);
 }
 
 export function DialogContent({ className = "", children, ...props }) {
