@@ -3,7 +3,9 @@ import React from "react";
 import { cn } from "@/utils/classnames.js";
 export function Badge({ className, variant = "default", ...props }) {
   const baseClasses =
-    "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors";
+    "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium " +
+    "transition-[color,background-color,border-color,box-shadow] duration-[var(--motion-fast)] ease-[var(--ease-standard)] " +
+    "shadow-[var(--shadow-sm)]";
 
   const variants = {
     default: "bg-[var(--primary-light)] text-[var(--primary)] border-transparent",

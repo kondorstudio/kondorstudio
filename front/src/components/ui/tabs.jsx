@@ -32,7 +32,8 @@ export function TabsList({ children, className = "" }) {
   return (
     <div
       className={
-        "inline-flex items-center rounded-[12px] border border-[var(--border)] bg-[var(--surface-muted)] p-1 text-[var(--text-muted)] " +
+        "inline-flex items-center rounded-[12px] border border-[var(--border)] bg-white/70 p-1 text-[var(--text-muted)] " +
+        "shadow-[var(--shadow-sm)] backdrop-blur " +
         className
       }
     >
@@ -56,10 +57,10 @@ export function TabsTrigger({ value, children, className = "" }) {
       type="button"
       onClick={() => ctx.setValue(value)}
       className={
-        "px-3 py-1.5 text-sm font-medium rounded-[10px] transition-colors " +
+        "px-3 py-1.5 text-sm font-medium rounded-[10px] transition-[color,background-color,box-shadow,transform] duration-[var(--motion-base)] ease-[var(--ease-standard)] " +
         (isActive
           ? "bg-white text-[var(--primary)] shadow-[var(--shadow-sm)]"
-          : "text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-white/70") +
+          : "text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-white/70 hover:-translate-y-0.5") +
         " " +
         className
       }

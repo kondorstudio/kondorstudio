@@ -60,7 +60,11 @@ body,
 
 body {
   margin: 0;
-  background: var(--background);
+  background:
+    radial-gradient(900px 520px at 12% -10%, rgba(109, 40, 217, 0.12), transparent 60%),
+    radial-gradient(800px 520px at 88% -15%, rgba(14, 165, 233, 0.12), transparent 60%),
+    var(--background);
+  background-attachment: fixed;
   color: var(--text);
   -webkit-font-smoothing: antialiased;
 }

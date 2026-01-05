@@ -12,22 +12,23 @@ export function Button({
   ...props
 }) {
   const baseClasses =
-    "inline-flex items-center justify-center gap-2 border text-sm font-semibold transition-colors " +
+    "inline-flex items-center justify-center gap-2 border text-sm font-semibold " +
+    "transition-[transform,box-shadow,background-color,border-color,color] duration-[var(--motion-base)] ease-[var(--ease-standard)] " +
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 " +
-    "focus-visible:ring-[rgba(109,40,217,0.35)] disabled:opacity-50 disabled:cursor-not-allowed";
+    "focus-visible:ring-[rgba(109,40,217,0.35)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none";
 
   const variantClasses = {
     primary:
-      "bg-[var(--primary)] border-transparent text-white hover:bg-[var(--primary-dark)]",
+      "bg-[var(--primary)] border-transparent text-white shadow-[var(--shadow-sm)] hover:bg-[var(--primary-dark)] hover:shadow-[var(--shadow-md)] hover:-translate-y-0.5",
     default:
-      "bg-[var(--primary)] border-transparent text-white hover:bg-[var(--primary-dark)]",
+      "bg-[var(--primary)] border-transparent text-white shadow-[var(--shadow-sm)] hover:bg-[var(--primary-dark)] hover:shadow-[var(--shadow-md)] hover:-translate-y-0.5",
     secondary:
-      "bg-white border-[var(--border)] text-[var(--text)] hover:bg-slate-50",
+      "bg-white border-[var(--border)] text-[var(--text)] hover:bg-slate-50 hover:shadow-[var(--shadow-sm)] hover:-translate-y-0.5",
     outline:
-      "bg-white border-[var(--border)] text-[var(--text)] hover:bg-slate-50",
+      "bg-white border-[var(--border)] text-[var(--text)] hover:bg-slate-50 hover:shadow-[var(--shadow-sm)] hover:-translate-y-0.5",
     ghost:
       "bg-transparent border-transparent text-[var(--text-muted)] hover:bg-slate-100 hover:text-[var(--text)]",
-    danger: "bg-red-600 border-transparent text-white hover:bg-red-700",
+    danger: "bg-red-600 border-transparent text-white shadow-[var(--shadow-sm)] hover:bg-red-700 hover:shadow-[var(--shadow-md)] hover:-translate-y-0.5",
     link: "bg-transparent border-transparent text-[var(--primary)] underline-offset-4 hover:underline",
   };
 

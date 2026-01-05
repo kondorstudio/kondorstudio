@@ -191,7 +191,7 @@ function LayoutContent() {
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--text)] flex">
       <Sidebar className="hidden lg:flex">
-        <SidebarHeader className={`border-[var(--border)] ${collapsed ? "px-3" : "px-4"}`}>
+        <SidebarHeader className={`border-[var(--border)] bg-white/80 backdrop-blur ${collapsed ? "px-3" : "px-4"}`}>
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <img src={logoHeader} alt="Kondor Studio" className="h-9 w-auto" />
@@ -215,11 +215,11 @@ function LayoutContent() {
                         to={item.to}
                         className={({ isActive }) =>
                           [
-                            "flex items-center rounded-[10px] py-2 text-sm font-medium transition",
+                            "flex items-center rounded-[10px] py-2 text-sm font-medium transition-[background-color,box-shadow,color] duration-[var(--motion-fast)] ease-[var(--ease-standard)]",
                             collapsed ? "justify-center px-2" : "gap-3 px-3",
                             isActive
-                              ? "bg-[var(--primary-light)] text-[var(--primary)]"
-                              : "text-[var(--text-muted)] hover:bg-[var(--surface-muted)]",
+                              ? "bg-[linear-gradient(135deg,rgba(109,40,217,0.14),rgba(14,165,233,0.1))] text-[var(--primary)] shadow-[var(--shadow-sm)]"
+                              : "text-[var(--text-muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--text)] hover:shadow-[var(--shadow-sm)]",
                           ].join(" ")
                         }
                         onMouseEnter={() => handlePrefetch(item.prefetch)}
@@ -236,7 +236,7 @@ function LayoutContent() {
           ))}
         </SidebarContent>
 
-        <SidebarFooter className={`border-[var(--border)] ${collapsed ? "px-3" : "px-4"}`}>
+        <SidebarFooter className={`border-[var(--border)] bg-white/80 backdrop-blur ${collapsed ? "px-3" : "px-4"}`}>
           <div className={`flex flex-col gap-3 ${collapsed ? "items-center" : ""}`}>
             <div className={`flex items-center gap-3 ${collapsed ? "flex-col" : ""}`}>
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--surface-muted)] text-xs font-semibold text-slate-700">
@@ -270,12 +270,12 @@ function LayoutContent() {
       </Sidebar>
 
       <div className="flex-1 flex flex-col">
-        <header className="sticky top-0 z-40 flex flex-wrap items-center justify-between gap-4 border-b border-[var(--border)] bg-[var(--surface)] px-6 py-4">
+        <header className="sticky top-0 z-40 flex flex-wrap items-center justify-between gap-4 border-b border-[var(--border)] bg-white/90 px-6 py-4 shadow-[var(--shadow-sm)] backdrop-blur">
           <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={toggleMobile}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-[10px] border border-[var(--border)] text-[var(--text-muted)] lg:hidden"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-[10px] border border-[var(--border)] text-[var(--text-muted)] transition-[background-color,box-shadow] duration-[var(--motion-fast)] ease-[var(--ease-standard)] hover:bg-[var(--surface-muted)] hover:shadow-[var(--shadow-sm)] lg:hidden"
               aria-label={mobileOpen ? "Fechar menu" : "Abrir menu"}
             >
               {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -290,7 +290,7 @@ function LayoutContent() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-3 rounded-[12px] border border-[var(--border)] bg-white px-3 py-2">
+            <div className="flex items-center gap-3 rounded-[12px] border border-[var(--border)] bg-white/80 px-3 py-2 shadow-[var(--shadow-sm)] backdrop-blur">
               <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
                 Perfil
               </span>
@@ -335,7 +335,7 @@ function LayoutContent() {
                   <button
                     type="button"
                     onClick={closeMobile}
-                    className="rounded-[10px] border border-[var(--border)] p-2 text-[var(--text-muted)]"
+                    className="rounded-[10px] border border-[var(--border)] p-2 text-[var(--text-muted)] transition-[background-color,box-shadow] duration-[var(--motion-fast)] ease-[var(--ease-standard)] hover:bg-[var(--surface-muted)] hover:shadow-[var(--shadow-sm)]"
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -355,10 +355,10 @@ function LayoutContent() {
                               to={item.to}
                               className={({ isActive }) =>
                                 [
-                                  "flex items-center gap-3 rounded-[10px] px-3 py-2 text-sm font-medium",
+                                  "flex items-center gap-3 rounded-[10px] px-3 py-2 text-sm font-medium transition-[background-color,box-shadow,color] duration-[var(--motion-fast)] ease-[var(--ease-standard)]",
                                   isActive
-                                    ? "bg-[var(--primary-light)] text-[var(--primary)]"
-                                    : "text-[var(--text-muted)] hover:bg-[var(--surface-muted)]",
+                                    ? "bg-[linear-gradient(135deg,rgba(109,40,217,0.14),rgba(14,165,233,0.1))] text-[var(--primary)] shadow-[var(--shadow-sm)]"
+                                    : "text-[var(--text-muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--text)] hover:shadow-[var(--shadow-sm)]",
                                 ].join(" ")
                               }
                               onClick={closeMobile}

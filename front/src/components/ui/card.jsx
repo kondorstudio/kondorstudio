@@ -6,6 +6,8 @@ export function Card({ className = "", ...props }) {
     <div
       className={
         "rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-sm)] " +
+        "transition-[box-shadow,border-color] duration-[var(--motion-base)] ease-[var(--ease-standard)] " +
+        "hover:shadow-[var(--shadow-md)] hover:border-slate-200/80 " +
         className
       }
       {...props}

@@ -119,7 +119,9 @@ export function SelectTrigger({ children, className = "", onClick, ...props }) {
     <button
       type="button"
       className={
-        "flex h-10 w-full items-center justify-between rounded-[10px] border border-[var(--border)] bg-white px-3 text-sm text-[var(--text)] shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[rgba(109,40,217,0.2)] " +
+        "flex h-10 w-full items-center justify-between rounded-[10px] border border-[var(--border)] bg-white px-3 text-sm text-[var(--text)] shadow-sm " +
+        "transition-[border-color,box-shadow,background-color] duration-[var(--motion-fast)] ease-[var(--ease-standard)] " +
+        "hover:bg-gray-50 hover:shadow-[var(--shadow-sm)] focus:outline-none focus:ring-2 focus:ring-[rgba(109,40,217,0.2)] " +
         className
       }
       {...props}
@@ -148,6 +150,7 @@ export function SelectContent({ children, className = "", ...props }) {
     <div
       className={
         "absolute left-0 right-0 mt-1 z-50 max-h-60 w-full overflow-auto rounded-[10px] border border-[var(--border)] bg-white p-1 shadow-lg " +
+        "animate-fade-in-up " +
         className
       }
       {...props}
@@ -183,7 +186,7 @@ export function SelectItem({ children, value, className = "", onClick, ...props 
       data-value={value}
       onClick={handleClick}
       className={
-        "cursor-pointer rounded-[8px] px-2 py-1.5 text-sm hover:bg-[var(--primary-light)] " +
+        "cursor-pointer rounded-[8px] px-2 py-1.5 text-sm transition-[background-color,color] duration-[var(--motion-fast)] ease-[var(--ease-standard)] hover:bg-[var(--primary-light)] " +
         (isSelected ? "bg-[var(--primary-light)] text-[var(--primary)]" : "text-gray-800") +
         " " +
         className

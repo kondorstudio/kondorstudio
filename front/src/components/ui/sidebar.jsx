@@ -36,7 +36,7 @@ export function Sidebar({ className = "", children }) {
   return (
     <aside
       data-collapsed={collapsed ? "true" : "false"}
-      className={`flex h-screen flex-col overflow-hidden bg-[var(--surface)] border-r border-[var(--border)] transition-[width] duration-200 ${
+      className={`flex h-screen flex-col overflow-hidden bg-[var(--surface)] border-r border-[var(--border)] shadow-[0_18px_45px_rgba(15,23,42,0.06)] transition-[width,box-shadow] duration-200 ${
         collapsed ? "w-16" : "w-64"
       } ${className}`}
     >
@@ -103,7 +103,7 @@ export function SidebarMenuButton({ className = "", children, ...props }) {
   return (
     <button
       type="button"
-      className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-[var(--text)] hover:bg-[var(--surface-muted)] ${className}`}
+      className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-[var(--text)] transition-[background-color,box-shadow] duration-[var(--motion-fast)] ease-[var(--ease-standard)] hover:bg-[var(--surface-muted)] hover:shadow-[var(--shadow-sm)] ${className}`}
       {...props}
     >
       {children}
@@ -120,7 +120,7 @@ export function SidebarTrigger({ className = "", children, ...props }) {
     <button
       type="button"
       onClick={toggleCollapsed}
-      className={`inline-flex items-center justify-center rounded-[10px] border border-[var(--border)] px-2 py-1 text-xs text-[var(--text-muted)] hover:bg-[var(--surface-muted)] ${className}`}
+      className={`inline-flex items-center justify-center rounded-[10px] border border-[var(--border)] px-2 py-1 text-xs text-[var(--text-muted)] transition-[background-color,box-shadow] duration-[var(--motion-fast)] ease-[var(--ease-standard)] hover:bg-[var(--surface-muted)] hover:shadow-[var(--shadow-sm)] ${className}`}
       {...props}
     >
       {children}

@@ -11,7 +11,9 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        "rounded-[12px] border border-dashed border-[var(--border)] bg-[var(--surface)] px-6 py-8 text-center",
+        "rounded-[12px] border border-dashed border-[var(--border)] " +
+          "bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(109,40,217,0.04))] " +
+          "px-6 py-8 text-center shadow-[var(--shadow-sm)] animate-fade-in-up",
         className
       )}
     >

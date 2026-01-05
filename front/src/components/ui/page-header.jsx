@@ -5,10 +5,11 @@ export function PageHeader({ title, subtitle, kicker, actions, className = "" })
   return (
     <div
       className={cn(
-        "flex flex-col gap-3 border-b border-[var(--border)] pb-5 md:flex-row md:items-center md:justify-between",
+        "relative flex flex-col gap-3 border-b border-[var(--border)] pb-5 md:flex-row md:items-center md:justify-between",
         className
       )}
     >
+      <div className="absolute -bottom-px left-0 h-[2px] w-24 rounded-full bg-gradient-to-r from-[var(--primary)] via-[var(--accent-sky)] to-transparent" />
       <div className="space-y-1">
         {kicker ? (
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">

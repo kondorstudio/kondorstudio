@@ -19,7 +19,7 @@ export function Dialog({ open, onOpenChange, children }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Overlay */}
       <div
-        className="fixed inset-0 bg-black/40"
+        className="fixed inset-0 bg-black/40 backdrop-blur-sm"
         onClick={handleOverlayClick}
       />
 
@@ -34,7 +34,7 @@ export function DialogContent({ className = "", children, ...props }) {
     <div
       className={
         "bg-white rounded-2xl shadow-xl border border-gray-200 " +
-        "w-[calc(100vw-2rem)] max-w-full sm:max-w-lg mx-auto p-4 sm:p-6 " +
+        "w-[calc(100vw-2rem)] max-w-full sm:max-w-lg mx-auto p-4 sm:p-6 animate-fade-in-up " +
         className
       }
       {...props}

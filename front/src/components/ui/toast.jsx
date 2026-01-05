@@ -28,7 +28,7 @@ export function Toast({ toast }) {
     <div className="fixed bottom-6 right-6 z-50">
       <div
         role="status"
-        className={`flex items-start gap-2 rounded-[12px] border border-[var(--border)] border-l-4 ${variant.border} bg-white px-4 py-3 shadow-[var(--shadow-md)]`}
+        className={`flex items-start gap-2 rounded-[12px] border border-[var(--border)] border-l-4 ${variant.border} bg-white px-4 py-3 shadow-[var(--shadow-md)] animate-fade-in-up`}
       >
         {Icon ? <Icon className={`h-4 w-4 ${variant.text}`} /> : null}
         <div className="text-sm text-[var(--text)]">{toast.message}</div>
