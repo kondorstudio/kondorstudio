@@ -20,9 +20,16 @@
   --primary-dark: #5b21b6;
   --primary-light: rgba(109, 40, 217, 0.08);
   --accent: #6d28d9;
+  --accent-blue: #2563eb;
+  --accent-teal: #0f766e;
+  --accent-amber: #f59e0b;
+  --accent-rose: #ef4444;
+  --accent-indigo: #4f46e5;
+  --accent-sky: #0ea5e9;
   --background: #f9fafb;
   --surface: #ffffff;
   --surface-muted: #f3f4f6;
+  --surface-elevated: #ffffff;
   --text: #111827;
   --text-muted: #6b7280;
   --border: #e5e7eb;
@@ -31,6 +38,17 @@
   --radius-card: 12px;
   --radius-input: 10px;
   --radius-button: 12px;
+  --chart-1: #6d28d9;
+  --chart-2: #0ea5e9;
+  --chart-3: #14b8a6;
+  --chart-4: #f59e0b;
+  --chart-5: #ef4444;
+  --chart-6: #22c55e;
+  --chart-muted: #e5e7eb;
+  --motion-fast: 120ms;
+  --motion-base: 180ms;
+  --motion-slow: 240ms;
+  --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 html,
@@ -65,7 +83,9 @@ button {
   font-family: inherit;
   border: none;
   cursor: pointer;
-  transition: background 150ms ease, box-shadow 150ms ease;
+  transition: background var(--motion-base) var(--ease-standard),
+    box-shadow var(--motion-base) var(--ease-standard),
+    transform var(--motion-base) var(--ease-standard);
 }
 
 img {
@@ -113,6 +133,54 @@ select:focus {
 
 .animate-fade-in-up {
   animation: kondor-fade-in-up 0.7s ease-out both;
+}
+
+@keyframes kondor-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -4px, 0);
+  }
+}
+
+@keyframes kondor-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.04);
+  }
+}
+
+@keyframes kondor-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.kondor-float {
+  animation: kondor-float 3.2s ease-in-out infinite;
+}
+
+.kondor-pulse {
+  animation: kondor-pulse 2.4s ease-in-out infinite;
+}
+
+.kondor-shimmer {
+  background: linear-gradient(
+    110deg,
+    rgba(148, 163, 184, 0.15) 8%,
+    rgba(148, 163, 184, 0.35) 18%,
+    rgba(148, 163, 184, 0.15) 33%
+  );
+  background-size: 200% 100%;
+  animation: kondor-shimmer 1.4s linear infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
