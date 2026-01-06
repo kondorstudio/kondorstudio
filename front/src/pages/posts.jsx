@@ -79,8 +79,36 @@ export default function Posts() {
   const [preferencesHydrated, setPreferencesHydrated] = useState(false);
   const lastSavedRef = React.useRef("");
   const saveTimeoutRef = React.useRef(null);
+  const mainScrollRef = React.useRef(null);
+  const scrollSnapshotRef = React.useRef(0);
+  const shouldRestoreScrollRef = React.useRef(false);
   const queryClient = useQueryClient();
   const { toast, showToast } = useToast();
+
+  const getMainScroll = () => {
+    if (mainScrollRef.current) return mainScrollRef.current;
+    if (typeof document === "undefined") return null;
+    mainScrollRef.current = document.querySelector("main");
+    return mainScrollRef.current;
+  };
+
+  const captureScrollPosition = () => {
+    const container = getMainScroll();
+    if (!container) return;
+    scrollSnapshotRef.current = container.scrollTop;
+    shouldRestoreScrollRef.current = true;
+  };
+
+  React.useLayoutEffect(() => {
+    if (!shouldRestoreScrollRef.current) return;
+    shouldRestoreScrollRef.current = false;
+    const container = getMainScroll();
+    if (!container) return;
+    const targetScrollTop = scrollSnapshotRef.current;
+    if (Math.abs(container.scrollTop - targetScrollTop) > 1) {
+      container.scrollTop = targetScrollTop;
+    }
+  });
 
   React.useEffect(() => {
     if (activeClientId === selectedClientId) return;
@@ -393,6 +421,7 @@ export default function Posts() {
 
   return (
     <PageShell>
+      <div onPointerDownCapture={captureScrollPosition}>
       <PageHeader
         title="Posts"
         subtitle="Gerencie o fluxo de criacao e aprovacao."
@@ -538,6 +567,7 @@ export default function Posts() {
       />
 
       <Toast toast={toast} />
+      </div>
     </PageShell>
   );
 }
