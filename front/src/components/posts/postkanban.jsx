@@ -1,5 +1,5 @@
 import React from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, GripVertical } from "lucide-react";
 import Postcard from "./postcard.jsx";
 import {
   WORKFLOW_STATUS_CONFIG,
@@ -59,16 +59,16 @@ export default function Postkanban({
   }, [integrations]);
 
   const renderSkeletonColumn = () => (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {[1, 2, 3].map((i) => (
-        <div key={i} className="h-20 rounded-[12px] bg-slate-100 animate-pulse" />
+        <div key={i} className="h-28 rounded-[16px] bg-slate-100 animate-pulse" />
       ))}
     </div>
   );
 
   const renderEmptyColumn = () => (
-    <div className="rounded-[12px] border border-dashed border-[var(--border)] bg-[var(--surface-muted)] px-4 py-6 text-center text-xs text-[var(--text-muted)]">
-      Nenhum post nesta coluna.
+    <div className="rounded-[14px] border border-dashed border-[var(--border)] bg-white/80 px-4 py-6 text-center text-xs text-[var(--text-muted)]">
+      Arraste um post para iniciar esta etapa.
     </div>
   );
 
@@ -82,22 +82,34 @@ export default function Postkanban({
   };
 
   return (
-    <div className="rounded-[16px] border border-[var(--border)] bg-[var(--surface)] p-4">
-      <div className="flex w-full gap-4 overflow-x-auto pb-3">
+    <div className="rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-6">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--text-muted)]">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[var(--border)] bg-white">
+            <GripVertical className="h-3.5 w-3.5" />
+          </span>
+          Arraste e solte os cards para mover entre status.
+        </div>
+      </div>
+      <div className="flex w-full gap-6 overflow-x-auto pb-4">
         {WORKFLOW_STATUS_ORDER.map((key) => {
           const config = WORKFLOW_STATUS_CONFIG[key];
           const Icon = config?.icon;
           const isCollapsed = Boolean(collapsed?.[key]);
           const items = groupedPosts[key] || [];
+          const columnBorder = config?.border || "border-[var(--border)]";
+          const columnBg = config?.accentSoft || "bg-white";
+          const accentBar = config?.accent || "bg-slate-300";
 
           return (
             <section
               key={key}
               className={`flex-shrink-0 transition-[width] duration-200 ease-out ${
-                isCollapsed ? "w-[72px]" : "w-[340px]"
+                isCollapsed ? "w-[88px]" : "w-[400px]"
               }`}
             >
-              <div className="flex h-full flex-col rounded-[16px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-sm)]">
+              <div className={`relative flex h-full flex-col rounded-[20px] border ${columnBorder} ${columnBg} p-4 shadow-[var(--shadow-sm)]`}>
+                <div className={`absolute inset-x-0 top-0 h-1.5 ${accentBar}`} />
                 <header
                   className={`flex items-start justify-between gap-2 ${
                     isCollapsed ? "flex-col" : ""
@@ -107,9 +119,11 @@ export default function Postkanban({
                     className={`flex items-start gap-2 ${isCollapsed ? "flex-col" : ""}`}
                   >
                     {Icon ? (
-                      <Icon
-                        className={`h-5 w-5 ${config?.tone || "text-slate-500"}`}
-                      />
+                      <span className={`flex h-9 w-9 items-center justify-center rounded-[12px] border bg-white shadow-[var(--shadow-sm)] ${columnBorder}`}>
+                        <Icon
+                          className={`h-4 w-4 ${config?.tone || "text-slate-500"}`}
+                        />
+                      </span>
                     ) : null}
                     {!isCollapsed ? (
                       <div>
@@ -126,7 +140,7 @@ export default function Postkanban({
                   <div
                     className={`flex items-center gap-2 ${isCollapsed ? "flex-col" : ""}`}
                   >
-                    <span className="rounded-full border border-[var(--border)] bg-[var(--surface-muted)] px-2.5 py-1 text-xs font-semibold text-[var(--text)]">
+                    <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${config?.badge || "bg-[var(--surface-muted)] text-[var(--text)] border-[var(--border)]"}`}>
                       {items.length}
                     </span>
                     <button
@@ -146,7 +160,7 @@ export default function Postkanban({
 
                 {!isCollapsed ? (
                   <div
-                    className="mt-4 flex-1 space-y-3 overflow-y-auto pr-1"
+                    className={`mt-4 flex-1 space-y-4 overflow-y-auto rounded-[16px] border border-dashed ${columnBorder} bg-white/80 p-3 pr-2`}
                     style={{ maxHeight: "calc(100vh - 280px)" }}
                   >
                     {isLoading
