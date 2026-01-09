@@ -138,7 +138,17 @@ function resolveNetworkLabels(post, integration) {
   return fallback ? [fallback] : [];
 }
 
-export default function Postcard({ post, client, integration, onEdit, onStatusChange }) {
+export default function Postcard({
+  post,
+  client,
+  integration,
+  onEdit,
+  onStatusChange,
+  draggable = false,
+  onDragStart,
+  onDragEnd,
+  isDragging = false,
+}) {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [localStatus, setLocalStatus] = React.useState(resolveWorkflowStatus(post));
   const triggerRef = React.useRef(null);
@@ -225,8 +235,14 @@ export default function Postcard({ post, client, integration, onEdit, onStatusCh
 
   return (
     <Card
-      className="group relative w-full overflow-hidden border border-[var(--border)] bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-grab active:cursor-grabbing"
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      className={`group relative w-full overflow-hidden border border-[var(--border)] bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-grab active:cursor-grabbing ${
+        isDragging ? "opacity-60" : ""
+      }`}
       onClick={(event) => {
+        if (isDragging) return;
         // Prevent default click behavior to keep scroll position stable.
         event.preventDefault();
         onEdit && onEdit(post);

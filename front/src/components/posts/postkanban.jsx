@@ -28,6 +28,63 @@ export default function Postkanban({
   }, [collapsedColumns, isControlled]);
 
   const collapsed = isControlled ? collapsedColumns || internalCollapsed : internalCollapsed;
+  const [dragState, setDragState] = React.useState(null);
+  const [dragOverKey, setDragOverKey] = React.useState(null);
+
+  const parseDragPayload = (event) => {
+    const types = Array.from(event.dataTransfer?.types || []);
+    if (!types.includes("application/x-kondor-post")) return null;
+    const raw = event.dataTransfer?.getData("application/x-kondor-post");
+    if (raw) {
+      try {
+        return JSON.parse(raw);
+      } catch (error) {
+        return null;
+      }
+    }
+    return null;
+  };
+
+  const handleDragStart = React.useCallback(
+    (event, postId, fromStatus) => {
+      if (!onStatusChange) return;
+      const payload = { postId, fromStatus };
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("application/x-kondor-post", JSON.stringify(payload));
+      event.dataTransfer.setData("text/plain", String(postId));
+      setDragState(payload);
+    },
+    [onStatusChange]
+  );
+
+  const handleDragEnd = React.useCallback(() => {
+    setDragState(null);
+    setDragOverKey(null);
+  }, []);
+
+  const handleDragOver = React.useCallback(
+    (event, statusKey) => {
+      if (!dragState) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      if (dragOverKey !== statusKey) setDragOverKey(statusKey);
+    },
+    [dragState, dragOverKey]
+  );
+
+  const handleDrop = React.useCallback(
+    (event, statusKey) => {
+      if (!onStatusChange) return;
+      event.preventDefault();
+      const payload = dragState || parseDragPayload(event);
+      setDragState(null);
+      setDragOverKey(null);
+      if (!payload?.postId) return;
+      if (payload.fromStatus && payload.fromStatus === statusKey) return;
+      onStatusChange(payload.postId, statusKey);
+    },
+    [dragState, onStatusChange]
+  );
 
   const groupedPosts = React.useMemo(() => {
     const next = {};
@@ -92,7 +149,14 @@ export default function Postkanban({
           const accentBorder = config?.accentBorder || "border-[var(--border)]";
           const accentText = config?.accentText || "text-[var(--text-muted)]";
           const isCollapsed = Boolean(collapsed?.[key]);
+          const isDragOver = dragOverKey === key;
           const items = groupedPosts[key] || [];
+          const dragHandlers = onStatusChange
+            ? {
+                onDragOver: (event) => handleDragOver(event, key),
+                onDrop: (event) => handleDrop(event, key),
+              }
+            : {};
 
           return (
             <section
@@ -101,7 +165,12 @@ export default function Postkanban({
                 isCollapsed ? "w-[84px]" : "w-[400px]"
               }`}
             >
-              <div className={`flex h-full flex-col rounded-[18px] border ${accentBorder} bg-white p-4 shadow-[var(--shadow-sm)]`}>
+              <div
+                className={`flex h-full flex-col rounded-[18px] border ${accentBorder} bg-white p-4 shadow-[var(--shadow-sm)] transition ${
+                  isDragOver ? "ring-2 ring-[var(--primary)] ring-offset-2 ring-offset-white" : ""
+                }`}
+                {...dragHandlers}
+              >
                 <div className={`h-1.5 w-full rounded-full ${accent}`} aria-hidden="true" />
                 <header
                   className={`mt-3 flex items-start justify-between gap-3 rounded-[14px] border ${accentBorder} ${accentSoft} px-3 py-2 ${
@@ -179,6 +248,10 @@ export default function Postkanban({
                             }
                             onEdit={onEdit}
                             onStatusChange={onStatusChange}
+                            draggable={Boolean(onStatusChange)}
+                            onDragStart={(event) => handleDragStart(event, post.id, key)}
+                            onDragEnd={handleDragEnd}
+                            isDragging={dragState?.postId === post.id}
                           />
                         ))}
                   </div>

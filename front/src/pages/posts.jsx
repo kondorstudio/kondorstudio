@@ -21,7 +21,6 @@ import {
 import { Plus, Search } from "lucide-react";
 import Postkanban from "../components/posts/postkanban.jsx";
 import Postcalendar from "../components/posts/postcalendar.jsx";
-import Postformdialog from "../components/posts/postformdialog.jsx";
 
 const VIEW_STORAGE_KEY = "kondor_posts_view_mode";
 const KANBAN_STORAGE_KEY = "kondor_posts_kanban_collapsed";
@@ -65,8 +64,6 @@ const serializePreferences = (payload) => {
 
 export default function Posts() {
   const navigate = useNavigate();
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingPost, setEditingPost] = useState(null);
   const [activeClientId, setActiveClientId] = useActiveClient();
   const [selectedClientId, setSelectedClientId] = useState(activeClientId || "");
   const [dateStart, setDateStart] = useState("");
@@ -86,11 +83,6 @@ export default function Posts() {
     if (activeClientId === selectedClientId) return;
     setSelectedClientId(activeClientId || "");
   }, [activeClientId, selectedClientId]);
-
-  const handleDialogClose = React.useCallback(() => {
-    setDialogOpen(false);
-    setEditingPost(null);
-  }, []);
 
   const handleNewPost = React.useCallback(
     (date) => {
@@ -135,29 +127,10 @@ export default function Posts() {
     showToast(message, "error");
   };
 
-  const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.Post.create(data),
-    onSuccess: () => {
-      invalidatePosts();
-      handleDialogClose();
-    },
-    onError: showError,
-  });
-
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => base44.entities.Post.update(id, data),
     onSuccess: () => {
       invalidatePosts();
-      handleDialogClose();
-    },
-    onError: showError,
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.Post.delete(id),
-    onSuccess: () => {
-      invalidatePosts();
-      handleDialogClose();
     },
     onError: showError,
   });
@@ -177,16 +150,13 @@ export default function Posts() {
     },
   });
 
-  const handleEdit = async (post) => {
-    if (!post?.id) return;
-    try {
-      const fullPost = await base44.entities.Post.get(post.id);
-      setEditingPost(fullPost);
-      setDialogOpen(true);
-    } catch (error) {
-      showToast("Erro ao carregar detalhes do post.", "error");
-    }
-  };
+  const handleEdit = React.useCallback(
+    (post) => {
+      if (!post?.id) return;
+      navigate(`/posts/${post.id}`);
+    },
+    [navigate]
+  );
 
   const handleStatusChange = async (postId, newStatus) => {
     const statusPayload = buildStatusPayload(newStatus);
@@ -210,19 +180,6 @@ export default function Posts() {
       data,
     });
   };
-
-  const handleSubmit = (data) => {
-    if (editingPost) {
-      updateMutation.mutate({ id: editingPost.id, data });
-    } else {
-      createMutation.mutate(data);
-    }
-  };
-
-  const isSaving =
-    createMutation.isPending ||
-    updateMutation.isPending ||
-    sendToApprovalMutation.isPending;
 
   React.useEffect(() => {
     if (typeof window === "undefined") return;
@@ -529,21 +486,6 @@ export default function Posts() {
           />
         )}
       </div>
-
-      <Postformdialog
-        open={dialogOpen}
-        onClose={handleDialogClose}
-        post={editingPost}
-        defaultClientId={selectedClientId}
-        clients={clients}
-        integrations={integrations}
-        onSubmit={handleSubmit}
-        isSaving={isSaving}
-        onDelete={
-          editingPost ? () => deleteMutation.mutate(editingPost.id) : undefined
-        }
-        isDeleting={deleteMutation.isPending}
-      />
 
       <Toast toast={toast} />
     </PageShell>
