@@ -60,6 +60,36 @@ function sanitizeCompetitor(record) {
   return { ...rest, latestSnapshot };
 }
 
+function diffNumber(startValue, endValue) {
+  if (startValue === undefined || startValue === null) return null;
+  if (endValue === undefined || endValue === null) return null;
+  const start = Number(startValue);
+  const end = Number(endValue);
+  if (Number.isNaN(start) || Number.isNaN(end)) return null;
+  return end - start;
+}
+
+function buildCompetitorWhere(tenantId, opts = {}) {
+  const { clientId, platform, status, q } = opts;
+  const where = { tenantId };
+
+  if (clientId) where.clientId = clientId;
+  if (platform) where.platform = normalizePlatform(platform);
+  if (status) where.status = status;
+
+  if (q) {
+    const query = String(q).trim();
+    if (query) {
+      where.OR = [
+        { name: { contains: query, mode: "insensitive" } },
+        { username: { contains: query.replace(/^@/, ""), mode: "insensitive" } },
+      ];
+    }
+  }
+
+  return where;
+}
+
 module.exports = {
   async list(tenantId, opts = {}) {
     const {
@@ -71,21 +101,7 @@ module.exports = {
       perPage = 50,
     } = opts;
 
-    const where = { tenantId };
-
-    if (clientId) where.clientId = clientId;
-    if (platform) where.platform = normalizePlatform(platform);
-    if (status) where.status = status;
-
-    if (q) {
-      const query = String(q).trim();
-      if (query) {
-        where.OR = [
-          { name: { contains: query, mode: "insensitive" } },
-          { username: { contains: query.replace(/^@/, ""), mode: "insensitive" } },
-        ];
-      }
-    }
+    const where = buildCompetitorWhere(tenantId, { clientId, platform, status, q });
 
     const skip = (Math.max(1, page) - 1) * perPage;
 
@@ -250,5 +266,90 @@ module.exports = {
       where: { id: competitorId },
       data: { metadata },
     });
+  },
+
+  async compare(tenantId, opts = {}) {
+    const {
+      clientId,
+      platform,
+      status,
+      q,
+      startDate,
+      endDate,
+      limit = 12,
+      perCompetitor = 90,
+    } = opts;
+
+    const where = buildCompetitorWhere(tenantId, { clientId, platform, status, q });
+
+    const competitors = await prisma.competitor.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: Number.isFinite(Number(limit)) ? Number(limit) : 12,
+    });
+
+    const competitorIds = competitors.map((item) => item.id);
+    const range = mergeCollectedAtRange(startDate, endDate);
+
+    const snapshotWhere = {
+      tenantId,
+      competitorId: { in: competitorIds },
+    };
+    if (range) snapshotWhere.collectedAt = range;
+
+    const snapshots = competitorIds.length
+      ? await prisma.competitorSnapshot.findMany({
+          where: snapshotWhere,
+          orderBy: { collectedAt: "asc" },
+        })
+      : [];
+
+    const grouped = new Map();
+    snapshots.forEach((snapshot) => {
+      if (!grouped.has(snapshot.competitorId)) {
+        grouped.set(snapshot.competitorId, []);
+      }
+      grouped.get(snapshot.competitorId).push(snapshot);
+    });
+
+    const items = competitors.map((competitor) => {
+      const list = grouped.get(competitor.id) || [];
+      const trimmed =
+        Number.isFinite(Number(perCompetitor)) && list.length > perCompetitor
+          ? list.slice(-Number(perCompetitor))
+          : list;
+      const first = trimmed[0] || null;
+      const latest = trimmed[trimmed.length - 1] || null;
+
+      return {
+        id: competitor.id,
+        clientId: competitor.clientId,
+        platform: competitor.platform,
+        username: competitor.username,
+        name: competitor.name,
+        profileUrl: competitor.profileUrl,
+        avatarUrl: competitor.avatarUrl,
+        status: competitor.status,
+        metadata: competitor.metadata,
+        latestSnapshot: latest || null,
+        firstSnapshot: first || null,
+        deltas: {
+          followers: diffNumber(first?.followers, latest?.followers),
+          postsCount: diffNumber(first?.postsCount, latest?.postsCount),
+          engagementRate: diffNumber(first?.engagementRate, latest?.engagementRate),
+          interactions: diffNumber(first?.interactions, latest?.interactions),
+        },
+        snapshots: trimmed,
+      };
+    });
+
+    return {
+      items,
+      total: items.length,
+      range: {
+        startDate: range?.gte ? range.gte.toISOString() : null,
+        endDate: range?.lte ? range.lte.toISOString() : null,
+      },
+    };
   },
 };

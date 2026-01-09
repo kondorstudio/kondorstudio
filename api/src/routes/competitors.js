@@ -38,6 +38,48 @@ router.get("/", async (req, res) => {
 });
 
 /**
+ * GET /competitors/compare
+ * Relatorio comparativo (tabela + graficos)
+ * Query:
+ *  - clientId
+ *  - platform
+ *  - status
+ *  - q
+ *  - startDate
+ *  - endDate
+ *  - limit
+ *  - perCompetitor
+ */
+router.get("/compare", async (req, res) => {
+  try {
+    const {
+      clientId,
+      platform,
+      status,
+      q,
+      startDate,
+      endDate,
+      limit,
+      perCompetitor,
+    } = req.query;
+    const result = await competitorsService.compare(req.tenantId, {
+      clientId,
+      platform,
+      status,
+      q,
+      startDate,
+      endDate,
+      limit: limit ? Number(limit) : undefined,
+      perCompetitor: perCompetitor ? Number(perCompetitor) : undefined,
+    });
+    return res.json(result);
+  } catch (err) {
+    console.error("GET /competitors/compare error:", err);
+    return res.status(500).json({ error: "Erro ao gerar comparativo" });
+  }
+});
+
+/**
  * POST /competitors
  */
 router.post("/", async (req, res) => {

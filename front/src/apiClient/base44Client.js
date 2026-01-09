@@ -779,6 +779,11 @@ const Competitor = {
     return jsonFetch(`/competitors/${id}/snapshots${qs}`, { method: "GET" });
   },
 
+  async compare(params) {
+    const qs = buildQuery(params);
+    return jsonFetch(`/competitors/compare${qs}`, { method: "GET" });
+  },
+
   async createSnapshot(id, payload) {
     return jsonFetch(`/competitors/${id}/snapshots`, {
       method: "POST",
