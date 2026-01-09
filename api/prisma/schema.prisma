@@ -417,6 +417,7 @@ model Client {
   dataSourceConnections DataSourceConnection[]
   brandGroupMembers BrandGroupMember[]
   reports          Report[]
+  reportSchedules  ReportSchedule[]
   dashboards       Dashboard[]
   metrics          Metric[]   @relation("ClientMetrics")
   competitors      Competitor[]
@@ -691,6 +692,7 @@ model Upload {
   posts     Post[]     @relation("PostUploads")
   creatives Creative[]
   reports   Report[]   @relation("ReportFiles")
+  reportExports ReportExport[] @relation("ReportExportFile")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -727,7 +729,6 @@ model Report {
   generatedAt DateTime?
   widgets     ReportWidget[]
   exports     ReportExport[]
-  schedules   ReportSchedule[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -749,6 +750,7 @@ model BrandGroup {
   members   BrandGroupMember[]
   reports   Report[]
   dashboards Dashboard[]
+  reportSchedules ReportSchedule[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -840,6 +842,7 @@ model ReportTemplate {
   versions    ReportTemplate[] @relation("ReportTemplateVersions")
 
   reports     Report[]
+  reportSchedules ReportSchedule[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
