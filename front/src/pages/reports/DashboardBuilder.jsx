@@ -99,10 +99,18 @@ function WidgetConfigDialog({
   onConnect,
 }) {
   const [draft, setDraft] = useState(widget);
+  const [filtersInput, setFiltersInput] = useState("");
+  const [filtersError, setFiltersError] = useState("");
 
   useEffect(() => {
     if (!open) return;
     setDraft(widget);
+    const initialFilters =
+      widget?.filters && typeof widget.filters === "object"
+        ? JSON.stringify(widget.filters, null, 2)
+        : "";
+    setFiltersInput(initialFilters);
+    setFiltersError("");
   }, [open, widget]);
 
   const widgetType = draft?.widgetType || "KPI";
@@ -379,15 +387,41 @@ function WidgetConfigDialog({
             </div>
           ) : null}
 
+          <div>
+            <Label>Filtros (JSON)</Label>
+            <Textarea
+              rows={4}
+              value={filtersInput}
+              onChange={(event) => {
+                setFiltersInput(event.target.value);
+                if (filtersError) setFiltersError("");
+              }}
+              placeholder='{"country":"BR"}'
+            />
+            {filtersError ? (
+              <p className="mt-1 text-xs text-red-600">{filtersError}</p>
+            ) : null}
+          </div>
+
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
             <Button
               onClick={() => {
+                let parsedFilters = {};
+                if (filtersInput.trim()) {
+                  try {
+                    parsedFilters = JSON.parse(filtersInput);
+                  } catch (err) {
+                    setFiltersError("JSON invalido.");
+                    return;
+                  }
+                }
                 onSave({
                   ...draft,
                   metrics: Array.isArray(draft.metrics) ? draft.metrics : [],
+                  filters: parsedFilters,
                   options,
                 });
                 onOpenChange(false);
