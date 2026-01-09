@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/apiClient/base44Client";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card.jsx";
@@ -15,6 +16,7 @@ import {
   CheckSquare,
   Clock,
   FileText,
+  Plus,
   RefreshCw,
   Sparkles,
   Users,
@@ -201,7 +203,10 @@ function StatCard({
   const TrendIcon = trendPositive ? ArrowUpRight : ArrowDownRight;
   const isLarge = size === "lg";
   const isCompact = size === "sm";
-  const valueClasses = isLarge ? "text-4xl" : isCompact ? "text-2xl" : "text-3xl";
+  const valueClasses = cn(
+    "tracking-tight leading-none",
+    isLarge ? "text-4xl md:text-5xl" : isCompact ? "text-2xl" : "text-3xl"
+  );
   const iconBoxClasses = isLarge ? "h-11 w-11" : "h-9 w-9";
   const iconClasses = isLarge ? "h-5 w-5" : "h-4 w-4";
   const contentPadding = isLarge ? "pt-6" : isCompact ? "pt-4" : "pt-5";
@@ -272,8 +277,96 @@ function StatCard({
   );
 }
 
+function CommandKpi({
+  title,
+  value,
+  description,
+  icon: Icon,
+  accent,
+  trend,
+  isLoading,
+}) {
+  const trendPositive = trend !== null && trend !== undefined ? trend >= 0 : null;
+  const TrendIcon = trendPositive ? ArrowUpRight : ArrowDownRight;
+  const gradient = accent?.solid
+    ? `linear-gradient(135deg, ${accent.solid}, #0f172a)`
+    : "linear-gradient(135deg, #0f172a, #0f172a)";
+
+  return (
+    <div className="group relative overflow-hidden rounded-[18px] border border-[var(--border)] bg-white/90 p-5 shadow-[var(--shadow-sm)]">
+      <div
+        className="absolute -right-10 -top-10 h-24 w-24 rounded-full opacity-60"
+        style={{ backgroundColor: accent?.soft }}
+        aria-hidden="true"
+      />
+      <div className="relative flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">
+            {title}
+          </p>
+          <div
+            className="mt-3 text-4xl font-semibold leading-none tracking-tight text-transparent bg-clip-text md:text-5xl"
+            style={{ backgroundImage: gradient }}
+          >
+            {isLoading ? (
+              <span className="inline-block h-9 w-28 rounded-full kondor-shimmer" />
+            ) : (
+              <AnimatedNumber value={value} formatter={formatNumber} />
+            )}
+          </div>
+          <p className="mt-3 text-xs text-[var(--text-muted)]">{description}</p>
+        </div>
+        <div
+          className="flex h-11 w-11 items-center justify-center rounded-[14px] border border-white/60"
+          style={{ backgroundColor: accent?.soft, color: accent?.solid }}
+        >
+          {Icon ? <Icon className="h-5 w-5" /> : null}
+        </div>
+      </div>
+      {trend !== null && trend !== undefined ? (
+        <div
+          className={`mt-4 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+            trendPositive ? "text-emerald-700 bg-emerald-50" : "text-rose-700 bg-rose-50"
+          }`}
+        >
+          <TrendIcon className="h-3 w-3" />
+          {formatPercent(Math.abs(trend))}
+          <span className="text-[10px] font-medium text-[var(--text-muted)]">
+            vs periodo anterior
+          </span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ActionTile({ title, description, icon: Icon, accent, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex w-full items-center justify-between gap-4 rounded-[16px] border border-[var(--border)] bg-white px-4 py-3 text-left shadow-[var(--shadow-sm)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)]"
+    >
+      <div className="flex items-center gap-3">
+        <div
+          className="flex h-10 w-10 items-center justify-center rounded-[12px]"
+          style={{ backgroundColor: accent?.soft, color: accent?.solid }}
+        >
+          {Icon ? <Icon className="h-4 w-4" /> : null}
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-[var(--text)]">{title}</p>
+          <p className="text-xs text-[var(--text-muted)]">{description}</p>
+        </div>
+      </div>
+      <ArrowUpRight className="h-4 w-4 text-[var(--text-muted)] transition group-hover:text-[var(--text)]" />
+    </button>
+  );
+}
+
 export default function Dashboard() {
   const [rangeDays, setRangeDays] = useState(30);
+  const navigate = useNavigate();
   const {
     data: clients = [],
     isLoading: loadingClients,
@@ -403,8 +496,8 @@ export default function Dashboard() {
   return (
     <PageShell>
       <PageHeader
-        title="Visão geral"
-        subtitle="Acompanhe rapidamente o desempenho da sua agência."
+        title="Centro de comando"
+        subtitle="Entenda o status da agencia em segundos."
         actions={
           <div className="flex items-center gap-3">
             <div className="flex items-center rounded-[12px] border border-[var(--border)] bg-white p-1">
@@ -443,49 +536,305 @@ export default function Dashboard() {
         }
       />
 
-      <div className="mt-8 space-y-10">
-        <section className="rounded-[24px] border border-[var(--border)] bg-gradient-to-r from-[var(--primary)] via-[#7c3aed] to-[var(--accent-sky)] p-7 text-white shadow-[var(--shadow-md)] md:p-8">
-          <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="mt-8 space-y-12">
+        <section className="space-y-5">
+          <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-white/70">
-                Dashboard
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">
+                Visao geral
               </p>
-              <h2 className="text-2xl font-semibold md:text-3xl">Visao consolidada</h2>
-              <p className="mt-2 text-sm text-white/80 md:text-base">
-                Tendencias, cadencia de conteudos e produtividade em um so lugar.
+              <h2 className="text-2xl font-semibold text-[var(--text)] md:text-3xl">
+                Centro de comando da agencia
+              </h2>
+              <p className="mt-2 text-sm text-[var(--text-muted)]">
+                KPIs criticos, tendencias e proximas acoes para guiar o dia.
               </p>
             </div>
-            <div className="flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-xs font-semibold text-white/90">
-              <Sparkles className="h-4 w-4 kondor-pulse" />
+            <div className="flex items-center gap-2 rounded-full border border-[var(--border)] bg-white px-3 py-1 text-xs text-[var(--text-muted)] shadow-[var(--shadow-sm)]">
+              <Sparkles className="h-3.5 w-3.5 text-[var(--primary)]" />
               {`Ultimos ${rangeDays} dias`}
             </div>
           </div>
-          <div className="mt-6 grid gap-4 md:grid-cols-3">
-            {[
-              { label: "Clientes", value: totalClients },
-              { label: "Posts ativos", value: totalPosts },
-              { label: "Tarefas em aberto", value: totalTasks },
-            ].map((item) => (
-              <div
-                key={item.label}
-                className="rounded-[16px] border border-white/15 bg-white/10 px-4 py-4"
-              >
-                <p className="text-xs text-white/70">{item.label}</p>
-                <p className="mt-1 text-xl font-semibold">
-                  {isLoading ? "—" : formatNumber(item.value)}
-                </p>
+
+          <div className="rounded-[28px] border border-[var(--border)] bg-[radial-gradient(900px_420px_at_10%_-20%,rgba(37,99,235,0.12),transparent_60%),radial-gradient(800px_420px_at_90%_-20%,rgba(109,40,217,0.15),transparent_60%),var(--surface)] p-6 shadow-[var(--shadow-md)]">
+            <div className="grid gap-6 lg:grid-cols-[2.2fr_1fr]">
+              <div className="grid gap-4 md:grid-cols-2">
+                <CommandKpi
+                  title="Clientes ativos"
+                  value={totalClients}
+                  description={`${clientsInRange} novos no periodo`}
+                  icon={Users}
+                  accent={STAT_ACCENTS.clients}
+                  trend={clientsTrend}
+                  isLoading={isLoading}
+                />
+                <CommandKpi
+                  title="Posts em fluxo"
+                  value={totalPosts}
+                  description={`${postsInRange} criados no periodo`}
+                  icon={FileText}
+                  accent={STAT_ACCENTS.posts}
+                  trend={postsTrend}
+                  isLoading={isLoading}
+                />
+                <CommandKpi
+                  title="Tarefas em aberto"
+                  value={totalTasks}
+                  description={`${tasksInRange} criadas no periodo`}
+                  icon={CheckSquare}
+                  accent={STAT_ACCENTS.tasks}
+                  trend={tasksTrend}
+                  isLoading={isLoading}
+                />
+                <CommandKpi
+                  title="Time ativo"
+                  value={totalTeam}
+                  description={`${teamInRange} novas entradas no periodo`}
+                  icon={Activity}
+                  accent={STAT_ACCENTS.team}
+                  trend={teamTrend}
+                  isLoading={isLoading}
+                />
               </div>
-            ))}
+
+              <div className="rounded-[22px] border border-[var(--border)] bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(109,40,217,0.08))] p-5 shadow-[var(--shadow-md)]">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">
+                    Acoes rapidas
+                  </p>
+                  <Badge variant="outline" className="text-[10px]">
+                    CTA
+                  </Badge>
+                </div>
+                <p className="mt-2 text-sm text-[var(--text-muted)]">
+                  Comandos diretos para destravar o dia da agencia.
+                </p>
+                <div className="mt-4 space-y-3">
+                  <Button
+                    size="lg"
+                    leftIcon={Plus}
+                    className="w-full"
+                    onClick={() => navigate("/posts/new")}
+                  >
+                    Criar novo post
+                  </Button>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <ActionTile
+                      title="Posts"
+                      description="Kanban e calendario"
+                      icon={FileText}
+                      accent={STAT_ACCENTS.posts}
+                      onClick={() => navigate("/posts")}
+                    />
+                    <ActionTile
+                      title="Tarefas"
+                      description="Operacao do time"
+                      icon={CheckSquare}
+                      accent={STAT_ACCENTS.tasks}
+                      onClick={() => navigate("/tasks")}
+                    />
+                    <ActionTile
+                      title="Clientes"
+                      description="Relacionamentos ativos"
+                      icon={Users}
+                      accent={STAT_ACCENTS.clients}
+                      onClick={() => navigate("/clients")}
+                    />
+                    <ActionTile
+                      title="Metricas"
+                      description="Resultados e insights"
+                      icon={BarChart3}
+                      accent={STAT_ACCENTS.team}
+                      onClick={() => navigate("/metrics")}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
-        <section className="space-y-4">
+        <section className="space-y-5">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">
-              KPIs principais
+              Operacao
+            </p>
+            <h3 className="text-xl font-semibold text-[var(--text)] md:text-2xl">
+              Ritmo diario e entregas
+            </h3>
+            <p className="mt-2 text-sm text-[var(--text-muted)]">
+              Cadencia de producao, gargalos e proximos posts da agencia.
             </p>
           </div>
-          <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+          <div className="grid gap-6 lg:grid-cols-[1.7fr_1fr]">
+            <Card className="lg:row-span-2">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="text-sm font-medium text-[var(--text)]">
+                  Cadencia de producao
+                </CardTitle>
+                <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+                  <span className="inline-flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-full bg-[var(--chart-1)]" />
+                    Posts
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-full bg-[var(--chart-3)]" />
+                    Tarefas
+                  </span>
+                </div>
+              </CardHeader>
+              <CardContent className="h-[320px]">
+                {activitySeries.length ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={activitySeries}>
+                      <defs>
+                        <linearGradient id="postsFill" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="var(--chart-1)" stopOpacity={0.35} />
+                          <stop offset="100%" stopColor="var(--chart-1)" stopOpacity={0} />
+                        </linearGradient>
+                        <linearGradient id="tasksFill" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="var(--chart-3)" stopOpacity={0.35} />
+                          <stop offset="100%" stopColor="var(--chart-3)" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-muted)" />
+                      <XAxis dataKey="day" tick={{ fontSize: 11, fill: "var(--text-muted)" }} />
+                      <YAxis tick={{ fontSize: 11, fill: "var(--text-muted)" }} />
+                      <Tooltip
+                        contentStyle={{
+                          borderRadius: 12,
+                          borderColor: "var(--border)",
+                          fontSize: 12,
+                        }}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="posts"
+                        stroke="var(--chart-1)"
+                        fill="url(#postsFill)"
+                        strokeWidth={2}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="tasks"
+                        stroke="var(--chart-3)"
+                        fill="url(#tasksFill)"
+                        strokeWidth={2}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex h-full items-center justify-center text-sm text-[var(--text-muted)]">
+                    Nenhuma atividade registrada neste periodo.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <div className="grid gap-6">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle className="text-sm font-medium text-[var(--text)]">
+                    Distribuicao de tarefas
+                  </CardTitle>
+                  <BarChart3 className="h-4 w-4 text-[var(--text-muted)] kondor-float" />
+                </CardHeader>
+                <CardContent className="h-[230px]">
+                  {tasksByStatus.length ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={tasksByStatus}
+                          dataKey="value"
+                          nameKey="label"
+                          innerRadius={50}
+                          outerRadius={85}
+                          paddingAngle={4}
+                        >
+                          {tasksByStatus.map((entry, index) => (
+                            <Cell key={entry.key} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          contentStyle={{
+                            borderRadius: 12,
+                            borderColor: "var(--border)",
+                            fontSize: 12,
+                          }}
+                        />
+                        <Legend wrapperStyle={{ fontSize: 12 }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-sm text-[var(--text-muted)]">
+                      Nenhuma tarefa encontrada.
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium text-[var(--text)]">
+                    Agenda dos proximos posts
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {posts
+                    .filter((post) => post.scheduledDate || post.scheduled_at)
+                    .sort((a, b) => {
+                      const first = parseDate(a.scheduledDate || a.scheduled_at) || new Date(0);
+                      const second = parseDate(b.scheduledDate || b.scheduled_at) || new Date(0);
+                      return first - second;
+                    })
+                    .slice(0, 4)
+                    .map((post) => {
+                      const status = resolveWorkflowStatus(post);
+                      const config = getWorkflowStatusConfig(status);
+                      return (
+                        <div
+                          key={post.id}
+                          className="flex items-start justify-between gap-3 rounded-[12px] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-3"
+                        >
+                          <div>
+                            <p className="text-sm font-semibold text-[var(--text)]">
+                              {post.title || "Post sem titulo"}
+                            </p>
+                            <p className="text-xs text-[var(--text-muted)]">
+                              {parseDate(post.scheduledDate || post.scheduled_at)?.toLocaleDateString("pt-BR") ||
+                                "Sem data"}
+                            </p>
+                          </div>
+                          <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${config.badge}`}>
+                            {config.label}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  {!posts.length ? (
+                    <div className="rounded-[12px] border border-dashed border-[var(--border)] px-4 py-4 text-sm text-[var(--text-muted)]">
+                      Crie posts para visualizar o calendario aqui.
+                    </div>
+                  ) : null}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </section>
+
+        <section className="space-y-5">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">
+              Performance
+            </p>
+            <h3 className="text-xl font-semibold text-[var(--text)] md:text-2xl">
+              Saude do pipeline e produtividade
+            </h3>
+            <p className="mt-2 text-sm text-[var(--text-muted)]">
+              Evolucao do time, eficiencia e distribuicao de conteudo.
+            </p>
+          </div>
+          <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
             <div className="grid gap-6 md:grid-cols-2">
               <StatCard
                 size="lg"
@@ -509,8 +858,6 @@ export default function Dashboard() {
                 sparkline={tasksSeries.slice(-7)}
                 isLoading={isLoading}
               />
-            </div>
-            <div className="grid gap-6">
               <StatCard
                 size="sm"
                 title="Clientes"
@@ -532,213 +879,44 @@ export default function Dashboard() {
                 isLoading={isLoading}
               />
             </div>
-          </div>
-        </section>
 
-        <section className="space-y-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">
-              Producao e cadencia
-            </p>
-          </div>
-          <div className="grid gap-6 lg:grid-cols-3">
-          <Card className="lg:col-span-2">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-sm font-medium text-[var(--text)]">
-                Cadencia de producao
-              </CardTitle>
-              <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
-                <span className="inline-flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-[var(--chart-1)]" />
-                  Posts
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="text-sm font-medium text-[var(--text)]">
+                  Posts por status
+                </CardTitle>
+                <span className="text-xs text-[var(--text-muted)]">
+                  Total {formatNumber(totalPosts)}
                 </span>
-                <span className="inline-flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-[var(--chart-3)]" />
-                  Tarefas
-                </span>
-              </div>
-            </CardHeader>
-            <CardContent className="h-[300px]">
-              {activitySeries.length ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={activitySeries}>
-                    <defs>
-                      <linearGradient id="postsFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="var(--chart-1)" stopOpacity={0.35} />
-                        <stop offset="100%" stopColor="var(--chart-1)" stopOpacity={0} />
-                      </linearGradient>
-                      <linearGradient id="tasksFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="var(--chart-3)" stopOpacity={0.35} />
-                        <stop offset="100%" stopColor="var(--chart-3)" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-muted)" />
-                    <XAxis dataKey="day" tick={{ fontSize: 11, fill: "var(--text-muted)" }} />
-                    <YAxis tick={{ fontSize: 11, fill: "var(--text-muted)" }} />
-                    <Tooltip
-                      contentStyle={{
-                        borderRadius: 12,
-                        borderColor: "var(--border)",
-                        fontSize: 12,
-                      }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="posts"
-                      stroke="var(--chart-1)"
-                      fill="url(#postsFill)"
-                      strokeWidth={2}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="tasks"
-                      stroke="var(--chart-3)"
-                      fill="url(#tasksFill)"
-                      strokeWidth={2}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex h-full items-center justify-center text-sm text-[var(--text-muted)]">
-                  Nenhuma atividade registrada neste periodo.
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-sm font-medium text-[var(--text)]">
-                Distribuicao de tarefas
-              </CardTitle>
-              <BarChart3 className="h-4 w-4 text-[var(--text-muted)] kondor-float" />
-            </CardHeader>
-            <CardContent className="h-[240px]">
-              {tasksByStatus.length ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={tasksByStatus}
-                      dataKey="value"
-                      nameKey="label"
-                      innerRadius={50}
-                      outerRadius={85}
-                      paddingAngle={4}
-                    >
-                      {tasksByStatus.map((entry, index) => (
-                        <Cell key={entry.key} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        borderRadius: 12,
-                        borderColor: "var(--border)",
-                        fontSize: 12,
-                      }}
-                    />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex h-full items-center justify-center text-sm text-[var(--text-muted)]">
-                  Nenhuma tarefa encontrada.
-                </div>
-              )}
-            </CardContent>
-          </Card>
-          </div>
-        </section>
-
-        <section className="space-y-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">
-              Conteudo de apoio
-            </p>
-          </div>
-          <div className="grid gap-6 lg:grid-cols-3">
-          <Card className="lg:col-span-2">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-sm font-medium text-[var(--text)]">
-                Posts por status
-              </CardTitle>
-              <span className="text-xs text-[var(--text-muted)]">
-                Total {formatNumber(totalPosts)}
-              </span>
-            </CardHeader>
-            <CardContent className="h-[300px]">
-              {postsByStatus.length ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={postsByStatus}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-muted)" />
-                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--text-muted)" }} />
-                    <YAxis tick={{ fontSize: 11, fill: "var(--text-muted)" }} />
-                    <Tooltip
-                      contentStyle={{
-                        borderRadius: 12,
-                        borderColor: "var(--border)",
-                        fontSize: 12,
-                      }}
-                    />
-                    <Bar dataKey="value" radius={[8, 8, 0, 0]}>
-                      {postsByStatus.map((entry, index) => (
-                        <Cell key={entry.key} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex h-full items-center justify-center text-sm text-[var(--text-muted)]">
-                  Nenhum post encontrado.
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm font-medium text-[var(--text)]">
-                Agenda dos proximos posts
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {posts
-                .filter((post) => post.scheduledDate || post.scheduled_at)
-                .sort((a, b) => {
-                  const first = parseDate(a.scheduledDate || a.scheduled_at) || new Date(0);
-                  const second = parseDate(b.scheduledDate || b.scheduled_at) || new Date(0);
-                  return first - second;
-                })
-                .slice(0, 4)
-                .map((post) => {
-                  const status = resolveWorkflowStatus(post);
-                  const config = getWorkflowStatusConfig(status);
-                  return (
-                    <div
-                      key={post.id}
-                      className="flex items-start justify-between gap-3 rounded-[12px] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-3"
-                    >
-                      <div>
-                        <p className="text-sm font-semibold text-[var(--text)]">
-                          {post.title || "Post sem titulo"}
-                        </p>
-                        <p className="text-xs text-[var(--text-muted)]">
-                          {parseDate(post.scheduledDate || post.scheduled_at)?.toLocaleDateString("pt-BR") ||
-                            "Sem data"}
-                        </p>
-                      </div>
-                      <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${config.badge}`}>
-                        {config.label}
-                      </span>
-                    </div>
-                  );
-                })}
-              {!posts.length ? (
-                <div className="rounded-[12px] border border-dashed border-[var(--border)] px-4 py-4 text-sm text-[var(--text-muted)]">
-                  Crie posts para visualizar o calendario aqui.
-                </div>
-              ) : null}
-            </CardContent>
-          </Card>
+              </CardHeader>
+              <CardContent className="h-[320px]">
+                {postsByStatus.length ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={postsByStatus}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-muted)" />
+                      <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--text-muted)" }} />
+                      <YAxis tick={{ fontSize: 11, fill: "var(--text-muted)" }} />
+                      <Tooltip
+                        contentStyle={{
+                          borderRadius: 12,
+                          borderColor: "var(--border)",
+                          fontSize: 12,
+                        }}
+                      />
+                      <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+                        {postsByStatus.map((entry, index) => (
+                          <Cell key={entry.key} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex h-full items-center justify-center text-sm text-[var(--text-muted)]">
+                    Nenhum post encontrado.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
         </section>
       </div>
