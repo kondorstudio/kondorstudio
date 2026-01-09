@@ -599,6 +599,29 @@ const Metrics = {
 };
 
 // --------------------
+// Reporting
+// --------------------
+
+const Reporting = {
+  async listMetricCatalog(params = {}) {
+    const qs = buildQuery(params);
+    return jsonFetch(`/reporting/metric-catalog${qs}`, { method: "GET" });
+  },
+
+  async listDimensions(params = {}) {
+    const qs = buildQuery(params);
+    return jsonFetch(`/reporting/dimensions${qs}`, { method: "GET" });
+  },
+
+  async createMetricCatalog(payload = {}) {
+    return jsonFetch("/reporting/metric-catalog", {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    });
+  },
+};
+
+// --------------------
 // Tasks
 // --------------------
 
@@ -986,6 +1009,7 @@ export const base44 = {
     Integration,
     Competitor,
   },
+  reporting: Reporting,
   uploads: {
     uploadFile,
   },

@@ -18,6 +18,7 @@ import { SelectNative } from "@/components/ui/select-native.jsx";
 import { useActiveClient } from "@/hooks/useActiveClient.js";
 import ReportsIntro from "@/components/reports/ReportsIntro.jsx";
 import ConnectDataSourceDialog from "@/components/reports/ConnectDataSourceDialog.jsx";
+import MetricCatalogPanel from "@/components/reports/MetricCatalogPanel.jsx";
 
 const DATA_SOURCES = [
   {
@@ -217,6 +218,8 @@ export default function ReportsHome() {
             </div>
           )}
         </section>
+
+        <MetricCatalogPanel />
 
         <EmptyState
           icon={BarChart3}
