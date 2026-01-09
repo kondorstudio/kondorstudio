@@ -652,6 +652,35 @@ const Reporting = {
       body: JSON.stringify(payload || {}),
     });
   },
+
+  async listBrandGroups() {
+    return jsonFetch("/reporting/brand-groups", { method: "GET" });
+  },
+
+  async listReports(params = {}) {
+    const qs = buildQuery(params);
+    return jsonFetch(`/reporting/reports${qs}`, { method: "GET" });
+  },
+
+  async getReport(id) {
+    if (!id) throw new Error("reportId obrigatorio");
+    return jsonFetch(`/reporting/reports/${id}`, { method: "GET" });
+  },
+
+  async createReport(payload = {}) {
+    return jsonFetch("/reporting/reports", {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    });
+  },
+
+  async updateReportLayout(id, payload = {}) {
+    if (!id) throw new Error("reportId obrigatorio");
+    return jsonFetch(`/reporting/reports/${id}/layout`, {
+      method: "PUT",
+      body: JSON.stringify(payload || {}),
+    });
+  },
 };
 
 // --------------------

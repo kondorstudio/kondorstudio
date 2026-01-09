@@ -3,9 +3,11 @@ const express = require('express');
 const router = express.Router();
 
 const auth = require('../../middleware/auth');
+const brandGroupsController = require('./brandGroups.controller');
 const connectionsController = require('./connections.controller');
 const metricCatalogController = require('./metricCatalog.controller');
 const templatesController = require('./templates.controller');
+const reportsController = require('./reports.controller');
 
 router.get('/health', (req, res) => {
   return res.json({ ok: true, module: 'reporting' });
@@ -14,6 +16,7 @@ router.get('/health', (req, res) => {
 router.get('/brands/:brandId/connections', connectionsController.listByBrand);
 router.post('/brands/:brandId/connections/link', connectionsController.link);
 router.get('/integrations/:integrationId/accounts', connectionsController.listAccounts);
+router.get('/brand-groups', brandGroupsController.list);
 router.get('/metric-catalog', metricCatalogController.list);
 router.get('/dimensions', metricCatalogController.listDimensions);
 router.post(
@@ -27,5 +30,10 @@ router.post('/templates', templatesController.create);
 router.get('/templates/:id', templatesController.get);
 router.put('/templates/:id', templatesController.update);
 router.post('/templates/:id/duplicate', templatesController.duplicate);
+
+router.get('/reports', reportsController.list);
+router.post('/reports', reportsController.create);
+router.get('/reports/:id', reportsController.get);
+router.put('/reports/:id/layout', reportsController.updateLayout);
 
 module.exports = router;

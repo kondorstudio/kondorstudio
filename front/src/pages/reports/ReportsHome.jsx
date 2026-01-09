@@ -119,15 +119,20 @@ export default function ReportsHome() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold text-[var(--text)]">
-                Templates oficiais
+                Relatorios por marca e grupo
               </h2>
               <p className="text-sm text-[var(--text-muted)]">
-                Monte e publique layouts reutilizaveis.
+                Crie um relatorio a partir dos templates configurados.
               </p>
             </div>
-            <Button onClick={() => navigate("/reports/templates")}>
-              Abrir templates
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={() => navigate("/reports/new")}>
+                Criar relatorio
+              </Button>
+              <Button variant="ghost" onClick={() => navigate("/reports/templates")}>
+                Ver templates
+              </Button>
+            </div>
           </div>
         </section>
         <section className="rounded-[18px] border border-[var(--border)] bg-white px-6 py-6 shadow-[var(--shadow-sm)]">
@@ -238,11 +243,11 @@ export default function ReportsHome() {
 
         <EmptyState
           icon={BarChart3}
-          title="Modulo de relatorios em construcao"
-          description="Estamos preparando o builder e a camada de dados. Enquanto isso, valide suas integracoes e clientes."
+          title="Crie seu primeiro relatorio"
+          description="Use o wizard para gerar relatorios por marca ou grupo com os templates existentes."
           action={
-            <Button variant="secondary" onClick={() => navigate("/integrations")}>
-              Ver integracoes
+            <Button variant="secondary" onClick={() => navigate("/reports/new")}>
+              Novo relatorio
             </Button>
           }
         />

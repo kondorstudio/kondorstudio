@@ -10,8 +10,8 @@ export default function ReportsIntro() {
         Relatorios inteligentes
       </h1>
       <p className="mt-2 max-w-2xl text-sm text-[var(--text-muted)]">
-        Templates, dashboards ao vivo e widgets configuraveis estao chegando. Use esta area como base
-        para o novo reporting multi-tenant do Kondor Studio.
+        Templates, relatorios por marca/grupo e widgets configuraveis ja estao disponiveis. Dashboards
+        ao vivo e automacoes chegam nas proximas etapas.
       </p>
     </section>
   );
