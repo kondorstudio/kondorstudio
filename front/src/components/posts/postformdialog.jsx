@@ -14,7 +14,9 @@ import { SelectNative } from "@/components/ui/select-native.jsx";
 import { DateField, TimeField } from "@/components/ui/date-field.jsx";
 import { base44 } from "@/apiClient/base44Client";
 import {
+  CalendarDays,
   Check,
+  CheckCircle2,
   ChevronDown,
   ChevronUp,
   Image as ImageIcon,
@@ -60,6 +62,33 @@ const PLATFORM_COLOR_MAP = {
   instagram: "#E1306C",
   facebook: "#1877F2",
   tiktok: "#0F172A",
+};
+const PLATFORM_LABELS = {
+  instagram: "Instagram",
+  facebook: "Facebook",
+  tiktok: "TikTok",
+};
+const POST_KIND_LABELS = {
+  feed: "Feed",
+  story: "Stories",
+  reel: "Reels",
+};
+const FLOW_STEPS = [
+  { id: "post-step-1", step: "1", title: "Perfil", description: "Cliente e grupo" },
+  { id: "post-step-2", step: "2", title: "Canais", description: "Rede e formatos" },
+  { id: "post-step-3", step: "3", title: "Legenda", description: "Texto e hashtags" },
+  { id: "post-step-4", step: "4", title: "Midia", description: "Upload e preview" },
+  { id: "post-step-5", step: "5", title: "Agenda", description: "Data e recorrencia" },
+  { id: "post-step-6", step: "6", title: "Extras", description: "Configuracoes avancadas" },
+];
+const STATUS_PREVIEW = {
+  DRAFT: { label: "Rascunho", className: "bg-slate-100 text-slate-700" },
+  CLIENT_APPROVAL: {
+    label: "Em aprovacao",
+    className: "bg-amber-100 text-amber-700",
+  },
+  DONE: { label: "Publicado", className: "bg-emerald-100 text-emerald-700" },
+  SCHEDULED: { label: "Agendado", className: "bg-indigo-100 text-indigo-700" },
 };
 
 function splitDateTime(value) {
@@ -210,11 +239,15 @@ function parseTags(value) {
 
 // Define StepCard at module scope to keep a stable component identity and
 // avoid remounts that can reset the main scroll position.
-const StepCard = ({ step, title, subtitle, children }) => (
-  <div className="rounded-[16px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-sm)] transition-[box-shadow,border-color] duration-[var(--motion-base)] ease-[var(--ease-standard)] hover:shadow-[var(--shadow-md)] hover:border-slate-200/80">
+const StepCard = ({ id, step, title, subtitle, badge, children }) => (
+  <div
+    id={id}
+    className="group relative scroll-mt-24 rounded-[16px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-sm)] transition-[box-shadow,border-color] duration-[var(--motion-base)] ease-[var(--ease-standard)] hover:shadow-[var(--shadow-md)] hover:border-slate-200/80"
+  >
+    <div className="absolute left-6 top-12 hidden h-[calc(100%-3.5rem)] w-px bg-gradient-to-b from-[var(--primary)]/45 to-transparent md:block" />
     <div className="flex items-start justify-between gap-3">
       <div className="flex items-start gap-3">
-        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--primary-light)] text-xs font-semibold text-[var(--primary)]">
+        <div className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-[var(--primary-light)] text-xs font-semibold text-[var(--primary)] shadow-[var(--shadow-sm)]">
           {step}
         </div>
         <div>
@@ -224,6 +257,7 @@ const StepCard = ({ step, title, subtitle, children }) => (
           ) : null}
         </div>
       </div>
+      {badge ? <div className="flex items-center">{badge}</div> : null}
     </div>
     <div className="mt-4 space-y-4">{children}</div>
   </div>
@@ -275,6 +309,13 @@ export function PostForm({
   });
   const fileInputRef = useRef(null);
   const isActive = open !== false;
+  const scrollToStep = (stepId) => {
+    if (typeof document === "undefined") return;
+    const element = document.getElementById(stepId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
 
   const resetState = () => {
     const metadata = post?.metadata || {};
@@ -789,6 +830,25 @@ export function PostForm({
   };
 
   const effectivePreview = previewUrl;
+  const statusMeta = STATUS_PREVIEW[formData.status] || STATUS_PREVIEW.DRAFT;
+  const previewClientInitials = selectedClient?.name
+    ? selectedClient.name.trim().slice(0, 2).toUpperCase()
+    : "KS";
+  const previewIntegrationLabel = selectedIntegration
+    ? resolveIntegrationLabel(selectedIntegration)
+    : "Rede principal";
+  const previewPlatforms = selectedPlatforms.length ? selectedPlatforms : [];
+  const previewPostKinds = selectedPostKinds.length ? selectedPostKinds : [];
+  const primarySlot =
+    scheduleSlots.find((slot) => slot.date || slot.time) || null;
+  const scheduleLabel = recurrence.enabled
+    ? generatedRecurringSlots.length
+      ? `Recorrente (${generatedRecurringSlots.length} posts)`
+      : "Recorrente (defina dias)"
+    : primarySlot?.date
+    ? formatSlotLabel(primarySlot)
+    : "Sem agendamento";
+  const previewTags = parseTags(tagsInput);
 
   return (
     <div className={`flex h-full flex-col ${containerClassName}`}>
@@ -805,8 +865,49 @@ export function PostForm({
 
       <form onSubmit={handleSubmit} className="flex h-full flex-col">
         <div className="grid flex-1 gap-6 overflow-y-auto px-6 py-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="lg:col-span-2">
+            <div className="rounded-[18px] border border-[var(--border)] bg-[linear-gradient(120deg,rgba(255,255,255,0.96),rgba(109,40,217,0.06))] p-4 shadow-[var(--shadow-sm)]">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">
+                    Fluxo do post
+                  </p>
+                  <p className="text-sm text-[var(--text-muted)]">
+                    Seis etapas claras para criar, revisar e publicar.
+                  </p>
+                </div>
+                <div className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-white px-3 py-1 text-[10px] font-semibold text-[var(--primary)] shadow-[var(--shadow-sm)]">
+                  <Sparkles className="h-3 w-3" />
+                  IA ATIVA
+                </div>
+              </div>
+              <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                {FLOW_STEPS.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => scrollToStep(item.id)}
+                    className="group flex w-full items-center gap-3 rounded-[14px] border border-[var(--border)] bg-white px-3 py-2 text-left text-xs shadow-[var(--shadow-sm)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)]"
+                  >
+                    <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-[var(--surface-muted)] text-xs font-semibold text-[var(--text)] transition group-hover:bg-[var(--primary-light)] group-hover:text-[var(--primary)]">
+                      {item.step}
+                    </span>
+                    <div>
+                      <p className="text-xs font-semibold text-[var(--text)]">
+                        {item.title}
+                      </p>
+                      <p className="text-[10px] text-[var(--text-muted)]">
+                        {item.description}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
           <div className="space-y-6">
             <StepCard
+              id="post-step-1"
               step="1"
               title="Selecione perfis"
               subtitle="Escolha o perfil e um grupo (opcional)."
@@ -833,6 +934,7 @@ export function PostForm({
             </StepCard>
 
               <StepCard
+                id="post-step-2"
                 step="2"
                 title="Selecione canais"
                 subtitle="Escolha redes e tipos de post."
@@ -983,12 +1085,65 @@ export function PostForm({
               </StepCard>
 
               <StepCard
+                id="post-step-3"
                 step="3"
                 title="Texto do post"
-                subtitle="Escreva a legenda e personalize hashtags."
+                subtitle="Legenda, hashtags e IA para acelerar."
+                badge={
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[var(--primary-light)] px-2 py-1 text-[10px] font-semibold text-[var(--primary)]">
+                    <Sparkles className="h-3 w-3" />
+                    IA
+                  </span>
+                }
               >
+                <div className="rounded-[14px] border border-[var(--border)] bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(109,40,217,0.08))] p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-white text-[var(--primary)] shadow-[var(--shadow-sm)]">
+                        <Sparkles className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-[var(--text)]">
+                          Kondor IA
+                        </p>
+                        <p className="text-xs text-[var(--text-muted)]">
+                          Gere legendas e variacoes com tom premium.
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      leftIcon={Sparkles}
+                      onClick={() => setShowAiHelper((prev) => !prev)}
+                    >
+                      Gerar com IA
+                    </Button>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className="rounded-full border border-[var(--border)] bg-white px-3 py-1 text-[10px] font-semibold text-[var(--text)]">
+                      CTA inteligente
+                    </span>
+                    <span className="rounded-full border border-[var(--border)] bg-white px-3 py-1 text-[10px] font-semibold text-[var(--text)]">
+                      Tom premium
+                    </span>
+                    <span className="rounded-full border border-[var(--border)] bg-white px-3 py-1 text-[10px] font-semibold text-[var(--text)]">
+                      Hashtags sugeridas
+                    </span>
+                  </div>
+                  {showAiHelper ? (
+                    <div className="mt-3 rounded-[12px] border border-[var(--border)] bg-white/80 px-3 py-2 text-xs text-[var(--text-muted)]">
+                      Ajuste o contexto do post para gerar legendas com IA (em breve).
+                    </div>
+                  ) : null}
+                </div>
+
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center rounded-[10px] border border-[var(--border)] bg-white p-1">
+                    <span className="px-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--text-muted)]">
+                      Tom
+                    </span>
                     <button
                       type="button"
                       className="h-8 rounded-[8px] px-3 text-xs font-semibold text-[var(--primary)] bg-[var(--primary-light)]"
@@ -996,22 +1151,10 @@ export function PostForm({
                       Todos
                     </button>
                   </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    leftIcon={Sparkles}
-                    onClick={() => setShowAiHelper((prev) => !prev)}
-                  >
-                    Criar legenda - IA
-                  </Button>
+                  <p className="text-[11px] text-[var(--text-muted)]">
+                    IA segue o tom selecionado.
+                  </p>
                 </div>
-
-                {showAiHelper ? (
-                  <div className="rounded-[12px] border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-xs text-[var(--text-muted)]">
-                    Configure o contexto do post para gerar legendas com IA (em breve).
-                  </div>
-                ) : null}
 
                 <Textarea
                   value={formData.body}
@@ -1041,6 +1184,7 @@ export function PostForm({
               </StepCard>
 
               <StepCard
+                id="post-step-4"
                 step="4"
                 title="Midias"
                 subtitle="Envie imagens, videos ou documentos."
@@ -1112,6 +1256,7 @@ export function PostForm({
               </StepCard>
 
               <StepCard
+                id="post-step-5"
                 step="5"
                 title="Data e horario das publicacoes"
                 subtitle="Defina a data e configure repeticoes."
@@ -1240,6 +1385,7 @@ export function PostForm({
               </StepCard>
 
               <StepCard
+                id="post-step-6"
                 step="6"
                 title="Configuracoes avancadas"
                 subtitle="Opcoes extras para o post."
@@ -1340,23 +1486,120 @@ export function PostForm({
               <div className="rounded-[16px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-sm)]">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-sm font-semibold text-[var(--text)]">Preview</p>
+                    <p className="text-sm font-semibold text-[var(--text)]">
+                      Preview inteligente
+                    </p>
                     <p className="text-xs text-[var(--text-muted)]">
-                      {selectedClient?.name || "Selecione um perfil"}
+                      Atualiza em tempo real conforme voce preenche.
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    className="text-xs font-semibold text-[var(--primary)]"
-                  >
-                    Ver todos
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface-muted)] px-2.5 py-1 text-[10px] font-semibold text-[var(--text)]">
+                      Live
+                    </span>
+                    <button
+                      type="button"
+                      className="text-xs font-semibold text-[var(--primary)]"
+                    >
+                      Ver todos
+                    </button>
+                  </div>
                 </div>
 
-                <div className="mt-4 rounded-[14px] border border-[var(--border)] bg-[var(--surface-muted)] p-3">
-                  {effectivePreview ? (
-                    <div className="aspect-square overflow-hidden rounded-[12px] bg-white">
-                      {formData.media_type === "video" ? (
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                  <div className="rounded-[12px] border border-[var(--border)] bg-white px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
+                      Canais
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {previewPlatforms.length ? (
+                        previewPlatforms.map((platform) => (
+                          <span
+                            key={`preview-platform-${platform}`}
+                            className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface-muted)] px-2 py-1 text-[10px] font-semibold text-[var(--text)]"
+                          >
+                            <span
+                              className="h-2 w-2 rounded-full"
+                              style={{
+                                backgroundColor:
+                                  PLATFORM_COLOR_MAP[platform] || "var(--primary)",
+                              }}
+                            />
+                            {PLATFORM_LABELS[platform] || platform}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-[10px] text-[var(--text-muted)]">
+                          Selecione um canal
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-[12px] border border-[var(--border)] bg-white px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
+                      Tipos
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {previewPostKinds.length ? (
+                        previewPostKinds.map((kind) => (
+                          <span
+                            key={`preview-kind-${kind}`}
+                            className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--surface-muted)] px-2 py-1 text-[10px] font-semibold text-[var(--text)]"
+                          >
+                            {POST_KIND_LABELS[kind] || kind}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-[10px] text-[var(--text-muted)]">
+                          Selecione um tipo
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-[12px] border border-[var(--border)] bg-white px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
+                      Agendamento
+                    </p>
+                    <div className="mt-2 flex items-center gap-2 text-[10px] text-[var(--text)]">
+                      <CalendarDays className="h-3.5 w-3.5 text-[var(--text-muted)]" />
+                      <span>{scheduleLabel}</span>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[12px] border border-[var(--border)] bg-white px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
+                      Status
+                    </p>
+                    <div className="mt-2">
+                      <span
+                        className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold ${statusMeta.className}`}
+                      >
+                        {statusMeta.label}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 overflow-hidden rounded-[16px] border border-[var(--border)] bg-white">
+                  <div className="flex items-center gap-3 border-b border-[var(--border)] px-3 py-2">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--primary-light)] text-xs font-semibold text-[var(--primary)]">
+                      {previewClientInitials}
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-[var(--text)]">
+                        {selectedClient?.name || "Perfil selecionado"}
+                      </p>
+                      <p className="text-[10px] text-[var(--text-muted)]">
+                        {previewIntegrationLabel}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="aspect-square bg-[var(--surface-muted)]">
+                    {effectivePreview ? (
+                      formData.media_type === "video" ? (
                         <video
                           src={effectivePreview}
                           className="h-full w-full object-cover"
@@ -1368,28 +1611,40 @@ export function PostForm({
                           alt="Preview"
                           className="h-full w-full object-cover"
                         />
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex h-[220px] items-center justify-center text-xs text-[var(--text-muted)]">
-                      Preview indisponivel
-                    </div>
-                  )}
-                </div>
+                      )
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-xs text-[var(--text-muted)]">
+                        Preview indisponivel
+                      </div>
+                    )}
+                  </div>
 
-                <div className="mt-3 space-y-1">
-                  <p className="text-sm font-semibold text-[var(--text)]">
-                    {formData.title || "Titulo do post"}
-                  </p>
-                  <p className="text-xs text-[var(--text-muted)] line-clamp-3">
-                    {buildCaption() || "A legenda do post aparece aqui."}
-                  </p>
+                  <div className="space-y-2 px-3 py-3">
+                    <p className="text-sm font-semibold text-[var(--text)]">
+                      {formData.title || "Titulo do post"}
+                    </p>
+                    <p className="text-xs text-[var(--text-muted)] line-clamp-3">
+                      {buildCaption() || "A legenda do post aparece aqui."}
+                    </p>
+                    {previewTags.length ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {previewTags.slice(0, 6).map((tag, index) => (
+                          <span
+                            key={`preview-tag-${tag}-${index}`}
+                            className="rounded-full border border-[var(--border)] bg-[var(--surface-muted)] px-2 py-1 text-[10px] font-semibold text-[var(--text-muted)]"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
               </div>
             </aside>
           </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] bg-white px-6 py-4">
+        <div className="flex flex-wrap items-start justify-between gap-4 border-t border-[var(--border)] bg-white px-6 py-4">
           {post && onDelete ? (
             <Button
               type="button"
@@ -1410,47 +1665,68 @@ export function PostForm({
             <div />
           )}
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => {
-                if (onCancel) onCancel();
-              }}
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => submitPost("DRAFT")}
-              disabled={isSaving || isUploading || isDeleting}
-            >
-              Salvar rascunho
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => submitPost("CLIENT_APPROVAL")}
-              disabled={isSaving || isUploading || isDeleting}
-            >
-              Enviar para aprovacao
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => submitPost("DONE")}
-              disabled={isSaving || isUploading || isDeleting}
-            >
-              Publicar agora
-            </Button>
-            <Button
-              type="button"
-              onClick={() => submitPost("SCHEDULED")}
-              disabled={isSaving || isUploading || isDeleting}
-            >
-              {isSaving ? "Salvando..." : "Agendar"}
-            </Button>
+          <div className="flex flex-wrap items-start gap-6">
+            <div className="space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--text-muted)]">
+                Salvar
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    if (onCancel) onCancel();
+                  }}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => submitPost("DRAFT")}
+                  disabled={isSaving || isUploading || isDeleting}
+                >
+                  Salvar rascunho
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--text-muted)]">
+                Destino do post
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  leftIcon={CheckCircle2}
+                  onClick={() => submitPost("CLIENT_APPROVAL")}
+                  disabled={isSaving || isUploading || isDeleting}
+                >
+                  Enviar para aprovacao
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  leftIcon={Play}
+                  onClick={() => submitPost("DONE")}
+                  disabled={isSaving || isUploading || isDeleting}
+                >
+                  Publicar agora
+                </Button>
+                <Button
+                  type="button"
+                  leftIcon={CalendarDays}
+                  onClick={() => submitPost("SCHEDULED")}
+                  disabled={isSaving || isUploading || isDeleting}
+                >
+                  {isSaving ? "Salvando..." : "Agendar publicacao"}
+                </Button>
+              </div>
+              <p className="text-[10px] text-[var(--text-muted)]">
+                Aprovacao envia para o cliente. Agendar publica automaticamente.
+              </p>
+            </div>
           </div>
         </div>
       </form>
