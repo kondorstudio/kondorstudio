@@ -18,6 +18,7 @@ router.get('/brands/:brandId/connections', connectionsController.listByBrand);
 router.post('/brands/:brandId/connections/link', connectionsController.link);
 router.get('/integrations/:integrationId/accounts', connectionsController.listAccounts);
 router.get('/brand-groups', brandGroupsController.list);
+router.get('/brand-groups/:groupId/members', brandGroupsController.listMembers);
 router.get('/metric-catalog', metricCatalogController.list);
 router.get('/dimensions', metricCatalogController.listDimensions);
 router.post(

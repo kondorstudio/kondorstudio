@@ -1,26 +1,10 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import PageShell from "@/components/ui/page-shell.jsx";
 import { Button } from "@/components/ui/button.jsx";
 import EmptyState from "@/components/ui/empty-state.jsx";
 import { base44 } from "@/apiClient/base44Client";
-
-function buildDefaultDashboard() {
-  const today = new Date();
-  const from = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-  const toDateKey = (value) => value.toISOString().slice(0, 10);
-  return {
-    name: "Dashboard ao vivo",
-    scope: "TENANT",
-    layoutSchema: [],
-    widgetsSchema: [],
-    globalFiltersSchema: {
-      dateFrom: toDateKey(from),
-      dateTo: toDateKey(today),
-    },
-  };
-}
 
 export default function DashboardsHome() {
   const navigate = useNavigate();
@@ -31,13 +15,6 @@ export default function DashboardsHome() {
   });
 
   const dashboards = data?.items || [];
-
-  const createMutation = useMutation({
-    mutationFn: () => base44.reporting.createDashboard(buildDefaultDashboard()),
-    onSuccess: (dashboard) => {
-      if (dashboard?.id) navigate(`/reports/dashboards/${dashboard.id}`);
-    },
-  });
 
   return (
     <PageShell>
@@ -54,8 +31,8 @@ export default function DashboardsHome() {
               Use filtros globais para atualizar tudo em tempo real.
             </p>
           </div>
-          <Button onClick={() => createMutation.mutate()}>
-            {createMutation.isLoading ? "Criando..." : "Novo dashboard"}
+          <Button onClick={() => navigate("/reports/dashboards/new")}>
+            Novo dashboard
           </Button>
         </div>
 
@@ -84,7 +61,7 @@ export default function DashboardsHome() {
             title="Nenhum dashboard ao vivo"
             description="Crie um dashboard para acompanhar resultados em tempo real."
             action={
-              <Button onClick={() => createMutation.mutate()}>
+              <Button onClick={() => navigate("/reports/dashboards/new")}>
                 Criar dashboard
               </Button>
             }

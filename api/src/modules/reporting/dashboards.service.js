@@ -24,6 +24,45 @@ function resolveGlobalFilters(dashboard, overrides = {}) {
   return base;
 }
 
+async function resolveBrandForGroup(tenantId, groupId) {
+  if (!tenantId || !groupId) return null;
+  const member = await prisma.brandGroupMember.findFirst({
+    where: { tenantId, groupId },
+    select: { brandId: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  return member?.brandId || null;
+}
+
+async function resolveConnectionForWidget({
+  tenantId,
+  source,
+  connectionId,
+  brandId,
+  cacheMap,
+}) {
+  if (connectionId) return connectionId;
+  if (!tenantId || !source || !brandId) return null;
+
+  const key = `${brandId}:${source}`;
+  if (cacheMap.has(key)) return cacheMap.get(key);
+
+  const connection = await prisma.dataSourceConnection.findFirst({
+    where: {
+      tenantId,
+      brandId,
+      source,
+      status: 'CONNECTED',
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true },
+  });
+
+  const resolved = connection?.id || null;
+  cacheMap.set(key, resolved);
+  return resolved;
+}
+
 function buildLayout(layoutSchema, widgetsSchema) {
   if (Array.isArray(layoutSchema) && layoutSchema.length) return layoutSchema;
   if (!Array.isArray(widgetsSchema)) return [];
@@ -108,13 +147,61 @@ async function queryDashboardData(tenantId, id, overrides = {}) {
     overrides.rangeDays,
   );
 
+  const compareMode = globalFilters.compareMode || overrides.compareMode || null;
+  const compareDateFrom =
+    globalFilters.compareDateFrom || overrides.compareDateFrom || null;
+  const compareDateTo =
+    globalFilters.compareDateTo || overrides.compareDateTo || null;
+
+  let effectiveBrandId = null;
+  let effectiveGroupId = null;
+
+  if (dashboard.scope === 'BRAND') {
+    effectiveBrandId = dashboard.brandId || null;
+  } else if (dashboard.scope === 'GROUP') {
+    effectiveGroupId = dashboard.groupId || null;
+    effectiveBrandId =
+      globalFilters.brandId || overrides.brandId || (await resolveBrandForGroup(
+        tenantId,
+        effectiveGroupId,
+      ));
+  } else {
+    effectiveBrandId = globalFilters.brandId || overrides.brandId || null;
+    effectiveGroupId = globalFilters.groupId || overrides.groupId || null;
+  }
+
   const widgets = Array.isArray(dashboard.widgetsSchema)
     ? dashboard.widgetsSchema
     : [];
   const results = [];
+  const connectionCache = new Map();
 
   for (const widget of widgets) {
-    if (!widget?.source || !widget?.connectionId) {
+    if (!widget?.source) {
+      results.push({
+        widgetId: widget?.id || null,
+        error: 'Widget sem fonte configurada',
+      });
+      continue;
+    }
+
+    const inheritBrand = widget?.inheritBrand !== false;
+    const widgetBrandId = widget?.brandId || null;
+    const resolvedBrandId = inheritBrand ? effectiveBrandId : widgetBrandId;
+
+    const resolvedConnectionId = await resolveConnectionForWidget({
+      tenantId,
+      source: widget.source,
+      connectionId: inheritBrand ? null : widget.connectionId,
+      brandId: resolvedBrandId,
+      cacheMap: connectionCache,
+    });
+
+    const finalConnectionId = inheritBrand
+      ? resolvedConnectionId || widget.connectionId
+      : widget.connectionId || resolvedConnectionId;
+
+    if (!finalConnectionId) {
       results.push({
         widgetId: widget?.id || null,
         error: 'Widget sem conexao configurada',
@@ -125,13 +212,23 @@ async function queryDashboardData(tenantId, id, overrides = {}) {
     try {
       const response = await reportingData.queryMetrics(tenantId, {
         source: widget.source,
-        connectionId: widget.connectionId,
+        connectionId: finalConnectionId,
         dateFrom,
         dateTo,
         level: widget.level || null,
         breakdown: widget.breakdown || null,
         metrics: Array.isArray(widget.metrics) ? widget.metrics : [],
-        filters: mergeFilters(globalFilters, widget.filters),
+        filters: mergeFilters(
+          {
+            ...globalFilters,
+            brandId: effectiveBrandId,
+            groupId: effectiveGroupId,
+            compareMode,
+            compareDateFrom,
+            compareDateTo,
+          },
+          widget.filters,
+        ),
         options: widget.options || null,
       });
       results.push({
@@ -150,6 +247,12 @@ async function queryDashboardData(tenantId, id, overrides = {}) {
 
   return {
     dashboardId: dashboard.id,
+    scope: dashboard.scope,
+    brandId: effectiveBrandId,
+    groupId: effectiveGroupId,
+    compareMode,
+    compareDateFrom,
+    compareDateTo,
     dateFrom,
     dateTo,
     widgets: results,

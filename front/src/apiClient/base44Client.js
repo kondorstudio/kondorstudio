@@ -657,6 +657,20 @@ const Reporting = {
     return jsonFetch("/reporting/brand-groups", { method: "GET" });
   },
 
+  async listBrandGroupMembers(groupId) {
+    if (!groupId) throw new Error("groupId obrigatorio");
+    return jsonFetch(`/reporting/brand-groups/${groupId}/members`, {
+      method: "GET",
+    });
+  },
+
+  async listConnectionsByBrand(brandId) {
+    if (!brandId) throw new Error("brandId obrigatorio");
+    return jsonFetch(`/reporting/brands/${brandId}/connections`, {
+      method: "GET",
+    });
+  },
+
   async listReports(params = {}) {
     const qs = buildQuery(params);
     return jsonFetch(`/reporting/reports${qs}`, { method: "GET" });

@@ -26,6 +26,7 @@ const ReportsWizard = lazy(() => import("./pages/reports/ReportsWizard.jsx"));
 const ReportViewer = lazy(() => import("./pages/reports/ReportViewer.jsx"));
 const DashboardsHome = lazy(() => import("./pages/reports/DashboardsHome.jsx"));
 const DashboardViewer = lazy(() => import("./pages/reports/DashboardViewer.jsx"));
+const DashboardBuilder = lazy(() => import("./pages/reports/DashboardBuilder.jsx"));
 
 const Home = lazy(() => import("./pages/home.jsx"));
 const Checkout = lazy(() => import("./pages/checkout.jsx"));
@@ -124,9 +125,14 @@ export default function App() {
             <Route path="/reports/new" element={<ReportsWizard />} />
             <Route path="/reports/:reportId" element={<ReportViewer />} />
             <Route path="/reports/dashboards" element={<DashboardsHome />} />
+            <Route path="/reports/dashboards/new" element={<DashboardBuilder />} />
             <Route
               path="/reports/dashboards/:dashboardId"
               element={<DashboardViewer />}
+            />
+            <Route
+              path="/reports/dashboards/:dashboardId/edit"
+              element={<DashboardBuilder />}
             />
             <Route path="/competitors" element={<Competitors />} />
             <Route path="/integrations" element={<Integrations />} />
