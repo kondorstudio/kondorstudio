@@ -106,14 +106,14 @@ export default function Financeiro() {
     <PageShell>
       <PageHeader
         title="Financeiro"
-        subtitle="Acompanhe os lancamentos financeiros por cliente."
+        subtitle="Acompanhe receitas, custos e saldo da agencia em um so painel."
         actions={
           <div className="flex flex-wrap gap-3">
             <Button variant="secondary" leftIcon={Plus} onClick={handleNewCost}>
-              Novo custo
+              Registrar custo
             </Button>
             <Button size="lg" leftIcon={Plus} onClick={handleNew}>
-              Novo lancamento
+              Registrar receita
             </Button>
           </div>
         }
@@ -151,7 +151,7 @@ export default function Financeiro() {
             <div className="absolute inset-x-0 top-0 h-1 bg-emerald-500" />
             <CardHeader>
               <CardTitle className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--text-muted)]">
-                Receitas (income)
+                Receitas
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -165,7 +165,7 @@ export default function Financeiro() {
             <div className="absolute inset-x-0 top-0 h-1 bg-rose-500" />
             <CardHeader>
               <CardTitle className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--text-muted)]">
-                Custos (expense)
+                Custos
               </CardTitle>
             </CardHeader>
             <CardContent>

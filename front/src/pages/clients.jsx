@@ -87,10 +87,10 @@ export default function Clients() {
     <PageShell>
       <PageHeader
         title="Clientes"
-        subtitle="Gerencie sua carteira de clientes."
+        subtitle="Construa e acompanhe sua carteira com contexto."
         actions={
           <Button size="lg" leftIcon={Plus} onClick={() => setDialogOpen(true)}>
-            Novo cliente
+            Adicionar cliente
           </Button>
         }
       />

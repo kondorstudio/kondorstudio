@@ -84,10 +84,10 @@ export default function Team() {
     <PageShell>
       <PageHeader
         title="Equipe"
-        subtitle="Gerencie os membros da sua agencia."
+        subtitle="Monte o time certo para cada entrega."
         actions={
           <Button size="lg" leftIcon={Plus} onClick={() => setDialogOpen(true)}>
-            Adicionar membro
+            Convidar membro
           </Button>
         }
       />

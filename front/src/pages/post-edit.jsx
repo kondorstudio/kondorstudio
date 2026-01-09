@@ -79,10 +79,10 @@ export default function PostEdit() {
       <PageShell>
         <PageHeader
           title="Editar post"
-          subtitle="Configure perfis, canais, conteudo e agendamento."
+          subtitle="Ajuste canais, conteudo e agenda em um unico fluxo."
           actions={
             <Button variant="ghost" leftIcon={ArrowLeft} onClick={handleCancel}>
-              Voltar
+              Voltar para posts
             </Button>
           }
         />
@@ -105,10 +105,10 @@ export default function PostEdit() {
       <PageShell>
         <PageHeader
           title="Editar post"
-          subtitle="Configure perfis, canais, conteudo e agendamento."
+          subtitle="Ajuste canais, conteudo e agenda em um unico fluxo."
           actions={
             <Button variant="ghost" leftIcon={ArrowLeft} onClick={handleCancel}>
-              Voltar
+              Voltar para posts
             </Button>
           }
         />
@@ -131,10 +131,10 @@ export default function PostEdit() {
       <PageShell>
         <PageHeader
           title="Editar post"
-          subtitle="Configure perfis, canais, conteudo e agendamento."
+          subtitle="Ajuste canais, conteudo e agenda em um unico fluxo."
           actions={
             <Button variant="ghost" leftIcon={ArrowLeft} onClick={handleCancel}>
-              Voltar
+              Voltar para posts
             </Button>
           }
         />
@@ -156,10 +156,10 @@ export default function PostEdit() {
     <PageShell>
       <PageHeader
         title="Editar post"
-        subtitle="Configure perfis, canais, conteudo e agendamento."
+        subtitle="Ajuste canais, conteudo e agenda em um unico fluxo."
         actions={
           <Button variant="ghost" leftIcon={ArrowLeft} onClick={handleCancel}>
-            Voltar
+            Voltar para posts
           </Button>
         }
       />

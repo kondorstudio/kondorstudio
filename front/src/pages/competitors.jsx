@@ -148,7 +148,7 @@ export default function Competitors() {
   const syncMutation = useMutation({
     mutationFn: (id) => base44.entities.Competitor.sync(id),
     onSuccess: (response) => {
-      showToast(response?.message || "Solicitacao enviada.", "info");
+      showToast(response?.message || "Solicitacao enviada com sucesso.", "info");
       queryClient.invalidateQueries({ queryKey: ["competitors"] });
     },
     onError: (error) => {
@@ -186,7 +186,7 @@ export default function Competitors() {
     <PageShell>
       <PageHeader
         title="Concorrentes"
-        subtitle="Acompanhe o desempenho dos principais concorrentes por rede."
+        subtitle="Compare desempenho e monitore o mercado por rede."
         actions={
           <Button leftIcon={UsersRound} onClick={handleAdd}>
             Adicionar concorrente
@@ -235,7 +235,7 @@ export default function Competitors() {
             <Input
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Buscar por concorrente"
+              placeholder="Buscar concorrente"
               className="pl-9"
             />
           </div>
@@ -247,9 +247,9 @@ export default function Competitors() {
           <CardHeader className="flex flex-col gap-2">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <CardTitle>Resumo dos concorrentes</CardTitle>
+                <CardTitle>Panorama competitivo</CardTitle>
                 <p className="text-sm text-[var(--text-muted)]">
-                  {competitors.length} concorrente(s) cadastrados
+                  {competitors.length} concorrente(s) monitorados
                 </p>
               </div>
               <Button
@@ -289,7 +289,7 @@ export default function Competitors() {
             ) : listEmpty ? (
               <EmptyState
                 title="Sem concorrentes monitorados"
-                description="Cadastre concorrentes para acompanhar mercado e oportunidades."
+                description="Adicione concorrentes para comparar performance e capturar oportunidades."
                 action={
                   <Button leftIcon={UsersRound} onClick={handleAdd}>
                     Adicionar concorrente

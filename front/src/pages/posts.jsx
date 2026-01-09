@@ -360,7 +360,7 @@ export default function Posts() {
     <PageShell>
       <PageHeader
         title="Posts"
-        subtitle="Gerencie o fluxo de criacao e aprovacao."
+        subtitle="Planeje, aprove e publique com clareza."
         actions={
           <Button
             size="lg"
@@ -368,7 +368,7 @@ export default function Posts() {
             leftIcon={Plus}
             onClick={() => handleNewPost()}
           >
-            Novo post
+            Criar post
           </Button>
         }
       />
@@ -393,7 +393,7 @@ export default function Posts() {
           </SelectNative>
           {clients.length === 0 ? (
             <p className="text-[11px] text-amber-600 mt-1">
-              Cadastre um cliente antes de visualizar posts.
+              Adicione um cliente para visualizar posts aqui.
             </p>
           ) : null}
         </div>

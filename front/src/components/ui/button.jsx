@@ -14,6 +14,7 @@ export function Button({
   const baseClasses =
     "inline-flex items-center justify-center gap-2 border text-sm font-semibold " +
     "transition-[transform,box-shadow,background-color,border-color,color] duration-[var(--motion-base)] ease-[var(--ease-standard)] " +
+    "hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] " +
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 " +
     "focus-visible:ring-[rgba(109,40,217,0.35)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none";
 

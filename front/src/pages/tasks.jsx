@@ -145,10 +145,10 @@ export default function Tasks() {
     <PageShell>
       <PageHeader
         title="Tarefas"
-        subtitle="Organize o fluxo de trabalho da sua agencia."
+        subtitle="Mantenha o time alinhado e as entregas no prazo."
         actions={
           <Button size="lg" leftIcon={Plus} onClick={handleNew}>
-            Nova tarefa
+            Criar tarefa
           </Button>
         }
       />

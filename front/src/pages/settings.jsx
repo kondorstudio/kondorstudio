@@ -80,7 +80,7 @@ export default function Settings() {
     <PageShell>
       <PageHeader
         title="Configuracoes"
-        subtitle="Personalize sua agencia e plano."
+        subtitle="Ajuste identidade, plano e limites da agencia."
       />
 
       <div className="mt-6 max-w-4xl">
@@ -104,7 +104,7 @@ export default function Settings() {
                 onClick={() => navigate(createPageUrl("Pricing"))}
                 leftIcon={CreditCard}
               >
-                Ver Planos
+                Ver planos
               </Button>
             </div>
           </CardHeader>
@@ -166,7 +166,7 @@ export default function Settings() {
                       <Button type="button" variant="outline" asChild>
                         <span>
                           <Upload className="w-4 h-4 mr-2" />
-                          {uploading ? 'Enviando...' : 'Upload Logo'}
+                          {uploading ? 'Enviando...' : 'Enviar logo'}
                         </span>
                       </Button>
                     </label>
@@ -212,7 +212,7 @@ export default function Settings() {
 
               {/* Preview */}
               <div className="p-6 bg-gray-50 rounded-lg border-2 border-dashed">
-                <p className="text-sm text-gray-600 mb-3">Preview do Portal do Cliente:</p>
+                <p className="text-sm text-gray-600 mb-3">Preview do portal do cliente:</p>
                 <div
                   className="p-4 rounded-lg"
                   style={{
@@ -237,7 +237,7 @@ export default function Settings() {
                   type="submit"
                   disabled={updateMutation.isPending || uploading}
                 >
-                  {updateMutation.isPending ? 'Salvando...' : 'Salvar Configurações'}
+                  {updateMutation.isPending ? 'Salvando...' : 'Salvar ajustes'}
                 </Button>
               </div>
             </form>

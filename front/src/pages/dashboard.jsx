@@ -616,7 +616,7 @@ export default function Dashboard() {
                     className="w-full"
                     onClick={() => navigate("/posts/new")}
                   >
-                    Criar novo post
+                    Criar post
                   </Button>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <ActionTile
@@ -731,7 +731,7 @@ export default function Dashboard() {
                       variant="secondary"
                       onClick={() => navigate("/posts/new")}
                     >
-                      Criar novo post
+                      Criar post
                     </Button>
                   </div>
                 )}

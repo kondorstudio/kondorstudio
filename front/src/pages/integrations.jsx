@@ -586,7 +586,7 @@ export default function Integrations() {
     <PageShell>
       <PageHeader
         title="Integracoes"
-        subtitle="Conecte os canais essenciais da agencia e mantenha o fluxo automatizado."
+        subtitle="Conecte canais essenciais da agencia e mantenha tudo sincronizado."
         actions={
           <Button
             variant="secondary"
@@ -596,13 +596,13 @@ export default function Integrations() {
             disabled={isFetching}
             isLoading={isFetching}
           >
-            Atualizar
+            Atualizar conexoes
           </Button>
         }
       />
 
       <div className="mt-4 text-xs text-[var(--text-muted)]">
-        {connectedCount} de {connectableCatalog.length} integracoes conectadas.
+        {connectedCount} de {connectableCatalog.length} integracoes ativas.
       </div>
 
       <div className="mt-8 space-y-12">

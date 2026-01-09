@@ -102,7 +102,7 @@ export default function Biblioteca() {
     <PageShell>
       <PageHeader
         title="Biblioteca de criativos"
-        subtitle="Gerencie seus assets e encontre o criativo ideal para cada post."
+        subtitle="Centralize seus assets e encontre o criativo certo em segundos."
         kicker="Biblioteca"
       />
 
@@ -123,7 +123,7 @@ export default function Biblioteca() {
         {filteredCreatives.length === 0 ? (
           <CreativeEmptyState
             onAction={() => navigate("/posts/new")}
-            actionLabel="Criar post e enviar midia"
+            actionLabel="Criar post com midia"
           />
         ) : (
           <CreativeGrid

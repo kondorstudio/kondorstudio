@@ -80,11 +80,11 @@ export default function PostCreate() {
   return (
     <PageShell>
       <PageHeader
-        title="Novo post"
-        subtitle="Configure perfis, canais, conteudo e agendamento."
+        title="Criar post"
+        subtitle="Defina canais, conteudo e agenda em um unico fluxo."
         actions={
           <Button variant="ghost" leftIcon={ArrowLeft} onClick={handleCancel}>
-            Voltar
+            Voltar para posts
           </Button>
         }
       />
