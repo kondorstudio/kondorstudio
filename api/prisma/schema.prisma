@@ -71,6 +71,73 @@ enum IntegrationOwnerType {
   CLIENT
 }
 
+enum DataSource {
+  META_ADS
+  GOOGLE_ADS
+  TIKTOK_ADS
+  LINKEDIN_ADS
+  GA4
+  GBP
+  META_SOCIAL
+}
+
+enum DataSourceConnectionStatus {
+  CONNECTED
+  DISCONNECTED
+  ERROR
+}
+
+enum MetricCatalogType {
+  METRIC
+  DIMENSION
+}
+
+enum ReportTemplateVisibility {
+  PRIVATE
+  TENANT
+  PUBLIC
+}
+
+enum ReportScope {
+  BRAND
+  GROUP
+}
+
+enum ReportCompareMode {
+  NONE
+  PREVIOUS_PERIOD
+  PREVIOUS_YEAR
+  CUSTOM
+}
+
+enum ReportWidgetType {
+  KPI
+  LINE
+  BAR
+  PIE
+  TABLE
+  TEXT
+  IMAGE
+}
+
+enum DashboardScope {
+  BRAND
+  GROUP
+  TENANT
+}
+
+enum ReportExportStatus {
+  PENDING
+  PROCESSING
+  READY
+  ERROR
+}
+
+enum ReportScheduleFrequency {
+  WEEKLY
+  MONTHLY
+}
+
 enum BillingInterval {
   MONTHLY
   YEARLY
@@ -135,6 +202,15 @@ model Tenant {
   integrations     Integration[]
   uploads          Upload[]
   reports          Report[]
+  brandGroups      BrandGroup[]
+  brandGroupMembers BrandGroupMember[]
+  dataSourceConnections DataSourceConnection[]
+  metricCatalog    MetricCatalog[]
+  reportTemplates  ReportTemplate[]
+  reportWidgets    ReportWidget[]
+  dashboards       Dashboard[]
+  reportExports    ReportExport[]
+  reportSchedules  ReportSchedule[]
   auditLogs        AuditLog[]
   subscriptions    Subscription[]
   financialRecords FinancialRecord[]
@@ -338,6 +414,10 @@ model Client {
   posts            Post[]
   financialRecords FinancialRecord[]
   integrations     Integration[]
+  dataSourceConnections DataSourceConnection[]
+  brandGroupMembers BrandGroupMember[]
+  reports          Report[]
+  dashboards       Dashboard[]
   metrics          Metric[]   @relation("ClientMetrics")
   competitors      Competitor[]
 
@@ -627,17 +707,242 @@ model Report {
   type     String // e.g., monthly_metrics, campaign_performance
   params   Json?
   status   String @default("pending")
+  scope    ReportScope?
+  brandId  String?
+  brand    Client? @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  groupId  String?
+  group    BrandGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  templateId String?
+  template   ReportTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  dateFrom DateTime?
+  dateTo   DateTime?
+  compareMode ReportCompareMode?
+  compareDateFrom DateTime?
+  compareDateTo   DateTime?
+  snapshotTemplate Json?
 
   fileId String?
   file   Upload? @relation("ReportFiles", fields: [fileId], references: [id], onDelete: SetNull)
 
   generatedAt DateTime?
+  widgets     ReportWidget[]
+  exports     ReportExport[]
+  schedules   ReportSchedule[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
   @@index([tenantId])
   @@index([status])
+  @@index([brandId])
+  @@index([groupId])
+  @@index([templateId])
   @@map("reports")
+}
+
+model BrandGroup {
+  id          String   @id @default(uuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+
+  members   BrandGroupMember[]
+  reports   Report[]
+  dashboards Dashboard[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@map("brand_groups")
+}
+
+model BrandGroupMember {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  groupId   String
+  group     BrandGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  brandId   String
+  brand     Client  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, groupId, brandId])
+  @@index([tenantId])
+  @@index([groupId])
+  @@index([brandId])
+  @@map("brand_group_members")
+}
+
+model DataSourceConnection {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  brandId   String
+  brand     Client   @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  source    DataSource
+  integrationId String?
+  integration Integration? @relation(fields: [integrationId], references: [id], onDelete: SetNull)
+  externalAccountId String?
+  displayName String
+  status    DataSourceConnectionStatus @default(CONNECTED)
+  meta      Json?
+
+  widgets   ReportWidget[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([brandId])
+  @@index([source])
+  @@index([integrationId])
+  @@map("data_source_connections")
+}
+
+model MetricCatalog {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  source    DataSource
+  level     String
+  metricKey String
+  dimensionKey String?
+  label     String
+  type      MetricCatalogType
+  supportedCharts     String[] @default([])
+  supportedBreakdowns String[] @default([])
+  isDefault Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, source, level, metricKey, type])
+  @@index([tenantId])
+  @@index([source])
+  @@index([level])
+  @@map("metric_catalog")
+}
+
+model ReportTemplate {
+  id          String   @id @default(uuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  visibility  ReportTemplateVisibility @default(TENANT)
+  layoutSchema  Json?
+  widgetsSchema Json?
+  version     Int @default(1)
+  parentTemplateId String?
+  parentTemplate   ReportTemplate? @relation("ReportTemplateVersions", fields: [parentTemplateId], references: [id], onDelete: SetNull)
+  versions    ReportTemplate[] @relation("ReportTemplateVersions")
+
+  reports     Report[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, name, version])
+  @@index([tenantId])
+  @@map("report_templates")
+}
+
+model ReportWidget {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  reportId  String
+  report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  widgetType ReportWidgetType
+  title     String?
+  source    DataSource
+  connectionId String?
+  connection   DataSourceConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  level     String?
+  breakdown String?
+  metrics   Json?
+  filters   Json?
+  options   Json?
+  layout    Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([reportId])
+  @@index([source])
+  @@map("report_widgets")
+}
+
+model Dashboard {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  scope     DashboardScope
+  brandId   String?
+  brand     Client?  @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  groupId   String?
+  group     BrandGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  layoutSchema  Json?
+  widgetsSchema Json?
+  globalFiltersSchema Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([scope])
+  @@map("dashboards")
+}
+
+model ReportExport {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  reportId  String
+  report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  status    ReportExportStatus @default(PENDING)
+  format    String @default("PDF")
+  fileId    String?
+  file      Upload? @relation("ReportExportFile", fields: [fileId], references: [id], onDelete: SetNull)
+  meta      Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([reportId])
+  @@index([status])
+  @@map("report_exports")
+}
+
+model ReportSchedule {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  scope     ReportScope
+  brandId   String?
+  brand     Client?  @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  groupId   String?
+  group     BrandGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  templateId String?
+  template   ReportTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  frequency ReportScheduleFrequency
+  timezone  String @default("America/Sao_Paulo")
+  scheduleConfig Json?
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([scope])
+  @@index([frequency])
+  @@map("report_schedules")
 }
 
 model Plan {
@@ -775,6 +1080,7 @@ model Integration {
   ownerKey             String               @default("AGENCY")
 
   integrationJobs IntegrationJob[]
+  dataSourceConnections DataSourceConnection[]
   metrics         Metric[]   @relation("IntegrationMetrics")
 
   createdAt DateTime @default(now())
