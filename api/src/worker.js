@@ -9,6 +9,7 @@ const {
   publishingQueue,
   reportGenerateQueue,
   dashboardRefreshQueue,
+  reportScheduleQueue,
 } = require('./queues');
 const { prisma } = require('./prisma');
 
@@ -17,9 +18,11 @@ const refreshMetaTokensJob = require('./jobs/refreshMetaTokensJob');
 const reportGenerationJob = require('./jobs/reportGenerationJob');
 const reportingGenerateJob = require('./jobs/reportingGenerateJob');
 const dashboardRefreshJob = require('./jobs/dashboardRefreshJob');
+const reportScheduleJob = require('./jobs/reportScheduleJob');
 const automationWhatsAppJob = require('./jobs/automationWhatsAppJob');
 const whatsappApprovalJob = require('./jobs/whatsappApprovalRequestJob');
 const publishScheduledPostsJob = require('./jobs/publishScheduledPostsJob');
+const reportSchedulesService = require('./modules/reporting/reportSchedules.service');
 
 // ------------------------------------------------------
 // Conexão do BullMQ (usa REDIS_URL da env; em dev cai pro localhost)
@@ -105,6 +108,15 @@ const dashboardRefreshWorker = new Worker(
   { connection },
 );
 
+const reportScheduleWorker = new Worker(
+  reportScheduleQueue.name,
+  async (job) => {
+    console.log('[reportSchedule] processing job', job.id, job.name);
+    await reportScheduleJob.processJob(job.data || {});
+  },
+  { connection },
+);
+
 const whatsappWorker = new Worker(
   whatsappQueue.name,
   async (job) => {
@@ -148,6 +160,10 @@ reportGenerateWorker.on('completed', (job) => {
 
 dashboardRefreshWorker.on('completed', (job) => {
   console.log('[dashboardRefresh] job completed', job.id);
+});
+
+reportScheduleWorker.on('completed', (job) => {
+  console.log('[reportSchedule] job completed', job.id);
 });
 
 whatsappWorker.on('completed', (job) => {
@@ -195,6 +211,11 @@ dashboardRefreshWorker.on('failed', async (job, err) => {
   await logJobFailure(dashboardRefreshQueue.name, job, err);
 });
 
+reportScheduleWorker.on('failed', async (job, err) => {
+  console.error('[reportSchedule] job failed', job?.id, err);
+  await logJobFailure(reportScheduleQueue.name, job, err);
+});
+
 whatsappWorker.on('failed', async (job, err) => {
   console.error('[whatsapp] job failed', job?.id, err);
   await logJobFailure(whatsappQueue.name, job, err);
@@ -236,3 +257,17 @@ ensureRepeatableJobs().catch((err) => {
     err && err.stack ? err.stack : err,
   );
 });
+
+async function ensureScheduleJobs() {
+  try {
+    const result = await reportSchedulesService.syncActiveSchedules();
+    console.log('[worker] report schedules synced', result);
+  } catch (err) {
+    console.error(
+      '[worker] erro ao sincronizar report schedules:',
+      err && err.stack ? err.stack : err,
+    );
+  }
+}
+
+ensureScheduleJobs();

@@ -15,6 +15,7 @@ const whatsappQueue = createQueue('whatsapp-automation');
 const publishingQueue = createQueue('posts-publish');
 const reportGenerateQueue = createQueue('report-generate');
 const dashboardRefreshQueue = createQueue('dashboard-refresh');
+const reportScheduleQueue = createQueue('report-schedule');
 
 module.exports = {
   metricsSyncQueue,
@@ -23,4 +24,5 @@ module.exports = {
   publishingQueue,
   reportGenerateQueue,
   dashboardRefreshQueue,
+  reportScheduleQueue,
 };

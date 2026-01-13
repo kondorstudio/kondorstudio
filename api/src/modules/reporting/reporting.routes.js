@@ -8,6 +8,7 @@ const connectionsController = require('./connections.controller');
 const dashboardsController = require('./dashboards.controller');
 const metricCatalogController = require('./metricCatalog.controller');
 const reportExportsController = require('./reportExports.controller');
+const reportSchedulesController = require('./reportSchedules.controller');
 const templatesController = require('./templates.controller');
 const reportsController = require('./reports.controller');
 
@@ -49,5 +50,28 @@ router.post('/reports/:id/refresh', reportsController.refresh);
 router.get('/reports/:id/exports', reportExportsController.list);
 router.post('/reports/:id/exports', reportExportsController.create);
 router.get('/report-exports/:exportId', reportExportsController.get);
+
+router.get('/schedules', reportSchedulesController.list);
+router.get('/schedules/:id', reportSchedulesController.get);
+router.post(
+  '/schedules',
+  auth.requireRole('OWNER', 'ADMIN'),
+  reportSchedulesController.create,
+);
+router.put(
+  '/schedules/:id',
+  auth.requireRole('OWNER', 'ADMIN'),
+  reportSchedulesController.update,
+);
+router.delete(
+  '/schedules/:id',
+  auth.requireRole('OWNER', 'ADMIN'),
+  reportSchedulesController.remove,
+);
+router.post(
+  '/schedules/:id/run',
+  auth.requireRole('OWNER', 'ADMIN'),
+  reportSchedulesController.run,
+);
 
 module.exports = router;
