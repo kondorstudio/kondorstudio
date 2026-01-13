@@ -314,7 +314,11 @@ async function createReportExport(tenantId, reportId) {
     const html = renderReportHtml(report, snapshots?.items || []);
     const pdfBuffer = await generatePdfFromHtml(html);
 
-    const filename = `${slugify(report.name || "relatorio")}-${report.id.slice(0, 6)}.pdf`;
+    const exportSuffix = exportRecord.id.slice(0, 6);
+    const filename = `${slugify(report.name || "relatorio")}-${report.id.slice(
+      0,
+      6,
+    )}-${exportSuffix}.pdf`;
     const key = `${tenantId}/reports/${report.id}/${filename}`;
 
     const uploadResult = await uploadsService.uploadBuffer(pdfBuffer, filename, "application/pdf", {
