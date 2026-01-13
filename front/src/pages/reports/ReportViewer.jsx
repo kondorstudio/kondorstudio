@@ -53,6 +53,8 @@ export default function ReportViewer() {
   const [layout, setLayout] = useState([]);
   const [isEditing, setIsEditing] = useState(false);
   const [refreshError, setRefreshError] = useState("");
+  const [exportError, setExportError] = useState("");
+  const [exportUrl, setExportUrl] = useState("");
 
   const reportQueryKey = ["reporting-report", reportId];
   const { data: report, isLoading } = useQuery({
@@ -110,6 +112,23 @@ export default function ReportViewer() {
     },
     onError: (err) => {
       setRefreshError(err?.message || "Erro ao atualizar dados.");
+    },
+  });
+
+  const exportMutation = useMutation({
+    mutationFn: async () => {
+      setExportError("");
+      return base44.reporting.createReportExport(reportId);
+    },
+    onSuccess: (data) => {
+      const url = data?.url || data?.file?.url || data?.export?.file?.url || "";
+      if (url) {
+        setExportUrl(url);
+        window.open(url, "_blank", "noopener");
+      }
+    },
+    onError: (err) => {
+      setExportError(err?.message || "Erro ao gerar PDF.");
     },
   });
 
@@ -192,8 +211,12 @@ export default function ReportViewer() {
             >
               {refreshMutation.isLoading ? "Atualizando..." : "Atualizar dados"}
             </Button>
-            <Button variant="secondary" disabled>
-              Exportar PDF
+            <Button
+              variant="secondary"
+              onClick={() => exportMutation.mutate()}
+              disabled={exportMutation.isLoading || isEditing}
+            >
+              {exportMutation.isLoading ? "Gerando PDF..." : "Exportar PDF"}
             </Button>
           </div>
         </div>
@@ -202,9 +225,24 @@ export default function ReportViewer() {
             Atualizado em {new Date(report.generatedAt).toLocaleString("pt-BR")}
           </p>
         ) : null}
+        {exportUrl ? (
+          <a
+            href={exportUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs text-[var(--primary)] underline"
+          >
+            Abrir ultimo PDF gerado
+          </a>
+        ) : null}
         {refreshError ? (
           <div className="rounded-[12px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
             {refreshError}
+          </div>
+        ) : null}
+        {exportError ? (
+          <div className="rounded-[12px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+            {exportError}
           </div>
         ) : null}
         {report?.status === "ERROR" && reportingErrors.length ? (

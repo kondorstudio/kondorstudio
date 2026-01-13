@@ -7,6 +7,7 @@ const brandGroupsController = require('./brandGroups.controller');
 const connectionsController = require('./connections.controller');
 const dashboardsController = require('./dashboards.controller');
 const metricCatalogController = require('./metricCatalog.controller');
+const reportExportsController = require('./reportExports.controller');
 const templatesController = require('./templates.controller');
 const reportsController = require('./reports.controller');
 
@@ -45,5 +46,8 @@ router.get('/reports/:id', reportsController.get);
 router.get('/reports/:id/snapshots', reportsController.snapshots);
 router.put('/reports/:id/layout', reportsController.updateLayout);
 router.post('/reports/:id/refresh', reportsController.refresh);
+router.get('/reports/:id/exports', reportExportsController.list);
+router.post('/reports/:id/exports', reportExportsController.create);
+router.get('/report-exports/:exportId', reportExportsController.get);
 
 module.exports = router;

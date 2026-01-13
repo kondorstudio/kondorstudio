@@ -708,6 +708,21 @@ const Reporting = {
     return jsonFetch(`/reporting/reports/${id}/snapshots`, { method: "GET" });
   },
 
+  async listReportExports(id) {
+    if (!id) throw new Error("reportId obrigatorio");
+    return jsonFetch(`/reporting/reports/${id}/exports`, { method: "GET" });
+  },
+
+  async createReportExport(id) {
+    if (!id) throw new Error("reportId obrigatorio");
+    return jsonFetch(`/reporting/reports/${id}/exports`, { method: "POST" });
+  },
+
+  async getReportExport(exportId) {
+    if (!exportId) throw new Error("exportId obrigatorio");
+    return jsonFetch(`/reporting/report-exports/${exportId}`, { method: "GET" });
+  },
+
   async listDashboards(params = {}) {
     const qs = buildQuery(params);
     return jsonFetch(`/reporting/dashboards${qs}`, { method: "GET" });
