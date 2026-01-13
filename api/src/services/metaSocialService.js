@@ -82,6 +82,7 @@ function resolveScopes(kind) {
     'pages_read_engagement',
     'pages_manage_posts',
     'instagram_basic',
+    'instagram_manage_insights',
     'instagram_content_publish',
   ];
 }
