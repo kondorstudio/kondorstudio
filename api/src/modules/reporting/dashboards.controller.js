@@ -1,5 +1,6 @@
 const { dashboardSchema, DASHBOARD_SCOPES } = require('./dashboards.validators');
 const dashboardsService = require('./dashboards.service');
+const { logReportingAction } = require('./reportingAudit.service');
 
 function parsePayload(body = {}, { partial = false } = {}) {
   const payload = {
@@ -70,6 +71,19 @@ module.exports = {
     try {
       const payload = parsePayload(req.body || {});
       const dashboard = await dashboardsService.createDashboard(req.tenantId, payload);
+      logReportingAction({
+        tenantId: req.tenantId,
+        userId: req.user?.id,
+        action: 'create',
+        resource: 'dashboard',
+        resourceId: dashboard.id,
+        ip: req.ip,
+        meta: {
+          scope: dashboard.scope,
+          brandId: dashboard.brandId,
+          groupId: dashboard.groupId,
+        },
+      });
       return res.status(201).json(dashboard);
     } catch (err) {
       const status = err.status || 500;
@@ -88,6 +102,19 @@ module.exports = {
       if (!dashboard) {
         return res.status(404).json({ error: 'Dashboard nao encontrado' });
       }
+      logReportingAction({
+        tenantId: req.tenantId,
+        userId: req.user?.id,
+        action: 'update',
+        resource: 'dashboard',
+        resourceId: dashboard.id,
+        ip: req.ip,
+        meta: {
+          scope: dashboard.scope,
+          brandId: dashboard.brandId,
+          groupId: dashboard.groupId,
+        },
+      });
       return res.json(dashboard);
     } catch (err) {
       const status = err.status || 500;

@@ -6,6 +6,7 @@ const {
 } = require('./reports.validators');
 const reportsService = require('./reports.service');
 const reportingSnapshots = require('./reportingSnapshots.service');
+const { logReportingAction } = require('./reportingAudit.service');
 
 function parseCreatePayload(body = {}) {
   const payload = {
@@ -130,6 +131,20 @@ module.exports = {
     try {
       const payload = parseCreatePayload(req.body || {});
       const report = await reportsService.createReport(req.tenantId, payload);
+      logReportingAction({
+        tenantId: req.tenantId,
+        userId: req.user?.id,
+        action: 'create',
+        resource: 'report',
+        resourceId: report.id,
+        ip: req.ip,
+        meta: {
+          scope: report.scope,
+          brandId: report.brandId,
+          groupId: report.groupId,
+          templateId: report.templateId,
+        },
+      });
       return res.status(201).json(report);
     } catch (err) {
       const status = err.status || 500;
@@ -148,6 +163,17 @@ module.exports = {
       if (!report) {
         return res.status(404).json({ error: 'Relatorio nao encontrado' });
       }
+      logReportingAction({
+        tenantId: req.tenantId,
+        userId: req.user?.id,
+        action: 'update_layout',
+        resource: 'report',
+        resourceId: report.id,
+        ip: req.ip,
+        meta: {
+          widgets: payload.widgets?.length || 0,
+        },
+      });
       return res.json(report);
     } catch (err) {
       const status = err.status || 500;
@@ -161,6 +187,14 @@ module.exports = {
       if (!report) {
         return res.status(404).json({ error: 'Relatorio nao encontrado' });
       }
+      logReportingAction({
+        tenantId: req.tenantId,
+        userId: req.user?.id,
+        action: 'refresh',
+        resource: 'report',
+        resourceId: report.id,
+        ip: req.ip,
+      });
       return res.json(report);
     } catch (err) {
       const status = err.status || 500;

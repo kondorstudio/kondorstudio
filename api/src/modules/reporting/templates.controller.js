@@ -1,5 +1,6 @@
 const { templateSchema, VISIBILITIES } = require('./templates.validators');
 const templatesService = require('./templates.service');
+const { logReportingAction } = require('./reportingAudit.service');
 
 function parseTemplatePayload(body = {}, { partial = false } = {}) {
   const payload = {
@@ -60,6 +61,18 @@ module.exports = {
     try {
       const payload = parseTemplatePayload(req.body || {});
       const template = await templatesService.createTemplate(req.tenantId, payload);
+      logReportingAction({
+        tenantId: req.tenantId,
+        userId: req.user?.id,
+        action: 'create',
+        resource: 'reportTemplate',
+        resourceId: template.id,
+        ip: req.ip,
+        meta: {
+          name: template.name,
+          visibility: template.visibility,
+        },
+      });
       return res.status(201).json(template);
     } catch (err) {
       const status = err.status || 500;
@@ -74,6 +87,18 @@ module.exports = {
       if (!template) {
         return res.status(404).json({ error: 'Template nao encontrado' });
       }
+      logReportingAction({
+        tenantId: req.tenantId,
+        userId: req.user?.id,
+        action: 'update',
+        resource: 'reportTemplate',
+        resourceId: template.id,
+        ip: req.ip,
+        meta: {
+          name: template.name,
+          visibility: template.visibility,
+        },
+      });
       return res.json(template);
     } catch (err) {
       const status = err.status || 500;
@@ -92,6 +117,17 @@ module.exports = {
       if (!template) {
         return res.status(404).json({ error: 'Template nao encontrado' });
       }
+      logReportingAction({
+        tenantId: req.tenantId,
+        userId: req.user?.id,
+        action: 'duplicate',
+        resource: 'reportTemplate',
+        resourceId: template.id,
+        ip: req.ip,
+        meta: {
+          sourceTemplateId: req.params.id,
+        },
+      });
       return res.status(201).json(template);
     } catch (err) {
       const status = err.status || 500;

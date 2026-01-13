@@ -1,5 +1,6 @@
 const { linkConnectionSchema } = require('./connections.validators');
 const connectionsService = require('./connections.service');
+const { logReportingAction } = require('./reportingAudit.service');
 
 function parseLinkPayload(body = {}) {
   const parsed = linkConnectionSchema.safeParse(body || {});
@@ -33,6 +34,20 @@ module.exports = {
         brandId,
         payload,
       );
+      logReportingAction({
+        tenantId: req.tenantId,
+        userId: req.user?.id,
+        action: 'link',
+        resource: 'dataSourceConnection',
+        resourceId: connection.id,
+        ip: req.ip,
+        meta: {
+          brandId,
+          source: payload.source,
+          integrationId: payload.integrationId,
+          externalAccountId: payload.externalAccountId,
+        },
+      });
       return res.status(201).json(connection);
     } catch (err) {
       const status = err.status || 500;

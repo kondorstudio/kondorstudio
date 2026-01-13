@@ -4,6 +4,11 @@ const router = express.Router();
 const authMiddleware = require("../middleware/auth");
 const tenantMiddleware = require("../middleware/tenant");
 const competitorsService = require("../services/competitorsService");
+const { requireReportingRole } = require("../modules/reporting/reportingAccess.middleware");
+const { logReportingAction } = require("../modules/reporting/reportingAudit.service");
+
+const allowViewer = requireReportingRole("viewer");
+const allowEditor = requireReportingRole("editor");
 
 router.use(authMiddleware);
 router.use(tenantMiddleware);
@@ -19,7 +24,7 @@ router.use(tenantMiddleware);
  *  - page
  *  - perPage
  */
-router.get("/", async (req, res) => {
+router.get("/", allowViewer, async (req, res) => {
   try {
     const { clientId, platform, status, q, page, perPage } = req.query;
     const result = await competitorsService.list(req.tenantId, {
@@ -50,7 +55,7 @@ router.get("/", async (req, res) => {
  *  - limit
  *  - perCompetitor
  */
-router.get("/compare", async (req, res) => {
+router.get("/compare", allowViewer, async (req, res) => {
   try {
     const {
       clientId,
@@ -82,9 +87,22 @@ router.get("/compare", async (req, res) => {
 /**
  * POST /competitors
  */
-router.post("/", async (req, res) => {
+router.post("/", allowEditor, async (req, res) => {
   try {
     const competitor = await competitorsService.create(req.tenantId, req.body || {});
+    logReportingAction({
+      tenantId: req.tenantId,
+      userId: req.user?.id,
+      action: "create",
+      resource: "competitor",
+      resourceId: competitor.id,
+      ip: req.ip,
+      meta: {
+        clientId: competitor.clientId,
+        platform: competitor.platform,
+        username: competitor.username,
+      },
+    });
     return res.status(201).json(competitor);
   } catch (err) {
     console.error("POST /competitors error:", err);
@@ -95,7 +113,7 @@ router.post("/", async (req, res) => {
 /**
  * GET /competitors/:id
  */
-router.get("/:id", async (req, res) => {
+router.get("/:id", allowViewer, async (req, res) => {
   try {
     const item = await competitorsService.getById(req.tenantId, req.params.id);
     if (!item) return res.status(404).json({ error: "Concorrente não encontrado" });
@@ -109,10 +127,23 @@ router.get("/:id", async (req, res) => {
 /**
  * PUT /competitors/:id
  */
-router.put("/:id", async (req, res) => {
+router.put("/:id", allowEditor, async (req, res) => {
   try {
     const updated = await competitorsService.update(req.tenantId, req.params.id, req.body || {});
     if (!updated) return res.status(404).json({ error: "Concorrente não encontrado" });
+    logReportingAction({
+      tenantId: req.tenantId,
+      userId: req.user?.id,
+      action: "update",
+      resource: "competitor",
+      resourceId: updated.id,
+      ip: req.ip,
+      meta: {
+        clientId: updated.clientId,
+        platform: updated.platform,
+        username: updated.username,
+      },
+    });
     return res.json(updated);
   } catch (err) {
     console.error("PUT /competitors/:id error:", err);
@@ -123,10 +154,18 @@ router.put("/:id", async (req, res) => {
 /**
  * DELETE /competitors/:id
  */
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", allowEditor, async (req, res) => {
   try {
     const removed = await competitorsService.remove(req.tenantId, req.params.id);
     if (!removed) return res.status(404).json({ error: "Concorrente não encontrado" });
+    logReportingAction({
+      tenantId: req.tenantId,
+      userId: req.user?.id,
+      action: "remove",
+      resource: "competitor",
+      resourceId: req.params.id,
+      ip: req.ip,
+    });
     return res.json({ ok: true });
   } catch (err) {
     console.error("DELETE /competitors/:id error:", err);
@@ -137,7 +176,7 @@ router.delete("/:id", async (req, res) => {
 /**
  * GET /competitors/:id/snapshots
  */
-router.get("/:id/snapshots", async (req, res) => {
+router.get("/:id/snapshots", allowViewer, async (req, res) => {
   try {
     const { startDate, endDate, order, limit } = req.query;
     const items = await competitorsService.listSnapshots(req.tenantId, req.params.id, {
@@ -156,13 +195,24 @@ router.get("/:id/snapshots", async (req, res) => {
 /**
  * POST /competitors/:id/snapshots
  */
-router.post("/:id/snapshots", async (req, res) => {
+router.post("/:id/snapshots", allowEditor, async (req, res) => {
   try {
     const snapshot = await competitorsService.createSnapshot(
       req.tenantId,
       req.params.id,
       req.body || {}
     );
+    logReportingAction({
+      tenantId: req.tenantId,
+      userId: req.user?.id,
+      action: "create_snapshot",
+      resource: "competitor",
+      resourceId: req.params.id,
+      ip: req.ip,
+      meta: {
+        snapshotId: snapshot.id,
+      },
+    });
     return res.status(201).json(snapshot);
   } catch (err) {
     console.error("POST /competitors/:id/snapshots error:", err);
@@ -174,9 +224,21 @@ router.post("/:id/snapshots", async (req, res) => {
  * POST /competitors/:id/sync
  * Stub para futura integração Meta
  */
-router.post("/:id/sync", async (req, res) => {
+router.post("/:id/sync", allowEditor, async (req, res) => {
   try {
     const result = await competitorsService.syncFromMeta(req.tenantId, req.params.id);
+    logReportingAction({
+      tenantId: req.tenantId,
+      userId: req.user?.id,
+      action: "sync",
+      resource: "competitor",
+      resourceId: req.params.id,
+      ip: req.ip,
+      meta: {
+        integrationId: result.integrationId || null,
+        snapshotId: result.snapshot?.id || null,
+      },
+    });
     return res.json({
       ok: true,
       status: "ready",
