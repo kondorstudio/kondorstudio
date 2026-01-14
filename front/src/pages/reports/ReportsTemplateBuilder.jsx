@@ -1,9 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import GridLayout, { useContainerWidth } from "react-grid-layout";
-import "react-grid-layout/css/styles.css";
-import "react-resizable/css/styles.css";
+import { useContainerWidth } from "react-grid-layout";
 import { base44 } from "@/apiClient/base44Client";
 import PageShell from "@/components/ui/page-shell.jsx";
 import { Button } from "@/components/ui/button.jsx";
@@ -11,6 +9,10 @@ import { Input } from "@/components/ui/input.jsx";
 import { Label } from "@/components/ui/label.jsx";
 import { SelectNative } from "@/components/ui/select-native.jsx";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog.jsx";
+import DashboardCanvas from "@/components/reports/widgets/DashboardCanvas.jsx";
+import WidgetCard from "@/components/reports/widgets/WidgetCard.jsx";
+import WidgetRenderer from "@/components/reports/widgets/WidgetRenderer.jsx";
+import { Badge } from "@/components/ui/badge.jsx";
 
 const WIDGET_TYPES = [
   { key: "KPI", label: "KPI" },
@@ -82,6 +84,15 @@ function WidgetConfigDialog({ open, onOpenChange, widget, onSave }) {
   const level = draft?.level || "";
   const widgetType = draft?.widgetType || "KPI";
 
+  const { data: levelsData } = useQuery({
+    queryKey: ["reporting-metric-levels", source],
+    queryFn: async () => {
+      if (!source) return { items: [] };
+      return base44.reporting.listMetricCatalog({ source, type: "METRIC" });
+    },
+    enabled: open && Boolean(source),
+  });
+
   const { data: metricsData } = useQuery({
     queryKey: ["reporting-metric-catalog", source, level, widgetType],
     queryFn: async () => {
@@ -108,6 +119,23 @@ function WidgetConfigDialog({ open, onOpenChange, widget, onSave }) {
     });
   }, [metricsData, widgetType]);
 
+  const levels = useMemo(() => {
+    const list = levelsData?.items || [];
+    const unique = new Set();
+    list.forEach((item) => {
+      if (item?.level) unique.add(String(item.level));
+    });
+    return Array.from(unique);
+  }, [levelsData]);
+
+  const metricsMap = useMemo(() => {
+    const map = new Map();
+    metrics.forEach((metric) => {
+      if (metric?.metricKey) map.set(metric.metricKey, metric.label || metric.metricKey);
+    });
+    return map;
+  }, [metrics]);
+
   const dimensions = useMemo(() => {
     const list = dimensionsData?.items || [];
     return list.filter((dimension) => {
@@ -115,6 +143,20 @@ function WidgetConfigDialog({ open, onOpenChange, widget, onSave }) {
       return dimension.supportedCharts.includes(widgetType);
     });
   }, [dimensionsData, widgetType]);
+
+  const previewRange = useMemo(() => {
+    const today = new Date();
+    const from = new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000);
+    return { dateFrom: from.toISOString().slice(0, 10), dateTo: today.toISOString().slice(0, 10) };
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    if (!source) return;
+    if (!level && levels.length) {
+      setDraft((prev) => ({ ...prev, level: levels[0] }));
+    }
+  }, [open, source, level, levels]);
 
   if (!draft) return null;
 
@@ -142,7 +184,13 @@ function WidgetConfigDialog({ open, onOpenChange, widget, onSave }) {
               <SelectNative
                 value={source}
                 onChange={(event) =>
-                  setDraft({ ...draft, source: event.target.value })
+                  setDraft({
+                    ...draft,
+                    source: event.target.value,
+                    level: "",
+                    breakdown: "",
+                    metrics: [],
+                  })
                 }
               >
                 <option value="">Selecione</option>
@@ -155,11 +203,32 @@ function WidgetConfigDialog({ open, onOpenChange, widget, onSave }) {
             </div>
             <div>
               <Label>Nivel</Label>
-              <Input
-                value={level}
-                onChange={(event) => setDraft({ ...draft, level: event.target.value })}
-                placeholder="CAMPAIGN / ADSET / PROPERTY"
-              />
+              {levels.length ? (
+                <SelectNative
+                  value={level}
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      level: event.target.value,
+                      metrics: [],
+                      breakdown: "",
+                    })
+                  }
+                >
+                  <option value="">Selecione</option>
+                  {levels.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </SelectNative>
+              ) : (
+                <Input
+                  value={level}
+                  onChange={(event) => setDraft({ ...draft, level: event.target.value })}
+                  placeholder="CAMPAIGN / ADSET / PROPERTY"
+                />
+              )}
             </div>
           </div>
 
@@ -182,7 +251,36 @@ function WidgetConfigDialog({ open, onOpenChange, widget, onSave }) {
 
           <div>
             <Label>Metricas</Label>
-            <div className="mt-2 grid gap-2 md:grid-cols-2">
+            {selectedMetrics.length ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {selectedMetrics.map((metricKey) => (
+                  <Badge
+                    key={metricKey}
+                    variant="outline"
+                    className="flex items-center gap-1"
+                  >
+                    <span>{metricsMap.get(metricKey) || metricKey}</span>
+                    <button
+                      type="button"
+                      className="ml-1 text-[10px] text-[var(--text-muted)] hover:text-[var(--text)]"
+                      onClick={() =>
+                        setDraft({
+                          ...draft,
+                          metrics: selectedMetrics.filter((key) => key !== metricKey),
+                        })
+                      }
+                    >
+                      ×
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-[var(--text-muted)]">
+                Nenhuma metrica selecionada.
+              </p>
+            )}
+            <div className="mt-3 grid gap-2 md:grid-cols-2">
               {metrics.length ? (
                 metrics.map((metric) => {
                   const checked = selectedMetrics.includes(metric.metricKey);
@@ -213,6 +311,19 @@ function WidgetConfigDialog({ open, onOpenChange, widget, onSave }) {
             </div>
           </div>
 
+          <div>
+            <Label>Preview</Label>
+            <div className="mt-2 rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-3 py-3">
+              <WidgetRenderer
+                widget={draft}
+                filters={previewRange}
+                enableQuery={Boolean(source && (level || widgetType === "TEXT" || widgetType === "IMAGE"))}
+                forceMock
+                variant="mini"
+              />
+            </div>
+          </div>
+
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => onOpenChange(false)}>
               Cancelar
@@ -236,6 +347,12 @@ function WidgetConfigDialog({ open, onOpenChange, widget, onSave }) {
 }
 
 function PreviewDialog({ open, onOpenChange, widgets, layout }) {
+  const previewRange = useMemo(() => {
+    const today = new Date();
+    const from = new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000);
+    return { dateFrom: from.toISOString().slice(0, 10), dateTo: today.toISOString().slice(0, 10) };
+  }, []);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl">
@@ -243,27 +360,24 @@ function PreviewDialog({ open, onOpenChange, widgets, layout }) {
           <DialogTitle>Preview do template</DialogTitle>
         </DialogHeader>
         <div className="rounded-[16px] border border-dashed border-[var(--border)] bg-[var(--surface)] p-3">
-          <GridLayout
+          <DashboardCanvas
             layout={layout}
-            cols={12}
-            rowHeight={32}
+            items={widgets}
             width={960}
-            isDraggable={false}
-            isResizable={false}
-            margin={[16, 16]}
-          >
-            {widgets.map((widget) => (
-              <div
-                key={widget.id}
-                className="rounded-[12px] border border-[var(--border)] bg-white px-3 py-3"
-              >
-                <p className="text-xs text-[var(--text-muted)]">{widget.widgetType}</p>
-                <p className="text-sm font-semibold text-[var(--text)]">
-                  {widget.title || "Widget"}
-                </p>
-              </div>
-            ))}
-          </GridLayout>
+            onLayoutChange={() => {}}
+            isEditable={false}
+            renderItem={(widget) => (
+              <WidgetCard widget={widget} showActions={false}>
+                <WidgetRenderer
+                  widget={widget}
+                  filters={previewRange}
+                  enableQuery={Boolean(widget?.source)}
+                  forceMock
+                  variant="mini"
+                />
+              </WidgetCard>
+            )}
+          />
         </div>
       </DialogContent>
     </Dialog>
@@ -501,58 +615,52 @@ export default function ReportsTemplateBuilder() {
           </aside>
 
           <section className="rounded-[18px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-sm)]">
-            <div ref={containerRef}>
-              <GridLayout
-                layout={layout}
-                cols={12}
-                rowHeight={32}
-                margin={[16, 16]}
-                width={width}
-                onLayoutChange={(nextLayout) => setLayout(nextLayout)}
-              >
-                {widgets.map((widget) => (
-                  <div
-                    key={widget.id}
-                    className="group rounded-[12px] border border-[var(--border)] bg-white p-3 shadow-[var(--shadow-sm)]"
+            <DashboardCanvas
+              layout={layout}
+              items={widgets}
+              width={width}
+              containerRef={containerRef}
+              onLayoutChange={(nextLayout) => setLayout(nextLayout)}
+              isEditable
+              renderItem={(widget) => {
+                const editHandler = () => {
+                  setActiveWidgetId(widget.id);
+                  setConfigOpen(true);
+                };
+
+                return (
+                  <WidgetCard
+                    widget={widget}
+                    onEdit={editHandler}
+                    onDuplicate={() => {
+                      const id = createWidgetId();
+                      const nextWidget = {
+                        ...widget,
+                        id,
+                        title: widget.title
+                          ? `${widget.title} (copia)`
+                          : "Widget (copia)",
+                      };
+                      setWidgets((prev) => [...prev, nextWidget]);
+                      setLayout((prev) => [...prev, createLayoutItem(id, prev)]);
+                    }}
+                    onRemove={() => handleRemoveWidget(widget.id)}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="text-xs text-[var(--text-muted)]">
-                          {widget.widgetType}
-                        </p>
-                        <p className="text-sm font-semibold text-[var(--text)]">
-                          {widget.title || "Widget"}
-                        </p>
-                        {widget.source ? (
-                          <p className="text-xs text-[var(--text-muted)]">
-                            {widget.source} {widget.level ? `• ${widget.level}` : ""}
-                          </p>
-                        ) : null}
-                      </div>
-                      <div className="flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => {
-                            setActiveWidgetId(widget.id);
-                            setConfigOpen(true);
-                          }}
-                        >
-                          Config
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleRemoveWidget(widget.id)}
-                        >
-                          Remover
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </GridLayout>
-            </div>
+                    <WidgetRenderer
+                      widget={widget}
+                      filters={{
+                        dateFrom: new Date().toISOString().slice(0, 10),
+                        dateTo: new Date().toISOString().slice(0, 10),
+                      }}
+                      enableQuery={Boolean(widget?.source)}
+                      forceMock
+                      variant="mini"
+                      onEdit={editHandler}
+                    />
+                  </WidgetCard>
+                );
+              }}
+            />
           </section>
         </div>
       </div>

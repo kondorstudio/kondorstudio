@@ -6,6 +6,7 @@ const brandGroupsController = require('./brandGroups.controller');
 const connectionsController = require('./connections.controller');
 const dashboardsController = require('./dashboards.controller');
 const metricCatalogController = require('./metricCatalog.controller');
+const reportingMetricsController = require('./reportingMetrics.controller');
 const reportExportsController = require('./reportExports.controller');
 const reportSchedulesController = require('./reportSchedules.controller');
 const templatesController = require('./templates.controller');
@@ -32,6 +33,7 @@ router.post(
   allowAdmin,
   metricCatalogController.create,
 );
+router.post('/metrics/query', allowViewer, reportingMetricsController.query);
 
 router.get('/dashboards', allowViewer, dashboardsController.list);
 router.post('/dashboards', allowEditor, dashboardsController.create);

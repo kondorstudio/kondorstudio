@@ -1,9 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import GridLayout, { useContainerWidth } from "react-grid-layout";
-import "react-grid-layout/css/styles.css";
-import "react-resizable/css/styles.css";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useContainerWidth } from "react-grid-layout";
 import { base44 } from "@/apiClient/base44Client";
 import PageShell from "@/components/ui/page-shell.jsx";
 import { Button } from "@/components/ui/button.jsx";
@@ -14,6 +12,10 @@ import { DateField } from "@/components/ui/date-field.jsx";
 import { Textarea } from "@/components/ui/textarea.jsx";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog.jsx";
 import ConnectDataSourceDialog from "@/components/reports/ConnectDataSourceDialog.jsx";
+import DashboardCanvas from "@/components/reports/widgets/DashboardCanvas.jsx";
+import WidgetCard from "@/components/reports/widgets/WidgetCard.jsx";
+import WidgetRenderer from "@/components/reports/widgets/WidgetRenderer.jsx";
+import { Badge } from "@/components/ui/badge.jsx";
 
 const WIDGET_TYPES = [
   { key: "KPI", label: "KPI" },
@@ -119,6 +121,15 @@ function WidgetConfigDialog({
   const inheritBrand = draft?.inheritBrand !== false;
   const brandId = inheritBrand ? globalBrandId : draft?.brandId || "";
 
+  const { data: levelsData } = useQuery({
+    queryKey: ["reporting-metric-levels", source],
+    queryFn: async () => {
+      if (!source) return { items: [] };
+      return base44.reporting.listMetricCatalog({ source, type: "METRIC" });
+    },
+    enabled: open && Boolean(source),
+  });
+
   const { data: metricsData } = useQuery({
     queryKey: ["reporting-metric-catalog", source, level, widgetType],
     queryFn: async () => {
@@ -154,6 +165,23 @@ function WidgetConfigDialog({
     });
   }, [metricsData, widgetType]);
 
+  const levels = useMemo(() => {
+    const list = levelsData?.items || [];
+    const unique = new Set();
+    list.forEach((item) => {
+      if (item?.level) unique.add(String(item.level));
+    });
+    return Array.from(unique);
+  }, [levelsData]);
+
+  const metricsMap = useMemo(() => {
+    const map = new Map();
+    metrics.forEach((metric) => {
+      if (metric?.metricKey) map.set(metric.metricKey, metric.label || metric.metricKey);
+    });
+    return map;
+  }, [metrics]);
+
   const dimensions = useMemo(() => {
     const list = dimensionsData?.items || [];
     return list.filter((dimension) => {
@@ -166,6 +194,28 @@ function WidgetConfigDialog({
     const list = connectionsData?.items || [];
     return list.filter((item) => (source ? item.source === source : true));
   }, [connectionsData, source]);
+
+  const previewRange = useMemo(() => buildDefaultDateRange(), []);
+
+  const previewConnectionId = useMemo(() => {
+    if (!source) return "";
+    if (inheritBrand) {
+      const match = (globalConnections || []).find(
+        (item) => item.source === source
+      );
+      return match?.id || "";
+    }
+    const match = availableConnections.find((item) => item.source === source);
+    return draft?.connectionId || match?.id || "";
+  }, [inheritBrand, globalConnections, availableConnections, draft, source]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (!source) return;
+    if (!level && levels.length) {
+      setDraft((prev) => ({ ...prev, level: levels[0] }));
+    }
+  }, [open, source, level, levels]);
 
   if (!draft) return null;
 
@@ -198,7 +248,14 @@ function WidgetConfigDialog({
               <SelectNative
                 value={source}
                 onChange={(event) =>
-                  setDraft({ ...draft, source: event.target.value, connectionId: "" })
+                  setDraft({
+                    ...draft,
+                    source: event.target.value,
+                    level: "",
+                    breakdown: "",
+                    metrics: [],
+                    connectionId: "",
+                  })
                 }
               >
                 <option value="">Selecione</option>
@@ -211,11 +268,34 @@ function WidgetConfigDialog({
             </div>
             <div>
               <Label>Nivel</Label>
-              <Input
-                value={level}
-                onChange={(event) => setDraft({ ...draft, level: event.target.value })}
-                placeholder="CAMPAIGN / ADSET / PROPERTY"
-              />
+              {levels.length ? (
+                <SelectNative
+                  value={level}
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      level: event.target.value,
+                      metrics: [],
+                      breakdown: "",
+                    })
+                  }
+                >
+                  <option value="">Selecione</option>
+                  {levels.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </SelectNative>
+              ) : (
+                <Input
+                  value={level}
+                  onChange={(event) =>
+                    setDraft({ ...draft, level: event.target.value })
+                  }
+                  placeholder="CAMPAIGN / ADSET / PROPERTY"
+                />
+              )}
             </div>
           </div>
 
@@ -325,7 +405,36 @@ function WidgetConfigDialog({
 
           <div>
             <Label>Metricas</Label>
-            <div className="mt-2 grid gap-2 md:grid-cols-2">
+            {selectedMetrics.length ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {selectedMetrics.map((metricKey) => (
+                  <Badge
+                    key={metricKey}
+                    variant="outline"
+                    className="flex items-center gap-1"
+                  >
+                    <span>{metricsMap.get(metricKey) || metricKey}</span>
+                    <button
+                      type="button"
+                      className="ml-1 text-[10px] text-[var(--text-muted)] hover:text-[var(--text)]"
+                      onClick={() =>
+                        setDraft({
+                          ...draft,
+                          metrics: selectedMetrics.filter((key) => key !== metricKey),
+                        })
+                      }
+                    >
+                      ×
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-[var(--text-muted)]">
+                Nenhuma metrica selecionada.
+              </p>
+            )}
+            <div className="mt-3 grid gap-2 md:grid-cols-2">
               {metrics.length ? (
                 metrics.map((metric) => {
                   const checked = selectedMetrics.includes(metric.metricKey);
@@ -386,6 +495,20 @@ function WidgetConfigDialog({
               />
             </div>
           ) : null}
+
+          <div>
+            <Label>Preview</Label>
+            <div className="mt-2 rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-3 py-3">
+              <WidgetRenderer
+                widget={draft}
+                connectionId={previewConnectionId}
+                filters={previewRange}
+                enableQuery={Boolean(source && (level || widgetType === "TEXT" || widgetType === "IMAGE"))}
+                forceMock={!previewConnectionId}
+                variant="mini"
+              />
+            </div>
+          </div>
 
           <div>
             <Label>Filtros (JSON)</Label>
@@ -459,6 +582,7 @@ export default function DashboardBuilder() {
   const [compareDateTo, setCompareDateTo] = useState("");
   const [layout, setLayout] = useState([]);
   const [widgets, setWidgets] = useState([]);
+  const [viewMode, setViewMode] = useState("edit");
   const [configOpen, setConfigOpen] = useState(false);
   const [activeWidgetId, setActiveWidgetId] = useState(null);
   const [error, setError] = useState("");
@@ -515,6 +639,33 @@ export default function DashboardBuilder() {
   });
 
   const globalConnections = globalConnectionsData?.items || [];
+
+  const brandIds = useMemo(() => {
+    const ids = new Set();
+    widgets.forEach((widget) => {
+      const inheritBrand = widget?.inheritBrand !== false;
+      const brand = inheritBrand ? globalBrandId : widget?.brandId;
+      if (brand) ids.add(brand);
+    });
+    return Array.from(ids);
+  }, [widgets, globalBrandId]);
+
+  const connectionsQueries = useQueries({
+    queries: brandIds.map((brand) => ({
+      queryKey: ["reporting-connections", brand],
+      queryFn: () => base44.reporting.listConnectionsByBrand(brand),
+      enabled: Boolean(brand),
+    })),
+  });
+
+  const connectionsByBrand = useMemo(() => {
+    const map = new Map();
+    brandIds.forEach((brand, index) => {
+      const items = connectionsQueries[index]?.data?.items || [];
+      map.set(brand, items);
+    });
+    return map;
+  }, [brandIds, connectionsQueries]);
 
   useEffect(() => {
     if (!dashboard) return;
@@ -604,6 +755,19 @@ export default function DashboardBuilder() {
     setLayout((prev) => prev.filter((item) => item.i !== widgetId));
   };
 
+  const handleDuplicateWidget = (widgetId) => {
+    const sourceWidget = widgets.find((widget) => widget.id === widgetId);
+    if (!sourceWidget) return;
+    const id = createWidgetId();
+    const nextWidget = {
+      ...sourceWidget,
+      id,
+      title: sourceWidget.title ? `${sourceWidget.title} (copia)` : "Widget (copia)",
+    };
+    setWidgets((prev) => [...prev, nextWidget]);
+    setLayout((prev) => [...prev, createLayoutItem(id, prev)]);
+  };
+
   const saveMutation = useMutation({
     mutationFn: async (payload) => {
       if (isNew) {
@@ -690,6 +854,22 @@ export default function DashboardBuilder() {
             <Button variant="ghost" onClick={() => navigate("/reports/dashboards")}>
               Voltar
             </Button>
+            <div className="flex items-center gap-1 rounded-full border border-[var(--border)] bg-white p-1">
+              <Button
+                size="sm"
+                variant={viewMode === "edit" ? "secondary" : "ghost"}
+                onClick={() => setViewMode("edit")}
+              >
+                Editar
+              </Button>
+              <Button
+                size="sm"
+                variant={viewMode === "preview" ? "secondary" : "ghost"}
+                onClick={() => setViewMode("preview")}
+              >
+                Preview
+              </Button>
+            </div>
             <Button onClick={() => handleSave()} disabled={saveMutation.isLoading}>
               {saveMutation.isLoading ? "Salvando..." : "Salvar"}
             </Button>
@@ -888,58 +1068,56 @@ export default function DashboardBuilder() {
           </aside>
 
           <section className="rounded-[18px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-sm)]">
-            <div ref={containerRef}>
-              <GridLayout
-                layout={layout}
-                cols={12}
-                rowHeight={32}
-                margin={[16, 16]}
-                width={width}
-                onLayoutChange={(nextLayout) => setLayout(nextLayout)}
-              >
-                {widgets.map((widget) => (
-                  <div
-                    key={widget.id}
-                    className="group rounded-[12px] border border-[var(--border)] bg-white p-3 shadow-[var(--shadow-sm)]"
+            <DashboardCanvas
+              layout={layout}
+              items={widgets}
+              width={width}
+              containerRef={containerRef}
+              onLayoutChange={(nextLayout) => setLayout(nextLayout)}
+              isEditable={viewMode === "edit"}
+              renderItem={(widget) => {
+                const inheritBrand = widget?.inheritBrand !== false;
+                const brand = inheritBrand ? globalBrandId : widget?.brandId;
+                const connections = brand ? connectionsByBrand.get(brand) || [] : [];
+                const connectionId =
+                  widget?.connectionId ||
+                  connections.find((item) => item.source === widget?.source)?.id ||
+                  "";
+                const connectHandler =
+                  brand && widget?.source
+                    ? () => handleConnectDialog(brand, widget?.source)
+                    : null;
+                const editHandler = () => {
+                  setActiveWidgetId(widget.id);
+                  setConfigOpen(true);
+                };
+
+                return (
+                  <WidgetCard
+                    widget={widget}
+                    showActions={viewMode === "edit"}
+                    onEdit={viewMode === "edit" ? editHandler : null}
+                    onDuplicate={() => handleDuplicateWidget(widget.id)}
+                    onRemove={() => handleRemoveWidget(widget.id)}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="text-xs text-[var(--text-muted)]">
-                          {widget.widgetType}
-                        </p>
-                        <p className="text-sm font-semibold text-[var(--text)]">
-                          {widget.title || "Widget"}
-                        </p>
-                        {widget.source ? (
-                          <p className="text-xs text-[var(--text-muted)]">
-                            {widget.source} {widget.level ? `- ${widget.level}` : ""}
-                          </p>
-                        ) : null}
-                      </div>
-                      <div className="flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => {
-                            setActiveWidgetId(widget.id);
-                            setConfigOpen(true);
-                          }}
-                        >
-                          Config
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleRemoveWidget(widget.id)}
-                        >
-                          Remover
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </GridLayout>
-            </div>
+                    <WidgetRenderer
+                      widget={widget}
+                      connectionId={connectionId}
+                      filters={{
+                        dateFrom,
+                        dateTo,
+                        compareMode,
+                        compareDateFrom,
+                        compareDateTo,
+                      }}
+                      enableQuery
+                      onConnect={connectHandler}
+                      onEdit={viewMode === "edit" ? editHandler : null}
+                    />
+                  </WidgetCard>
+                );
+              }}
+            />
           </section>
         </div>
       </div>

@@ -755,6 +755,13 @@ const Reporting = {
       body: JSON.stringify(payload || {}),
     });
   },
+
+  async queryMetrics(payload = {}) {
+    return jsonFetch("/reporting/metrics/query", {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    });
+  },
 };
 
 // --------------------

@@ -1,26 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import GridLayout, { useContainerWidth } from "react-grid-layout";
-import {
-  BarChart,
-  Bar,
-  LineChart,
-  Line,
-  PieChart,
-  Pie,
-  Cell,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useContainerWidth } from "react-grid-layout";
 import PageShell from "@/components/ui/page-shell.jsx";
 import { Button } from "@/components/ui/button.jsx";
 import { DateField } from "@/components/ui/date-field.jsx";
 import { SelectNative } from "@/components/ui/select-native.jsx";
 import { base44 } from "@/apiClient/base44Client";
+import ConnectDataSourceDialog from "@/components/reports/ConnectDataSourceDialog.jsx";
+import DashboardCanvas from "@/components/reports/widgets/DashboardCanvas.jsx";
+import WidgetCard from "@/components/reports/widgets/WidgetCard.jsx";
+import WidgetRenderer from "@/components/reports/widgets/WidgetRenderer.jsx";
 
 const COMPARE_OPTIONS = [
   { value: "NONE", label: "Sem comparacao" },
@@ -28,8 +18,6 @@ const COMPARE_OPTIONS = [
   { value: "PREVIOUS_YEAR", label: "Ano anterior" },
   { value: "CUSTOM", label: "Personalizado" },
 ];
-
-const PIE_COLORS = ["#38bdf8", "#f97316", "#84cc16", "#e879f9", "#facc15"];
 
 function toDateKey(value) {
   if (!value) return "";
@@ -53,6 +41,7 @@ function buildLayout(widgets, layoutSchema) {
 export default function DashboardViewer() {
   const { dashboardId } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { width, containerRef } = useContainerWidth({
     measureBeforeMount: true,
     initialWidth: 960,
@@ -70,6 +59,11 @@ export default function DashboardViewer() {
   const [compareDateTo, setCompareDateTo] = useState("");
   const [globalBrandId, setGlobalBrandId] = useState("");
   const [globalGroupId, setGlobalGroupId] = useState("");
+  const [connectDialog, setConnectDialog] = useState({
+    open: false,
+    brandId: "",
+    source: "META_ADS",
+  });
 
   const { data: clientsData } = useQuery({
     queryKey: ["clients"],
@@ -130,47 +124,37 @@ export default function DashboardViewer() {
     [widgets, dashboard]
   );
 
-  const { data: liveData, isFetching, refetch } = useQuery({
-    queryKey: [
-      "reporting-dashboard-data",
-      dashboardId,
-      dateFrom,
-      dateTo,
-      compareMode,
-      compareDateFrom,
-      compareDateTo,
-      globalBrandId,
-      globalGroupId,
-    ],
-    queryFn: () =>
-      base44.reporting.queryDashboardData(dashboardId, {
-        dateFrom,
-        dateTo,
-        compareMode,
-        compareDateFrom,
-        compareDateTo,
-        brandId: globalBrandId || undefined,
-        groupId: globalGroupId || undefined,
-        filters: {
-          dateFrom,
-          dateTo,
-          compareMode,
-          compareDateFrom,
-          compareDateTo,
-          brandId: globalBrandId || undefined,
-          groupId: globalGroupId || undefined,
-        },
-      }),
-    enabled: Boolean(dashboardId && dateFrom && dateTo && widgets.length),
+  const brandIds = useMemo(() => {
+    const ids = new Set();
+    widgets.forEach((widget) => {
+      const inheritBrand = widget?.inheritBrand !== false;
+      const brand = inheritBrand ? globalBrandId : widget?.brandId;
+      if (brand) ids.add(brand);
+    });
+    return Array.from(ids);
+  }, [widgets, globalBrandId]);
+
+  const connectionsQueries = useQueries({
+    queries: brandIds.map((brandId) => ({
+      queryKey: ["reporting-connections", brandId],
+      queryFn: () => base44.reporting.listConnectionsByBrand(brandId),
+      enabled: Boolean(brandId),
+    })),
   });
 
-  const liveByWidget = useMemo(() => {
-    const items = liveData?.widgets || [];
-    return items.reduce((acc, item) => {
-      if (item?.widgetId) acc[item.widgetId] = item;
-      return acc;
-    }, {});
-  }, [liveData]);
+  const connectionsByBrand = useMemo(() => {
+    const map = new Map();
+    brandIds.forEach((brandId, index) => {
+      const items = connectionsQueries[index]?.data?.items || [];
+      map.set(brandId, items);
+    });
+    return map;
+  }, [brandIds, connectionsQueries]);
+
+  const handleConnect = (brandId, source) => {
+    if (!brandId || !source) return;
+    setConnectDialog({ open: true, brandId, source });
+  };
 
   if (isLoading) {
     return (
@@ -214,10 +198,11 @@ export default function DashboardViewer() {
             </Button>
             <Button
               variant="secondary"
-              onClick={() => refetch()}
-              disabled={isFetching}
+              onClick={() =>
+                queryClient.invalidateQueries({ queryKey: ["widgetData"] })
+              }
             >
-              {isFetching ? "Atualizando..." : "Atualizar dados"}
+              Atualizar dados
             </Button>
           </div>
         </div>
@@ -246,7 +231,7 @@ export default function DashboardViewer() {
               </SelectNative>
             </div>
             <div className="flex items-end text-xs text-[var(--text-muted)]">
-              {isFetching ? "Atualizando indicadores..." : "Dados ao vivo."}
+              Dados ao vivo.
             </div>
           </div>
           {compareMode === "CUSTOM" ? (
@@ -345,205 +330,46 @@ export default function DashboardViewer() {
 
         {widgets.length ? (
           <section className="rounded-[18px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-sm)]">
-            <div ref={containerRef}>
-              <GridLayout
-                layout={layout}
-                cols={12}
-                rowHeight={32}
-                margin={[16, 16]}
-                width={width}
-                isDraggable={false}
-                isResizable={false}
-              >
-                {widgets.map((widget) => {
-                  const live = liveByWidget[widget.id];
-                  const data = live?.data || null;
-                  const totals =
-                    data && typeof data.totals === "object" ? data.totals : {};
-                  const metrics = Array.isArray(widget.metrics)
-                    ? widget.metrics
-                    : [];
-                  const primaryMetric = metrics[0] || null;
-                  const primaryValue =
-                    primaryMetric && totals
-                      ? totals[primaryMetric]
-                      : null;
-                  const series = Array.isArray(data?.series) ? data.series : [];
-                  const primarySeries = series[0];
-                  const seriesData = primarySeries?.data
-                    ? primarySeries.data.map((point) => ({
-                        name: point.x,
-                        value: point.y,
-                      }))
-                    : [];
-                  const pieData = metrics.length
-                    ? metrics.map((metric) => ({
-                        name: metric,
-                        value: totals[metric] || 0,
-                      }))
-                    : Object.entries(totals || {}).map(([key, value]) => ({
-                        name: key,
-                        value,
-                      }));
+            <DashboardCanvas
+              layout={layout}
+              items={widgets}
+              width={width}
+              containerRef={containerRef}
+              onLayoutChange={() => {}}
+              isEditable={false}
+              renderItem={(widget) => {
+                const inheritBrand = widget?.inheritBrand !== false;
+                const brandId = inheritBrand ? globalBrandId : widget?.brandId;
+                const connections = brandId
+                  ? connectionsByBrand.get(brandId) || []
+                  : [];
+                const connection =
+                  widget?.connectionId ||
+                  connections.find((item) => item.source === widget?.source)?.id ||
+                  "";
+                const connectHandler =
+                  brandId && widget?.source
+                    ? () => handleConnect(brandId, widget?.source)
+                    : null;
 
-                  return (
-                    <div
-                      key={widget.id}
-                      className="rounded-[12px] border border-[var(--border)] bg-white p-3 shadow-[var(--shadow-sm)]"
-                    >
-                      <p className="text-xs text-[var(--text-muted)]">
-                        {widget.widgetType || "Widget"}
-                      </p>
-                      <p className="text-sm font-semibold text-[var(--text)]">
-                        {widget.title || "Widget"}
-                      </p>
-                      <p className="mt-1 text-xs text-[var(--text-muted)]">
-                        {widget.source || "Fonte"}{" "}
-                        {widget.level ? `- ${widget.level}` : ""}
-                      </p>
-                      {live?.error ? (
-                        <div className="mt-3 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-                          {live.error}
-                        </div>
-                      ) : data ? (
-                        <div className="mt-3">
-                          {widget.widgetType === "KPI" ? (
-                            <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2">
-                              <p className="text-xs text-[var(--text-muted)]">
-                                {primaryMetric || "Metricas"}
-                              </p>
-                              <p className="text-lg font-semibold text-[var(--text)]">
-                                {typeof primaryValue === "number"
-                                  ? primaryValue.toLocaleString("pt-BR")
-                                  : primaryMetric
-                                  ? "-"
-                                  : `${Object.keys(totals).length} metricas`}
-                              </p>
-                            </div>
-                          ) : null}
-                          {widget.widgetType === "LINE" ? (
-                            <div className="h-40">
-                              <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={seriesData}>
-                                  <CartesianGrid strokeDasharray="3 3" />
-                                  <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                                  <YAxis tick={{ fontSize: 10 }} />
-                                  <Tooltip />
-                                  <Line
-                                    type="monotone"
-                                    dataKey="value"
-                                    stroke="#0ea5e9"
-                                    strokeWidth={2}
-                                    dot={false}
-                                  />
-                                </LineChart>
-                              </ResponsiveContainer>
-                            </div>
-                          ) : null}
-                          {widget.widgetType === "BAR" ? (
-                            <div className="h-40">
-                              <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={seriesData}>
-                                  <CartesianGrid strokeDasharray="3 3" />
-                                  <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                                  <YAxis tick={{ fontSize: 10 }} />
-                                  <Tooltip />
-                                  <Bar dataKey="value" fill="#38bdf8" radius={[6, 6, 0, 0]} />
-                                </BarChart>
-                              </ResponsiveContainer>
-                            </div>
-                          ) : null}
-                          {widget.widgetType === "PIE" ? (
-                            <div className="h-40">
-                              <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                  <Pie
-                                    data={pieData}
-                                    dataKey="value"
-                                    nameKey="name"
-                                    innerRadius={30}
-                                    outerRadius={60}
-                                  >
-                                    {pieData.map((entry, index) => (
-                                      <Cell
-                                        key={`${entry.name}-${index}`}
-                                        fill={PIE_COLORS[index % PIE_COLORS.length]}
-                                      />
-                                    ))}
-                                  </Pie>
-                                  <Tooltip />
-                                </PieChart>
-                              </ResponsiveContainer>
-                            </div>
-                          ) : null}
-                          {widget.widgetType === "TABLE" ? (
-                            <div className="mt-2 max-h-40 overflow-auto rounded-[10px] border border-[var(--border)]">
-                              <table className="w-full text-xs">
-                                <thead className="bg-[var(--surface-muted)] text-[var(--text-muted)]">
-                                  <tr>
-                                    <th className="px-3 py-2 text-left">Metrica</th>
-                                    <th className="px-3 py-2 text-right">Valor</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {(metrics.length ? metrics : Object.keys(totals)).map(
-                                    (metric) => (
-                                      <tr key={metric} className="border-t border-[var(--border)]">
-                                        <td className="px-3 py-2 text-[var(--text)]">
-                                          {metric}
-                                        </td>
-                                        <td className="px-3 py-2 text-right text-[var(--text)]">
-                                          {typeof totals[metric] === "number"
-                                            ? totals[metric].toLocaleString("pt-BR")
-                                            : "-"}
-                                        </td>
-                                      </tr>
-                                    )
-                                  )}
-                                </tbody>
-                              </table>
-                            </div>
-                          ) : null}
-                          {widget.widgetType === "TEXT" ? (
-                            <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text)]">
-                              {widget.options?.text || "Sem conteudo"}
-                            </div>
-                          ) : null}
-                          {widget.widgetType === "IMAGE" ? (
-                            <div className="mt-2 flex items-center justify-center rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-2">
-                              {widget.options?.imageUrl ? (
-                                <img
-                                  src={widget.options.imageUrl}
-                                  alt={widget.title || "Imagem"}
-                                  className="max-h-32 w-auto rounded-[8px] object-contain"
-                                />
-                              ) : (
-                                <span className="text-xs text-[var(--text-muted)]">
-                                  Sem imagem
-                                </span>
-                              )}
-                            </div>
-                          ) : null}
-                          {!seriesData.length &&
-                          widget.widgetType !== "KPI" &&
-                          widget.widgetType !== "TEXT" &&
-                          widget.widgetType !== "IMAGE" &&
-                          widget.widgetType !== "TABLE" ? (
-                            <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs text-[var(--text-muted)]">
-                              Sem dados para renderizar
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <div className="mt-3 rounded-[10px] border border-dashed border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs text-[var(--text-muted)]">
-                          Sem dados carregados
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </GridLayout>
-            </div>
+                return (
+                  <WidgetCard widget={widget} showActions={false}>
+                    <WidgetRenderer
+                      widget={widget}
+                      connectionId={connection}
+                      filters={{
+                        dateFrom,
+                        dateTo,
+                        compareMode,
+                        compareDateFrom,
+                        compareDateTo,
+                      }}
+                      onConnect={connectHandler}
+                    />
+                  </WidgetCard>
+                );
+              }}
+            />
           </section>
         ) : (
           <section className="rounded-[18px] border border-[var(--border)] bg-white px-6 py-6 text-sm text-[var(--text-muted)]">
@@ -551,6 +377,13 @@ export default function DashboardViewer() {
           </section>
         )}
       </div>
+
+      <ConnectDataSourceDialog
+        open={connectDialog.open}
+        onOpenChange={(open) => setConnectDialog((prev) => ({ ...prev, open }))}
+        brandId={connectDialog.brandId}
+        defaultSource={connectDialog.source}
+      />
     </PageShell>
   );
 }

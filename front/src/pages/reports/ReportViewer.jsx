@@ -1,10 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import GridLayout, { useContainerWidth } from "react-grid-layout";
+import { useContainerWidth } from "react-grid-layout";
 import PageShell from "@/components/ui/page-shell.jsx";
 import { Button } from "@/components/ui/button.jsx";
 import { base44 } from "@/apiClient/base44Client";
+import ConnectDataSourceDialog from "@/components/reports/ConnectDataSourceDialog.jsx";
+import DashboardCanvas from "@/components/reports/widgets/DashboardCanvas.jsx";
+import WidgetCard from "@/components/reports/widgets/WidgetCard.jsx";
+import WidgetRenderer from "@/components/reports/widgets/WidgetRenderer.jsx";
 
 function getNextY(layout) {
   if (!layout.length) return 0;
@@ -55,6 +59,11 @@ export default function ReportViewer() {
   const [refreshError, setRefreshError] = useState("");
   const [exportError, setExportError] = useState("");
   const [exportUrl, setExportUrl] = useState("");
+  const [connectDialog, setConnectDialog] = useState({
+    open: false,
+    brandId: "",
+    source: "META_ADS",
+  });
 
   const reportQueryKey = ["reporting-report", reportId];
   const { data: report, isLoading } = useQuery({
@@ -62,13 +71,6 @@ export default function ReportViewer() {
     queryFn: () => base44.reporting.getReport(reportId),
     refetchInterval: (data) =>
       data?.status === "GENERATING" ? 5000 : false,
-  });
-
-  const { data: snapshotsData, isFetching: snapshotsLoading } = useQuery({
-    queryKey: ["reporting-report-snapshots", reportId],
-    queryFn: () => base44.reporting.getReportSnapshots(reportId),
-    enabled: Boolean(reportId),
-    refetchInterval: report?.status === "GENERATING" ? 5000 : false,
   });
 
   useEffect(() => {
@@ -106,9 +108,7 @@ export default function ReportViewer() {
       if (data) {
         queryClient.setQueryData(reportQueryKey, data);
       }
-      queryClient.invalidateQueries({
-        queryKey: ["reporting-report-snapshots", reportId],
-      });
+      queryClient.invalidateQueries({ queryKey: ["widgetData"] });
     },
     onError: (err) => {
       setRefreshError(err?.message || "Erro ao atualizar dados.");
@@ -133,18 +133,22 @@ export default function ReportViewer() {
   });
 
   const widgets = useMemo(() => report?.widgets || [], [report]);
-  const snapshotsByWidget = useMemo(() => {
-    const items = snapshotsData?.items || [];
-    return items.reduce((acc, item) => {
-      if (item && item.widgetId) acc[item.widgetId] = item;
-      return acc;
-    }, {});
-  }, [snapshotsData]);
-
   const reportingErrors = useMemo(() => {
     const errors = report?.params?.reporting?.errors;
     return Array.isArray(errors) ? errors : [];
   }, [report]);
+
+  const { data: connectionsData } = useQuery({
+    queryKey: ["reporting-connections", report?.brandId],
+    queryFn: () => base44.reporting.listConnectionsByBrand(report.brandId),
+    enabled: Boolean(report?.brandId),
+  });
+
+  const connections = connectionsData?.items || [];
+  const handleConnect = (brandId, source) => {
+    if (!brandId || !source) return;
+    setConnectDialog({ open: true, brandId, source });
+  };
 
   if (isLoading) {
     return (
@@ -253,91 +257,50 @@ export default function ReportViewer() {
         ) : null}
 
         <section className="rounded-[18px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-sm)]">
-          <div ref={containerRef}>
-            <GridLayout
-              layout={layout}
-              cols={12}
-              rowHeight={32}
-              margin={[16, 16]}
-              width={width}
-              isDraggable={isEditing}
-              isResizable={isEditing}
-              onLayoutChange={(nextLayout) => setLayout(nextLayout)}
-            >
-              {widgets.map((widget) => (
-                <div
-                  key={widget.id}
-                  className="rounded-[12px] border border-[var(--border)] bg-white p-3 shadow-[var(--shadow-sm)]"
-                >
-                  {snapshotsLoading ? (
-                    <div className="mb-3 h-6 w-24 rounded-full bg-[var(--surface-muted)] animate-pulse" />
-                  ) : null}
-                  <p className="text-xs text-[var(--text-muted)]">
-                    {widget.widgetType}
-                  </p>
-                  <p className="text-sm font-semibold text-[var(--text)]">
-                    {widget.title || "Widget"}
-                  </p>
-                  <p className="mt-1 text-xs text-[var(--text-muted)]">
-                    {widget.source} {widget.level ? `• ${widget.level}` : ""}
-                  </p>
-                  {(() => {
-                    const snapshot = snapshotsByWidget[widget.id];
-                    const data = snapshot?.data || null;
-                    const totals =
-                      data && typeof data.totals === "object" ? data.totals : {};
-                    const metrics = Array.isArray(widget.metrics)
-                      ? widget.metrics
-                      : [];
-                    const primaryMetric = metrics[0] || null;
-                    const primaryValue =
-                      primaryMetric && totals
-                        ? totals[primaryMetric]
-                        : null;
+          <DashboardCanvas
+            layout={layout}
+            items={widgets}
+            width={width}
+            containerRef={containerRef}
+            onLayoutChange={(nextLayout) => setLayout(nextLayout)}
+            isEditable={isEditing}
+            renderItem={(widget) => {
+              const connection =
+                widget?.connectionId ||
+                connections.find((item) => item.source === widget?.source)?.id ||
+                "";
 
-                    if (!data) {
-                      return (
-                        <div className="mt-3 rounded-[10px] border border-dashed border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs text-[var(--text-muted)]">
-                          Sem dados carregados
-                        </div>
-                      );
+              return (
+                <WidgetCard widget={widget} showActions={false}>
+                  <WidgetRenderer
+                    widget={widget}
+                    connectionId={connection}
+                    filters={{
+                      dateFrom: report?.dateFrom,
+                      dateTo: report?.dateTo,
+                      compareMode: report?.compareMode,
+                      compareDateFrom: report?.compareDateFrom,
+                      compareDateTo: report?.compareDateTo,
+                    }}
+                    onConnect={
+                      report?.brandId
+                        ? () => handleConnect(report?.brandId, widget?.source)
+                        : null
                     }
-
-                    if (widget.widgetType === "KPI" && primaryMetric) {
-                      return (
-                        <div className="mt-3 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2">
-                          <p className="text-xs text-[var(--text-muted)]">
-                            {primaryMetric}
-                          </p>
-                          <p className="text-lg font-semibold text-[var(--text)]">
-                            {typeof primaryValue === "number"
-                              ? primaryValue.toLocaleString("pt-BR")
-                              : "-"}
-                          </p>
-                        </div>
-                      );
-                    }
-
-                    const seriesCount = Array.isArray(data.series)
-                      ? data.series.length
-                      : 0;
-                    const totalsCount = Object.keys(totals || {}).length;
-
-                    return (
-                      <div className="mt-3 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs text-[var(--text-muted)]">
-                        {seriesCount
-                          ? `${seriesCount} serie(s) carregadas`
-                          : "Dados carregados"}
-                        {totalsCount ? ` • ${totalsCount} metricas` : ""}
-                      </div>
-                    );
-                  })()}
-                </div>
-              ))}
-            </GridLayout>
-          </div>
+                  />
+                </WidgetCard>
+              );
+            }}
+          />
         </section>
       </div>
+
+      <ConnectDataSourceDialog
+        open={connectDialog.open}
+        onOpenChange={(open) => setConnectDialog((prev) => ({ ...prev, open }))}
+        brandId={connectDialog.brandId}
+        defaultSource={connectDialog.source}
+      />
     </PageShell>
   );
 }
