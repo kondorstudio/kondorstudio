@@ -220,12 +220,12 @@ export default function WidgetRenderer({
   if (!connectionId && !forceMock) {
     return (
       <EmptyStateCard
-        title="Sem conta associada"
-        description={`Esta marca nao possui conta associada para ${source}.`}
+        title="Acao necessaria"
+        description={`Widget sem conta selecionada para ${source}. Clique em configurar para vincular.`}
         icon={Link2}
         action={
           onConnect ? (
-            <Button size="sm" onClick={() => onConnect()}>
+            <Button size="sm" variant="accent" onClick={() => onConnect()}>
               Associar conta
             </Button>
           ) : null

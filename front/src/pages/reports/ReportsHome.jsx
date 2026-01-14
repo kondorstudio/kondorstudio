@@ -1,19 +1,23 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BarChart3,
+  Eye,
   Facebook,
   Instagram,
   Linkedin,
   MapPin,
   Megaphone,
   Music,
+  RefreshCw,
+  Search,
 } from "lucide-react";
 import { base44 } from "@/apiClient/base44Client";
 import PageShell from "@/components/ui/page-shell.jsx";
 import EmptyState from "@/components/ui/empty-state.jsx";
 import { Button } from "@/components/ui/button.jsx";
+import { Input } from "@/components/ui/input.jsx";
 import { SelectNative } from "@/components/ui/select-native.jsx";
 import { useActiveClient } from "@/hooks/useActiveClient.js";
 import ReportsIntro from "@/components/reports/ReportsIntro.jsx";
@@ -67,10 +71,12 @@ const DATA_SOURCES = [
 
 export default function ReportsHome() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [activeClientId, setActiveClientId] = useActiveClient();
   const [selectedBrandId, setSelectedBrandId] = useState(activeClientId || "");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [defaultSource, setDefaultSource] = useState("META_ADS");
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     if (!selectedBrandId && activeClientId) {
@@ -81,6 +87,16 @@ export default function ReportsHome() {
   const { data: clients = [] } = useQuery({
     queryKey: ["clients"],
     queryFn: () => base44.entities.Client.list(),
+  });
+
+  const { data: groupsData } = useQuery({
+    queryKey: ["reporting-brand-groups"],
+    queryFn: () => base44.reporting.listBrandGroups(),
+  });
+
+  const { data: reportsData, isLoading: reportsLoading } = useQuery({
+    queryKey: ["reporting-reports"],
+    queryFn: () => base44.reporting.listReports(),
   });
 
   const { data: connectionsData, isLoading: connectionsLoading } = useQuery({
@@ -106,6 +122,41 @@ export default function ReportsHome() {
     }, {});
   }, [connections]);
 
+  const brandMap = useMemo(
+    () => new Map(clients.map((client) => [client.id, client.name])),
+    [clients]
+  );
+  const groupMap = useMemo(
+    () => new Map((groupsData?.items || []).map((group) => [group.id, group.name])),
+    [groupsData]
+  );
+
+  const reports = reportsData?.items || [];
+  const filteredReports = useMemo(() => {
+    if (!search.trim()) return reports;
+    const query = search.trim().toLowerCase();
+    return reports.filter((report) =>
+      String(report.name || "").toLowerCase().includes(query)
+    );
+  }, [reports, search]);
+
+  const refreshMutation = useMutation({
+    mutationFn: async (reportId) => base44.reporting.refreshReport(reportId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["reporting-reports"] });
+    },
+  });
+
+  const formatDateRange = (report) => {
+    if (!report?.dateFrom || !report?.dateTo) return "-";
+    return `${new Date(report.dateFrom).toLocaleDateString("pt-BR")} - ${new Date(report.dateTo).toLocaleDateString("pt-BR")}`;
+  };
+
+  const formatCreatedAt = (value) => {
+    if (!value) return "-";
+    return new Date(value).toLocaleString("pt-BR");
+  };
+
   const openDialog = (sourceKey) => {
     setDefaultSource(sourceKey);
     setDialogOpen(true);
@@ -119,20 +170,105 @@ export default function ReportsHome() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold text-[var(--text)]">
-                Relatorios por marca e grupo
+                Relatorios
               </h2>
               <p className="text-sm text-[var(--text-muted)]">
-                Crie um relatorio a partir dos templates configurados.
+                Gerencie aqui seus relatorios por marca e grupo.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button onClick={() => navigate("/reports/new")}>
-                Criar relatorio
-              </Button>
               <Button variant="ghost" onClick={() => navigate("/reports/templates")}>
-                Ver templates
+                Templates
+              </Button>
+              <Button onClick={() => navigate("/reports/new")}>
+                Novo Relatorio
               </Button>
             </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <div className="relative w-full max-w-md">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Buscar relatorio"
+                className="pl-9"
+              />
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-[16px] border border-[var(--border)] bg-white">
+            {reportsLoading ? (
+              <div className="h-32 animate-pulse rounded-[16px] bg-[var(--surface-muted)]" />
+            ) : filteredReports.length ? (
+              <table className="w-full text-sm">
+                <thead className="text-xs uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                  <tr className="border-b border-[var(--border)]">
+                    <th className="px-4 py-3 text-left">Nome</th>
+                    <th className="px-4 py-3 text-left">Marca/Grupo</th>
+                    <th className="px-4 py-3 text-left">Periodo</th>
+                    <th className="px-4 py-3 text-left">Criado em</th>
+                    <th className="px-4 py-3 text-right">Acoes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredReports.map((report) => (
+                    <tr
+                      key={report.id}
+                      className="border-b border-[var(--border)] last:border-b-0"
+                    >
+                      <td className="px-4 py-3 font-medium text-[var(--text)]">
+                        {report.name}
+                      </td>
+                      <td className="px-4 py-3 text-[var(--text-muted)]">
+                        {report.scope === "GROUP"
+                          ? groupMap.get(report.groupId) || "Grupo"
+                          : brandMap.get(report.brandId) || "Marca"}
+                      </td>
+                      <td className="px-4 py-3 text-[var(--text-muted)]">
+                        {formatDateRange(report)}
+                      </td>
+                      <td className="px-4 py-3 text-[var(--text-muted)]">
+                        {formatCreatedAt(report.createdAt)}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => navigate(`/reports/${report.id}`)}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => refreshMutation.mutate(report.id)}
+                            disabled={refreshMutation.isLoading}
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className="p-6">
+                <EmptyState
+                  icon={BarChart3}
+                  title="Voce ainda nao criou um relatorio."
+                  description="Vamos criar um agora?"
+                  action={
+                    <Button onClick={() => navigate("/reports/new")}>
+                      Criar relatorio
+                    </Button>
+                  }
+                />
+              </div>
+            )}
           </div>
         </section>
         <section className="rounded-[18px] border border-[var(--border)] bg-white px-6 py-6 shadow-[var(--shadow-sm)]">
@@ -219,7 +355,7 @@ export default function ReportsHome() {
                         </div>
                       </div>
                       <Button
-                        variant="ghost"
+                        variant="secondary"
                         size="sm"
                         onClick={() => openDialog(source.key)}
                       >
@@ -255,17 +391,6 @@ export default function ReportsHome() {
         </section>
 
         <MetricCatalogPanel />
-
-        <EmptyState
-          icon={BarChart3}
-          title="Crie seu primeiro relatorio"
-          description="Use o wizard para gerar relatorios por marca ou grupo com os templates existentes."
-          action={
-            <Button variant="secondary" onClick={() => navigate("/reports/new")}>
-              Novo relatorio
-            </Button>
-          }
-        />
       </div>
 
       <ConnectDataSourceDialog

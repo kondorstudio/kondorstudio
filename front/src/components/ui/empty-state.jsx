@@ -11,14 +11,13 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        "rounded-[12px] border border-dashed border-[var(--border)] " +
-          "bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(109,40,217,0.04))] " +
-          "px-6 py-8 text-center shadow-[var(--shadow-sm)] animate-fade-in-up",
+        "rounded-[16px] border border-[var(--border)] bg-white px-6 py-10 text-center " +
+          "shadow-[var(--shadow-sm)] animate-fade-in-up",
         className
       )}
     >
       {Icon ? (
-        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--primary-light)] text-[var(--primary)]">
+        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-orange-50 text-[var(--accent)]">
           <Icon className="h-5 w-5" />
         </div>
       ) : null}

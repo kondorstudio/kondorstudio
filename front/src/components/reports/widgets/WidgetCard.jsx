@@ -96,7 +96,7 @@ export default function WidgetCard({
     <div
       className={cn(
         "group flex h-full flex-col rounded-[16px] border border-[var(--border)] " +
-          "bg-white p-4 shadow-[var(--shadow-sm)] transition hover:shadow-[var(--shadow-md)]",
+          "bg-white p-4 shadow-[var(--shadow-sm)] transition hover:border-[rgba(31,111,235,0.35)] hover:shadow-[var(--shadow-md)]",
         className
       )}
     >

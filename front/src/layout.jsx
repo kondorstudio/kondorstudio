@@ -5,6 +5,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BarChart3,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   FileText,
@@ -12,6 +13,7 @@ import {
   Library,
   LogOut,
   Menu,
+  AlertTriangle,
   Plug,
   PieChart,
   Settings,
@@ -123,6 +125,12 @@ function LayoutContent() {
     queryFn: () => base44.entities.Client.list(),
   });
 
+  const { data: connectionsStatus } = useQuery({
+    queryKey: ["reporting-connections-status", activeClientId],
+    queryFn: () => base44.reporting.listConnectionsByBrand(activeClientId),
+    enabled: Boolean(activeClientId),
+  });
+
   useEffect(() => {
     setIsMounted(true);
   }, []);
@@ -190,6 +198,7 @@ function LayoutContent() {
     }
     return location.pathname === item.to || location.pathname.startsWith(`${item.to}/`);
   });
+  const totalConnections = connectionsStatus?.items?.length || 0;
 
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--background)] text-[var(--text)]">
@@ -221,7 +230,7 @@ function LayoutContent() {
                             "flex items-center rounded-[10px] py-2 text-sm font-medium transition-[background-color,box-shadow,color] duration-[var(--motion-fast)] ease-[var(--ease-standard)]",
                             collapsed ? "justify-center px-2" : "gap-3 px-3",
                             isActive
-                              ? "bg-[linear-gradient(135deg,rgba(109,40,217,0.14),rgba(14,165,233,0.1))] text-[var(--primary)] shadow-[var(--shadow-sm)]"
+                              ? "bg-blue-50 text-[var(--primary)] shadow-[var(--shadow-sm)]"
                               : "text-[var(--text-muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--text)] hover:shadow-[var(--shadow-sm)]",
                           ].join(" ")
                         }
@@ -293,6 +302,22 @@ function LayoutContent() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            {activeClientId ? (
+              <div
+                className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${
+                  totalConnections
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    : "border-amber-200 bg-amber-50 text-amber-700"
+                }`}
+              >
+                {totalConnections ? (
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                ) : (
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                )}
+                {totalConnections ? "Conexoes OK" : "Sem conexoes"}
+              </div>
+            ) : null}
             <div className="flex items-center gap-3 rounded-[12px] border border-[var(--border)] bg-white/80 px-3 py-2 shadow-[var(--shadow-sm)] backdrop-blur">
               <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
                 Perfil
@@ -361,7 +386,7 @@ function LayoutContent() {
                                 [
                                   "flex items-center gap-3 rounded-[10px] px-3 py-2 text-sm font-medium transition-[background-color,box-shadow,color] duration-[var(--motion-fast)] ease-[var(--ease-standard)]",
                                   isActive
-                                    ? "bg-[linear-gradient(135deg,rgba(109,40,217,0.14),rgba(14,165,233,0.1))] text-[var(--primary)] shadow-[var(--shadow-sm)]"
+                                    ? "bg-blue-50 text-[var(--primary)] shadow-[var(--shadow-sm)]"
                                     : "text-[var(--text-muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--text)] hover:shadow-[var(--shadow-sm)]",
                                 ].join(" ")
                               }

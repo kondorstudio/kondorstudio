@@ -9,10 +9,14 @@ import { Input } from "@/components/ui/input.jsx";
 import { Label } from "@/components/ui/label.jsx";
 import { SelectNative } from "@/components/ui/select-native.jsx";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog.jsx";
+import { Textarea } from "@/components/ui/textarea.jsx";
+import MetricMultiSelect from "@/components/reports/MetricMultiSelect.jsx";
+import SortableChips from "@/components/reports/SortableChips.jsx";
+import UnderlineTabs from "@/components/reports/UnderlineTabs.jsx";
 import DashboardCanvas from "@/components/reports/widgets/DashboardCanvas.jsx";
 import WidgetCard from "@/components/reports/widgets/WidgetCard.jsx";
 import WidgetRenderer from "@/components/reports/widgets/WidgetRenderer.jsx";
-import { Badge } from "@/components/ui/badge.jsx";
+import { getWidgetTypeMeta } from "@/components/reports/widgets/widgetMeta.js";
 
 const WIDGET_TYPES = [
   { key: "KPI", label: "KPI" },
@@ -74,10 +78,12 @@ function normalizeWidgets(widgets = []) {
 
 function WidgetConfigDialog({ open, onOpenChange, widget, onSave }) {
   const [draft, setDraft] = useState(widget);
+  const [tab, setTab] = useState("main");
 
   useEffect(() => {
     if (!open) return;
     setDraft(widget);
+    setTab("main");
   }, [open, widget]);
 
   const source = draft?.source || "";
@@ -161,6 +167,15 @@ function WidgetConfigDialog({ open, onOpenChange, widget, onSave }) {
   if (!draft) return null;
 
   const selectedMetrics = Array.isArray(draft.metrics) ? draft.metrics : [];
+  const options = draft.options && typeof draft.options === "object" ? draft.options : {};
+  const metricOptions = useMemo(
+    () =>
+      metrics.map((metric) => ({
+        value: metric.metricKey,
+        label: metric.label || metric.metricKey,
+      })),
+    [metrics]
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -170,159 +185,200 @@ function WidgetConfigDialog({ open, onOpenChange, widget, onSave }) {
         </DialogHeader>
 
         <div className="space-y-4">
-          <div>
-            <Label>Titulo</Label>
-            <Input
-              value={draft.title || ""}
-              onChange={(event) => setDraft({ ...draft, title: event.target.value })}
-            />
-          </div>
+          <UnderlineTabs
+            value={tab}
+            onChange={setTab}
+            tabs={[
+              { value: "main", label: "Dados principais" },
+              { value: "advanced", label: "Opcoes avancadas" },
+            ]}
+          />
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <Label>Fonte</Label>
-              <SelectNative
-                value={source}
-                onChange={(event) =>
-                  setDraft({
-                    ...draft,
-                    source: event.target.value,
-                    level: "",
-                    breakdown: "",
-                    metrics: [],
-                  })
-                }
-              >
-                <option value="">Selecione</option>
-                {SOURCE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </SelectNative>
-            </div>
-            <div>
-              <Label>Nivel</Label>
-              {levels.length ? (
-                <SelectNative
-                  value={level}
-                  onChange={(event) =>
-                    setDraft({
-                      ...draft,
-                      level: event.target.value,
-                      metrics: [],
-                      breakdown: "",
-                    })
-                  }
-                >
-                  <option value="">Selecione</option>
-                  {levels.map((item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
-                  ))}
-                </SelectNative>
-              ) : (
+          {tab === "main" ? (
+            <div className="space-y-4">
+              <div>
+                <Label>Titulo</Label>
                 <Input
-                  value={level}
-                  onChange={(event) => setDraft({ ...draft, level: event.target.value })}
-                  placeholder="CAMPAIGN / ADSET / PROPERTY"
+                  value={draft.title || ""}
+                  onChange={(event) =>
+                    setDraft({ ...draft, title: event.target.value })
+                  }
                 />
-              )}
-            </div>
-          </div>
+              </div>
 
-          <div>
-            <Label>Breakdown</Label>
-            <SelectNative
-              value={draft.breakdown || ""}
-              onChange={(event) =>
-                setDraft({ ...draft, breakdown: event.target.value })
-              }
-            >
-              <option value="">Sem breakdown</option>
-              {dimensions.map((dimension) => (
-                <option key={dimension.id} value={dimension.metricKey}>
-                  {dimension.label}
-                </option>
-              ))}
-            </SelectNative>
-          </div>
-
-          <div>
-            <Label>Metricas</Label>
-            {selectedMetrics.length ? (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {selectedMetrics.map((metricKey) => (
-                  <Badge
-                    key={metricKey}
-                    variant="outline"
-                    className="flex items-center gap-1"
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <Label>Fonte</Label>
+                  <SelectNative
+                    value={source}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        source: event.target.value,
+                        level: "",
+                        breakdown: "",
+                        metrics: [],
+                      })
+                    }
                   >
-                    <span>{metricsMap.get(metricKey) || metricKey}</span>
-                    <button
-                      type="button"
-                      className="ml-1 text-[10px] text-[var(--text-muted)] hover:text-[var(--text)]"
-                      onClick={() =>
+                    <option value="">Selecione</option>
+                    {SOURCE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </SelectNative>
+                </div>
+                <div>
+                  <Label>Nivel</Label>
+                  {levels.length ? (
+                    <SelectNative
+                      value={level}
+                      onChange={(event) =>
                         setDraft({
                           ...draft,
-                          metrics: selectedMetrics.filter((key) => key !== metricKey),
+                          level: event.target.value,
+                          metrics: [],
+                          breakdown: "",
                         })
                       }
                     >
-                      ×
-                    </button>
-                  </Badge>
-                ))}
+                      <option value="">Selecione</option>
+                      {levels.map((item) => (
+                        <option key={item} value={item}>
+                          {item}
+                        </option>
+                      ))}
+                    </SelectNative>
+                  ) : (
+                    <Input
+                      value={level}
+                      onChange={(event) =>
+                        setDraft({ ...draft, level: event.target.value })
+                      }
+                      placeholder="CAMPAIGN / ADSET / PROPERTY"
+                    />
+                  )}
+                </div>
               </div>
-            ) : (
-              <p className="mt-2 text-xs text-[var(--text-muted)]">
-                Nenhuma metrica selecionada.
-              </p>
-            )}
-            <div className="mt-3 grid gap-2 md:grid-cols-2">
-              {metrics.length ? (
-                metrics.map((metric) => {
-                  const checked = selectedMetrics.includes(metric.metricKey);
-                  return (
-                    <label
-                      key={metric.id}
-                      className="flex items-center gap-2 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(event) => {
-                          const next = event.target.checked
-                            ? [...selectedMetrics, metric.metricKey]
-                            : selectedMetrics.filter((key) => key !== metric.metricKey);
-                          setDraft({ ...draft, metrics: next });
-                        }}
-                      />
-                      <span className="text-[var(--text)]">{metric.label}</span>
-                    </label>
-                  );
-                })
-              ) : (
-                <p className="text-xs text-[var(--text-muted)]">
-                  Nenhuma metrica disponivel.
-                </p>
-              )}
-            </div>
-          </div>
 
-          <div>
-            <Label>Preview</Label>
-            <div className="mt-2 rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-3 py-3">
-              <WidgetRenderer
-                widget={draft}
-                filters={previewRange}
-                enableQuery={Boolean(source && (level || widgetType === "TEXT" || widgetType === "IMAGE"))}
-                forceMock
-                variant="mini"
-              />
+              <div>
+                <Label>Breakdown</Label>
+                <SelectNative
+                  value={draft.breakdown || ""}
+                  onChange={(event) =>
+                    setDraft({ ...draft, breakdown: event.target.value })
+                  }
+                >
+                  <option value="">Sem breakdown</option>
+                  {dimensions.map((dimension) => (
+                    <option key={dimension.id} value={dimension.metricKey}>
+                      {dimension.label}
+                    </option>
+                  ))}
+                </SelectNative>
+              </div>
+
+              <div>
+                <Label>Metricas</Label>
+                <MetricMultiSelect
+                  options={metricOptions}
+                  value={selectedMetrics}
+                  onChange={(next) => setDraft({ ...draft, metrics: next })}
+                />
+              </div>
+
+              {widgetType === "TEXT" ? (
+                <div>
+                  <Label>Conteudo</Label>
+                  <Textarea
+                    rows={4}
+                    value={options.text || ""}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        options: { ...options, text: event.target.value },
+                      })
+                    }
+                  />
+                </div>
+              ) : null}
+
+              {widgetType === "IMAGE" ? (
+                <div>
+                  <Label>URL da imagem</Label>
+                  <Input
+                    value={options.imageUrl || ""}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        options: { ...options, imageUrl: event.target.value },
+                      })
+                    }
+                  />
+                </div>
+              ) : null}
+
+              <div>
+                <Label>Preview</Label>
+                <div className="mt-2 rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-3 py-3">
+                  <WidgetRenderer
+                    widget={draft}
+                    filters={previewRange}
+                    enableQuery={Boolean(
+                      source && (level || widgetType === "TEXT" || widgetType === "IMAGE")
+                    )}
+                    forceMock
+                    variant="mini"
+                  />
+                </div>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <Label>Ordenar metricas (arraste para mudar a ordem)</Label>
+                <div className="mt-2">
+                  <SortableChips
+                    items={selectedMetrics}
+                    onChange={(next) => setDraft({ ...draft, metrics: next })}
+                    getLabel={(key) => metricsMap.get(key) || key}
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <Label>Moeda</Label>
+                  <Input
+                    value={options.currency || ""}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        options: { ...options, currency: event.target.value },
+                      })
+                    }
+                    placeholder="BRL"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <label className="flex items-center gap-2 text-sm text-[var(--text)]">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(options.hideZero)}
+                      onChange={(event) =>
+                        setDraft({
+                          ...draft,
+                          options: { ...options, hideZero: event.target.checked },
+                        })
+                      }
+                    />
+                    Ocultar resultados com 0
+                  </label>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => onOpenChange(false)}>
@@ -333,6 +389,7 @@ function WidgetConfigDialog({ open, onOpenChange, widget, onSave }) {
                 onSave({
                   ...draft,
                   metrics: Array.isArray(draft.metrics) ? draft.metrics : [],
+                  options,
                 });
                 onOpenChange(false);
               }}
@@ -555,7 +612,7 @@ export default function ReportsTemplateBuilder() {
             <Button variant="ghost" onClick={() => setPreviewOpen(true)}>
               Preview
             </Button>
-            <Button variant="secondary" onClick={() => handleSave("PUBLIC")}>
+            <Button variant="success" onClick={() => handleSave("PUBLIC")}>
               Publicar
             </Button>
             <Button onClick={() => handleSave()} disabled={saveMutation.isLoading}>
@@ -602,13 +659,21 @@ export default function ReportsTemplateBuilder() {
               <p className="text-sm font-semibold text-[var(--text)]">Widgets</p>
               <div className="mt-3 grid gap-2">
                 {WIDGET_TYPES.map((item) => (
-                  <Button
-                    key={item.key}
-                    variant="secondary"
-                    onClick={() => addWidget(item.key)}
-                  >
-                    {item.label}
-                  </Button>
+                  (() => {
+                    const meta = getWidgetTypeMeta(item.key);
+                    const Icon = meta?.icon;
+                    return (
+                      <Button
+                        key={item.key}
+                        variant="secondary"
+                        className="justify-start"
+                        onClick={() => addWidget(item.key)}
+                      >
+                        {Icon ? <Icon className="h-4 w-4" /> : null}
+                        {item.label}
+                      </Button>
+                    );
+                  })()
                 ))}
               </div>
             </div>

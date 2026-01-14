@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import PageShell from "@/components/ui/page-shell.jsx";
+import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button.jsx";
 import { Label } from "@/components/ui/label.jsx";
 import { Input } from "@/components/ui/input.jsx";
@@ -38,6 +39,15 @@ export default function ReportsWizard() {
   const [compareTo, setCompareTo] = useState("");
   const [customName, setCustomName] = useState("");
   const [error, setError] = useState("");
+  const [brandQuery, setBrandQuery] = useState("");
+  const [groupQuery, setGroupQuery] = useState("");
+
+  useEffect(() => {
+    setBrandId("");
+    setGroupId("");
+    setBrandQuery("");
+    setGroupQuery("");
+  }, [scope]);
 
   const { data: clientsData } = useQuery({
     queryKey: ["clients"],
@@ -57,6 +67,22 @@ export default function ReportsWizard() {
   const clients = clientsData || [];
   const groups = groupsData?.items || [];
   const templates = templatesData?.items || [];
+
+  const filteredClients = useMemo(() => {
+    if (!brandQuery.trim()) return clients;
+    const query = brandQuery.trim().toLowerCase();
+    return clients.filter((client) =>
+      String(client.name || "").toLowerCase().includes(query)
+    );
+  }, [clients, brandQuery]);
+
+  const filteredGroups = useMemo(() => {
+    if (!groupQuery.trim()) return groups;
+    const query = groupQuery.trim().toLowerCase();
+    return groups.filter((group) =>
+      String(group.name || "").toLowerCase().includes(query)
+    );
+  }, [groups, groupQuery]);
 
   const selectedTemplate = useMemo(
     () => templates.find((template) => template.id === templateId) || null,
@@ -156,7 +182,7 @@ export default function ReportsWizard() {
                 onClick={() => setScope("BRAND")}
                 className={`rounded-[16px] border px-4 py-4 text-left transition ${
                   scope === "BRAND"
-                    ? "border-[var(--primary)] bg-[rgba(109,40,217,0.08)]"
+                    ? "border-[var(--primary)] bg-blue-50"
                     : "border-[var(--border)] bg-[var(--surface)]"
                 }`}
               >
@@ -170,7 +196,7 @@ export default function ReportsWizard() {
                 onClick={() => setScope("GROUP")}
                 className={`rounded-[16px] border px-4 py-4 text-left transition ${
                   scope === "GROUP"
-                    ? "border-[var(--primary)] bg-[rgba(109,40,217,0.08)]"
+                    ? "border-[var(--primary)] bg-blue-50"
                     : "border-[var(--border)] bg-[var(--surface)]"
                 }`}
               >
@@ -188,37 +214,68 @@ export default function ReportsWizard() {
             <h2 className="text-lg font-semibold text-[var(--text)]">
               Selecione {scope === "BRAND" ? "a marca" : "o grupo"}
             </h2>
-            <div className="mt-4 max-w-md">
-              <Label>{scope === "BRAND" ? "Marca" : "Grupo"}</Label>
-              {scope === "BRAND" ? (
-                <SelectNative
-                  value={brandId}
-                  onChange={(event) => setBrandId(event.target.value)}
-                >
-                  <option value="">
-                    {clients.length ? "Selecione" : "Nenhuma marca"}
-                  </option>
-                  {clients.map((client) => (
-                    <option key={client.id} value={client.id}>
-                      {client.name}
-                    </option>
-                  ))}
-                </SelectNative>
-              ) : (
-                <SelectNative
-                  value={groupId}
-                  onChange={(event) => setGroupId(event.target.value)}
-                >
-                  <option value="">
-                    {groups.length ? "Selecione" : "Nenhum grupo"}
-                  </option>
-                  {groups.map((group) => (
-                    <option key={group.id} value={group.id}>
-                      {group.name}
-                    </option>
-                  ))}
-                </SelectNative>
-              )}
+            <div className="mt-4 rounded-[16px] border border-[var(--border)] bg-[var(--surface)]">
+              <div className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-3">
+                <Search className="h-4 w-4 text-[var(--text-muted)]" />
+                <Input
+                  value={scope === "BRAND" ? brandQuery : groupQuery}
+                  onChange={(event) =>
+                    scope === "BRAND"
+                      ? setBrandQuery(event.target.value)
+                      : setGroupQuery(event.target.value)
+                  }
+                  placeholder={`Buscar ${scope === "BRAND" ? "marca" : "grupo"}`}
+                  className="border-0 bg-transparent px-0 shadow-none focus:ring-0"
+                />
+              </div>
+              <div className="max-h-64 overflow-y-auto">
+                {(scope === "BRAND" ? filteredClients : filteredGroups).map((item) => {
+                  const selected =
+                    scope === "BRAND" ? brandId === item.id : groupId === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() =>
+                        scope === "BRAND"
+                          ? setBrandId(item.id)
+                          : setGroupId(item.id)
+                      }
+                      className={`flex w-full items-center gap-3 border-b border-[var(--border)] px-4 py-3 text-left text-sm transition ${
+                        selected
+                          ? "bg-orange-50 text-[var(--text)]"
+                          : "text-[var(--text-muted)] hover:bg-white"
+                      }`}
+                    >
+                      <span
+                        className={`h-4 w-4 rounded-full border ${
+                          selected
+                            ? "border-[var(--accent)] bg-[var(--accent)]"
+                            : "border-[var(--border)]"
+                        }`}
+                      />
+                      <span className="text-[var(--text)]">{item.name}</span>
+                    </button>
+                  );
+                })}
+                {scope === "BRAND" && !filteredClients.length ? (
+                  <p className="px-4 py-4 text-sm text-[var(--text-muted)]">
+                    Nenhuma marca encontrada.
+                  </p>
+                ) : null}
+                {scope === "GROUP" && !filteredGroups.length ? (
+                  <p className="px-4 py-4 text-sm text-[var(--text-muted)]">
+                    Nenhum grupo encontrado.
+                  </p>
+                ) : null}
+              </div>
+              <div className="flex items-center justify-between px-4 py-3 text-xs text-[var(--text-muted)]">
+                <span>
+                  Total de registros:{" "}
+                  {scope === "BRAND" ? filteredClients.length : filteredGroups.length}
+                </span>
+                <span>Linhas por pagina 20</span>
+              </div>
             </div>
           </section>
         ) : null}
@@ -239,7 +296,7 @@ export default function ReportsWizard() {
                     onClick={() => setTemplateId(template.id)}
                     className={`rounded-[16px] border px-4 py-4 text-left transition ${
                       templateId === template.id
-                        ? "border-[var(--primary)] bg-[rgba(109,40,217,0.08)]"
+                        ? "border-[var(--primary)] bg-blue-50"
                         : "border-[var(--border)] bg-[var(--surface)]"
                     }`}
                   >

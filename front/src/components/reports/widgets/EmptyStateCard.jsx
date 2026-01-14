@@ -12,12 +12,12 @@ export default function EmptyStateCard({
     <div
       className={cn(
         "rounded-[14px] border border-dashed border-[var(--border)] " +
-          "bg-[var(--surface)] px-4 py-4 text-center text-sm text-[var(--text-muted)]",
+          "bg-white px-4 py-4 text-center text-sm text-[var(--text-muted)]",
         className
       )}
     >
       {Icon ? (
-        <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-[var(--surface-muted)] text-[var(--text)]">
+        <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-orange-50 text-[var(--accent)]">
           <Icon className="h-4 w-4" />
         </div>
       ) : null}

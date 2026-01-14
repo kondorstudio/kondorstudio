@@ -1,13 +1,16 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { Search } from "lucide-react";
 import PageShell from "@/components/ui/page-shell.jsx";
 import { Button } from "@/components/ui/button.jsx";
 import EmptyState from "@/components/ui/empty-state.jsx";
+import { Input } from "@/components/ui/input.jsx";
 import { base44 } from "@/apiClient/base44Client";
 
 export default function DashboardsHome() {
   const navigate = useNavigate();
+  const [search, setSearch] = useState("");
 
   const { data, isLoading } = useQuery({
     queryKey: ["reporting-dashboards"],
@@ -15,58 +18,78 @@ export default function DashboardsHome() {
   });
 
   const dashboards = data?.items || [];
+  const filteredDashboards = useMemo(() => {
+    if (!search.trim()) return dashboards;
+    const query = search.trim().toLowerCase();
+    return dashboards.filter((dashboard) =>
+      String(dashboard.name || "").toLowerCase().includes(query)
+    );
+  }, [dashboards, search]);
 
   return (
     <PageShell>
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
-              Dashboards ao vivo
-            </p>
             <h1 className="text-2xl font-semibold text-[var(--text)]">
-              Painel de desempenho
+              Dashboards
             </h1>
             <p className="text-sm text-[var(--text-muted)]">
-              Use filtros globais para atualizar tudo em tempo real.
+              Gerencie seus dashboards ao vivo.
             </p>
           </div>
           <Button onClick={() => navigate("/reports/dashboards/new")}>
-            Novo dashboard
+            Novo Dashboard
           </Button>
         </div>
 
-        {isLoading ? (
-          <div className="rounded-[18px] border border-[var(--border)] bg-white/70 p-6 animate-pulse" />
-        ) : dashboards.length ? (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {dashboards.map((dashboard) => (
-              <button
-                key={dashboard.id}
-                type="button"
-                onClick={() => navigate(`/reports/dashboards/${dashboard.id}`)}
-                className="rounded-[16px] border border-[var(--border)] bg-white px-4 py-4 text-left shadow-[var(--shadow-sm)] transition hover:border-[var(--primary)]"
-              >
-                <p className="text-sm font-semibold text-[var(--text)]">
-                  {dashboard.name}
-                </p>
-                <p className="mt-1 text-xs text-[var(--text-muted)]">
-                  Escopo: {dashboard.scope}
-                </p>
-              </button>
-            ))}
+        <section className="rounded-[18px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-sm)]">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="relative w-full max-w-md">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Buscar dashboard"
+                className="pl-9"
+              />
+            </div>
           </div>
-        ) : (
-          <EmptyState
-            title="Nenhum dashboard ao vivo"
-            description="Crie um dashboard para acompanhar resultados em tempo real."
-            action={
-              <Button onClick={() => navigate("/reports/dashboards/new")}>
-                Criar dashboard
-              </Button>
-            }
-          />
-        )}
+
+          <div className="mt-4">
+            {isLoading ? (
+              <div className="rounded-[18px] border border-[var(--border)] bg-white/70 p-6 animate-pulse" />
+            ) : filteredDashboards.length ? (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {filteredDashboards.map((dashboard) => (
+                  <button
+                    key={dashboard.id}
+                    type="button"
+                    onClick={() => navigate(`/reports/dashboards/${dashboard.id}`)}
+                    className="rounded-[16px] border border-[var(--border)] bg-white px-4 py-4 text-left shadow-[var(--shadow-sm)] transition hover:border-[var(--primary)]"
+                  >
+                    <p className="text-sm font-semibold text-[var(--text)]">
+                      {dashboard.name}
+                    </p>
+                    <p className="mt-1 text-xs text-[var(--text-muted)]">
+                      Escopo: {dashboard.scope}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                title="Voce ainda nao criou um dashboard."
+                description="Vamos criar agora?"
+                action={
+                  <Button onClick={() => navigate("/reports/dashboards/new")}>
+                    Criar dashboard
+                  </Button>
+                }
+              />
+            )}
+          </div>
+        </section>
       </div>
     </PageShell>
   );

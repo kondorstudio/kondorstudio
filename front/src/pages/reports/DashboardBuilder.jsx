@@ -12,10 +12,14 @@ import { DateField } from "@/components/ui/date-field.jsx";
 import { Textarea } from "@/components/ui/textarea.jsx";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog.jsx";
 import ConnectDataSourceDialog from "@/components/reports/ConnectDataSourceDialog.jsx";
+import AlertBanner from "@/components/reports/AlertBanner.jsx";
+import MetricMultiSelect from "@/components/reports/MetricMultiSelect.jsx";
+import SortableChips from "@/components/reports/SortableChips.jsx";
+import UnderlineTabs from "@/components/reports/UnderlineTabs.jsx";
 import DashboardCanvas from "@/components/reports/widgets/DashboardCanvas.jsx";
 import WidgetCard from "@/components/reports/widgets/WidgetCard.jsx";
 import WidgetRenderer from "@/components/reports/widgets/WidgetRenderer.jsx";
-import { Badge } from "@/components/ui/badge.jsx";
+import { getWidgetTypeMeta } from "@/components/reports/widgets/widgetMeta.js";
 
 const WIDGET_TYPES = [
   { key: "KPI", label: "KPI" },
@@ -103,10 +107,14 @@ function WidgetConfigDialog({
   const [draft, setDraft] = useState(widget);
   const [filtersInput, setFiltersInput] = useState("");
   const [filtersError, setFiltersError] = useState("");
+  const [tab, setTab] = useState("main");
+  const [alertDismissed, setAlertDismissed] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setDraft(widget);
+    setTab("main");
+    setAlertDismissed(false);
     const initialFilters =
       widget?.filters && typeof widget.filters === "object"
         ? JSON.stringify(widget.filters, null, 2)
@@ -217,6 +225,11 @@ function WidgetConfigDialog({
     }
   }, [open, source, level, levels]);
 
+  useEffect(() => {
+    if (!open) return;
+    setAlertDismissed(false);
+  }, [open, source, brandId, globalBrandId]);
+
   if (!draft) return null;
 
   const selectedMetrics = Array.isArray(draft.metrics) ? draft.metrics : [];
@@ -225,6 +238,22 @@ function WidgetConfigDialog({
     globalBrandId && globalConnections?.length ? true : false;
 
   const showBrandSelector = scope !== "BRAND" && !inheritBrand;
+  const metricOptions = useMemo(
+    () =>
+      metrics.map((metric) => ({
+        value: metric.metricKey,
+        label: metric.label || metric.metricKey,
+      })),
+    [metrics]
+  );
+  const canCheckConnection = inheritBrand ? Boolean(globalBrandId) : Boolean(brandId);
+  const hasConnectionForSource = !source
+    ? true
+    : inheritBrand
+      ? globalConnections.some((item) => item.source === source)
+      : availableConnections.some((item) => item.source === source);
+  const showConnectionAlert =
+    source && canCheckConnection && !hasConnectionForSource && !alertDismissed;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -234,297 +263,331 @@ function WidgetConfigDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          <div>
-            <Label>Titulo</Label>
-            <Input
-              value={draft.title || ""}
-              onChange={(event) => setDraft({ ...draft, title: event.target.value })}
-            />
-          </div>
+          <UnderlineTabs
+            value={tab}
+            onChange={setTab}
+            tabs={[
+              { value: "main", label: "Dados principais" },
+              { value: "advanced", label: "Opcoes avancadas" },
+            ]}
+          />
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <Label>Fonte</Label>
-              <SelectNative
-                value={source}
-                onChange={(event) =>
-                  setDraft({
-                    ...draft,
-                    source: event.target.value,
-                    level: "",
-                    breakdown: "",
-                    metrics: [],
-                    connectionId: "",
-                  })
-                }
-              >
-                <option value="">Selecione</option>
-                {SOURCE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </SelectNative>
-            </div>
-            <div>
-              <Label>Nivel</Label>
-              {levels.length ? (
-                <SelectNative
-                  value={level}
-                  onChange={(event) =>
-                    setDraft({
-                      ...draft,
-                      level: event.target.value,
-                      metrics: [],
-                      breakdown: "",
-                    })
-                  }
-                >
-                  <option value="">Selecione</option>
-                  {levels.map((item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
-                  ))}
-                </SelectNative>
-              ) : (
+          {tab === "main" ? (
+            <div className="space-y-4">
+              <div>
+                <Label>Titulo</Label>
                 <Input
-                  value={level}
+                  value={draft.title || ""}
                   onChange={(event) =>
-                    setDraft({ ...draft, level: event.target.value })
+                    setDraft({ ...draft, title: event.target.value })
                   }
-                  placeholder="CAMPAIGN / ADSET / PROPERTY"
                 />
-              )}
-            </div>
-          </div>
-
-          <div className="rounded-[12px] border border-[var(--border)] bg-[var(--surface)] px-3 py-3 text-xs">
-            <label className="flex items-center gap-2 text-[var(--text)]">
-              <input
-                type="checkbox"
-                checked={inheritBrand}
-                onChange={(event) =>
-                  setDraft({
-                    ...draft,
-                    inheritBrand: event.target.checked,
-                    brandId: event.target.checked ? "" : draft.brandId || "",
-                    connectionId: "",
-                  })
-                }
-              />
-              Usar marca global
-            </label>
-            {inheritBrand ? (
-              <p className="mt-1 text-[var(--text-muted)]">
-                Widget segue a marca selecionada nos filtros globais.
-              </p>
-            ) : null}
-          </div>
-
-          {showBrandSelector ? (
-            <div>
-              <Label>Marca do widget</Label>
-              <SelectNative
-                value={draft.brandId || ""}
-                onChange={(event) =>
-                  setDraft({ ...draft, brandId: event.target.value, connectionId: "" })
-                }
-              >
-                <option value="">Selecione a marca</option>
-                {brands.map((brand) => (
-                  <option key={brand.id} value={brand.id}>
-                    {brand.name}
-                  </option>
-                ))}
-              </SelectNative>
-            </div>
-          ) : null}
-
-          <div>
-            <Label>Conexao</Label>
-            {inheritBrand && !globalBrandId ? (
-              <div className="mt-2 text-xs text-[var(--text-muted)]">
-                Selecione uma marca global para usar conexoes.
               </div>
-            ) : inheritBrand ? (
-              <div className="mt-2 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs text-[var(--text-muted)]">
-                Usando conexao da marca global. Para escolher uma conta
-                especifica, desative a marca global.
-              </div>
-            ) : (
-              <SelectNative
-                value={draft.connectionId || ""}
-                onChange={(event) =>
-                  setDraft({ ...draft, connectionId: event.target.value })
-                }
-              >
-                <option value="">Selecione a conexao</option>
-                {availableConnections.map((connection) => (
-                  <option key={connection.id} value={connection.id}>
-                    {connection.displayName}
-                  </option>
-                ))}
-              </SelectNative>
-            )}
-            {!availableConnections.length && source && brandId ? (
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[var(--text-muted)]">
-                <span>Sem conexao para esta fonte.</span>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => onConnect(brandId, source)}
-                >
-                  Associar conta
-                </Button>
-              </div>
-            ) : null}
-            {inheritBrand && globalHasConnection === false && source ? (
-              <div className="mt-2 text-xs text-[var(--text-muted)]">
-                Nenhuma conexao encontrada para a marca global.
-              </div>
-            ) : null}
-          </div>
 
-          <div>
-            <Label>Breakdown</Label>
-            <SelectNative
-              value={draft.breakdown || ""}
-              onChange={(event) =>
-                setDraft({ ...draft, breakdown: event.target.value })
-              }
-            >
-              <option value="">Sem breakdown</option>
-              {dimensions.map((dimension) => (
-                <option key={dimension.id} value={dimension.metricKey}>
-                  {dimension.label}
-                </option>
-              ))}
-            </SelectNative>
-          </div>
-
-          <div>
-            <Label>Metricas</Label>
-            {selectedMetrics.length ? (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {selectedMetrics.map((metricKey) => (
-                  <Badge
-                    key={metricKey}
-                    variant="outline"
-                    className="flex items-center gap-1"
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <Label>Fonte de dados</Label>
+                  <SelectNative
+                    value={source}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        source: event.target.value,
+                        level: "",
+                        breakdown: "",
+                        metrics: [],
+                        connectionId: "",
+                      })
+                    }
                   >
-                    <span>{metricsMap.get(metricKey) || metricKey}</span>
-                    <button
-                      type="button"
-                      className="ml-1 text-[10px] text-[var(--text-muted)] hover:text-[var(--text)]"
-                      onClick={() =>
+                    <option value="">Selecione</option>
+                    {SOURCE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </SelectNative>
+                </div>
+                <div>
+                  <Label>Nivel</Label>
+                  {levels.length ? (
+                    <SelectNative
+                      value={level}
+                      onChange={(event) =>
                         setDraft({
                           ...draft,
-                          metrics: selectedMetrics.filter((key) => key !== metricKey),
+                          level: event.target.value,
+                          metrics: [],
+                          breakdown: "",
                         })
                       }
                     >
-                      ×
-                    </button>
-                  </Badge>
-                ))}
+                      <option value="">Selecione</option>
+                      {levels.map((item) => (
+                        <option key={item} value={item}>
+                          {item}
+                        </option>
+                      ))}
+                    </SelectNative>
+                  ) : (
+                    <Input
+                      value={level}
+                      onChange={(event) =>
+                        setDraft({ ...draft, level: event.target.value })
+                      }
+                      placeholder="CAMPAIGN / ADSET / PROPERTY"
+                    />
+                  )}
+                </div>
               </div>
-            ) : (
-              <p className="mt-2 text-xs text-[var(--text-muted)]">
-                Nenhuma metrica selecionada.
-              </p>
-            )}
-            <div className="mt-3 grid gap-2 md:grid-cols-2">
-              {metrics.length ? (
-                metrics.map((metric) => {
-                  const checked = selectedMetrics.includes(metric.metricKey);
-                  return (
-                    <label
-                      key={metric.id}
-                      className="flex items-center gap-2 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs"
+
+              <div className="rounded-[12px] border border-[var(--border)] bg-[var(--surface)] px-3 py-3 text-xs">
+                <label className="flex items-center gap-2 text-[var(--text)]">
+                  <input
+                    type="checkbox"
+                    checked={inheritBrand}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        inheritBrand: event.target.checked,
+                        brandId: event.target.checked ? "" : draft.brandId || "",
+                        connectionId: "",
+                      })
+                    }
+                  />
+                  Usar marca global
+                </label>
+                {inheritBrand ? (
+                  <p className="mt-1 text-[var(--text-muted)]">
+                    Widget segue a marca selecionada nos filtros globais.
+                  </p>
+                ) : null}
+              </div>
+
+              {showBrandSelector ? (
+                <div>
+                  <Label>Marca do widget</Label>
+                  <SelectNative
+                    value={draft.brandId || ""}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        brandId: event.target.value,
+                        connectionId: "",
+                      })
+                    }
+                  >
+                    <option value="">Selecione a marca</option>
+                    {brands.map((brand) => (
+                      <option key={brand.id} value={brand.id}>
+                        {brand.name}
+                      </option>
+                    ))}
+                  </SelectNative>
+                </div>
+              ) : null}
+
+              <div>
+                <Label>Conexao</Label>
+                {inheritBrand && !globalBrandId ? (
+                  <div className="mt-2 text-xs text-[var(--text-muted)]">
+                    Selecione uma marca global para usar conexoes.
+                  </div>
+                ) : inheritBrand ? (
+                  <div className="mt-2 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs text-[var(--text-muted)]">
+                    Usando conexao da marca global. Para escolher uma conta
+                    especifica, desative a marca global.
+                  </div>
+                ) : (
+                  <SelectNative
+                    value={draft.connectionId || ""}
+                    onChange={(event) =>
+                      setDraft({ ...draft, connectionId: event.target.value })
+                    }
+                  >
+                    <option value="">Selecione a conexao</option>
+                    {availableConnections.map((connection) => (
+                      <option key={connection.id} value={connection.id}>
+                        {connection.displayName}
+                      </option>
+                    ))}
+                  </SelectNative>
+                )}
+                {!availableConnections.length && source && brandId ? (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[var(--text-muted)]">
+                    <span>Sem conexao para esta fonte.</span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => onConnect(brandId, source)}
                     >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(event) => {
-                          const next = event.target.checked
-                            ? [...selectedMetrics, metric.metricKey]
-                            : selectedMetrics.filter((key) => key !== metric.metricKey);
-                          setDraft({ ...draft, metrics: next });
-                        }}
-                      />
-                      <span className="text-[var(--text)]">{metric.label}</span>
-                    </label>
-                  );
-                })
-              ) : (
-                <p className="text-xs text-[var(--text-muted)]">
-                  Nenhuma metrica disponivel.
-                </p>
-              )}
-            </div>
-          </div>
+                      Associar conta
+                    </Button>
+                  </div>
+                ) : null}
+                {inheritBrand && globalHasConnection === false && source ? (
+                  <div className="mt-2 text-xs text-[var(--text-muted)]">
+                    Nenhuma conexao encontrada para a marca global.
+                  </div>
+                ) : null}
+              </div>
 
-          {widgetType === "TEXT" ? (
-            <div>
-              <Label>Conteudo</Label>
-              <Textarea
-                rows={4}
-                value={options.text || ""}
-                onChange={(event) =>
-                  setDraft({
-                    ...draft,
-                    options: { ...options, text: event.target.value },
-                  })
-                }
-              />
-            </div>
-          ) : null}
+              {showConnectionAlert ? (
+                <AlertBanner
+                  title="Importante"
+                  description="Este cliente nao possui conta associada para essa fonte."
+                  onDismiss={() => setAlertDismissed(true)}
+                  action={
+                    onConnect && canCheckConnection ? (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="border-red-200 text-red-600 hover:bg-white"
+                        onClick={() =>
+                          onConnect(inheritBrand ? globalBrandId : brandId, source)
+                        }
+                      >
+                        Associar conta
+                      </Button>
+                    ) : null
+                  }
+                />
+              ) : null}
 
-          {widgetType === "IMAGE" ? (
-            <div>
-              <Label>URL da imagem</Label>
-              <Input
-                value={options.imageUrl || ""}
-                onChange={(event) =>
-                  setDraft({
-                    ...draft,
-                    options: { ...options, imageUrl: event.target.value },
-                  })
-                }
-              />
-            </div>
-          ) : null}
+              <div>
+                <Label>Metricas</Label>
+                <MetricMultiSelect
+                  options={metricOptions}
+                  value={selectedMetrics}
+                  onChange={(next) => setDraft({ ...draft, metrics: next })}
+                />
+              </div>
 
-          <div>
-            <Label>Preview</Label>
-            <div className="mt-2 rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-3 py-3">
-              <WidgetRenderer
-                widget={draft}
-                connectionId={previewConnectionId}
-                filters={previewRange}
-                enableQuery={Boolean(source && (level || widgetType === "TEXT" || widgetType === "IMAGE"))}
-                forceMock={!previewConnectionId}
-                variant="mini"
-              />
-            </div>
-          </div>
+              <div>
+                <Label>Breakdown</Label>
+                <SelectNative
+                  value={draft.breakdown || ""}
+                  onChange={(event) =>
+                    setDraft({ ...draft, breakdown: event.target.value })
+                  }
+                >
+                  <option value="">Sem breakdown</option>
+                  {dimensions.map((dimension) => (
+                    <option key={dimension.id} value={dimension.metricKey}>
+                      {dimension.label}
+                    </option>
+                  ))}
+                </SelectNative>
+              </div>
 
-          <div>
-            <Label>Filtros (JSON)</Label>
-            <Textarea
-              rows={4}
-              value={filtersInput}
-              onChange={(event) => {
-                setFiltersInput(event.target.value);
-                if (filtersError) setFiltersError("");
-              }}
-              placeholder='{"country":"BR"}'
-            />
-            {filtersError ? (
-              <p className="mt-1 text-xs text-red-600">{filtersError}</p>
-            ) : null}
-          </div>
+              {widgetType === "TEXT" ? (
+                <div>
+                  <Label>Conteudo</Label>
+                  <Textarea
+                    rows={4}
+                    value={options.text || ""}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        options: { ...options, text: event.target.value },
+                      })
+                    }
+                  />
+                </div>
+              ) : null}
+
+              {widgetType === "IMAGE" ? (
+                <div>
+                  <Label>URL da imagem</Label>
+                  <Input
+                    value={options.imageUrl || ""}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        options: { ...options, imageUrl: event.target.value },
+                      })
+                    }
+                  />
+                </div>
+              ) : null}
+
+              <div>
+                <Label>Preview</Label>
+                <div className="mt-2 rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-3 py-3">
+                  <WidgetRenderer
+                    widget={draft}
+                    connectionId={previewConnectionId}
+                    filters={previewRange}
+                    enableQuery={Boolean(
+                      source && (level || widgetType === "TEXT" || widgetType === "IMAGE")
+                    )}
+                    forceMock={!previewConnectionId}
+                    variant="mini"
+                  />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <Label>Ordenar metricas (arraste para mudar a ordem)</Label>
+                <div className="mt-2">
+                  <SortableChips
+                    items={selectedMetrics}
+                    onChange={(next) => setDraft({ ...draft, metrics: next })}
+                    getLabel={(key) => metricsMap.get(key) || key}
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <Label>Moeda</Label>
+                  <Input
+                    value={options.currency || ""}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        options: { ...options, currency: event.target.value },
+                      })
+                    }
+                    placeholder="BRL"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <label className="flex items-center gap-2 text-sm text-[var(--text)]">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(options.hideZero)}
+                      onChange={(event) =>
+                        setDraft({
+                          ...draft,
+                          options: { ...options, hideZero: event.target.checked },
+                        })
+                      }
+                    />
+                    Ocultar resultados com 0
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <Label>Filtros (JSON)</Label>
+                <Textarea
+                  rows={4}
+                  value={filtersInput}
+                  onChange={(event) => {
+                    setFiltersInput(event.target.value);
+                    if (filtersError) setFiltersError("");
+                  }}
+                  placeholder='{"country":"BR"}'
+                />
+                {filtersError ? (
+                  <p className="mt-1 text-xs text-red-600">{filtersError}</p>
+                ) : null}
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => onOpenChange(false)}>
@@ -1055,13 +1118,21 @@ export default function DashboardBuilder() {
               <p className="text-sm font-semibold text-[var(--text)]">Widgets</p>
               <div className="mt-3 grid gap-2">
                 {WIDGET_TYPES.map((item) => (
-                  <Button
-                    key={item.key}
-                    variant="secondary"
-                    onClick={() => addWidget(item.key)}
-                  >
-                    {item.label}
-                  </Button>
+                  (() => {
+                    const meta = getWidgetTypeMeta(item.key);
+                    const Icon = meta?.icon;
+                    return (
+                      <Button
+                        key={item.key}
+                        variant="secondary"
+                        className="justify-start"
+                        onClick={() => addWidget(item.key)}
+                      >
+                        {Icon ? <Icon className="h-4 w-4" /> : null}
+                        {item.label}
+                      </Button>
+                    );
+                  })()
                 ))}
               </div>
             </div>

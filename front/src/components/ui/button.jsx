@@ -16,7 +16,7 @@ export function Button({
     "transition-[transform,box-shadow,background-color,border-color,color] duration-[var(--motion-base)] ease-[var(--ease-standard)] " +
     "hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] " +
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 " +
-    "focus-visible:ring-[rgba(109,40,217,0.35)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none";
+    "focus-visible:ring-[rgba(31,111,235,0.35)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none";
 
   const variantClasses = {
     primary:
@@ -30,6 +30,10 @@ export function Button({
     ghost:
       "bg-transparent border-transparent text-[var(--text-muted)] hover:bg-slate-100 hover:text-[var(--text)]",
     danger: "bg-red-600 border-transparent text-white shadow-[var(--shadow-sm)] hover:bg-red-700 hover:shadow-[var(--shadow-md)] hover:-translate-y-0.5",
+    success:
+      "bg-emerald-500 border-transparent text-white shadow-[var(--shadow-sm)] hover:bg-emerald-600 hover:shadow-[var(--shadow-md)] hover:-translate-y-0.5",
+    accent:
+      "bg-[var(--accent)] border-transparent text-white shadow-[var(--shadow-sm)] hover:bg-orange-600 hover:shadow-[var(--shadow-md)] hover:-translate-y-0.5",
     link: "bg-transparent border-transparent text-[var(--primary)] underline-offset-4 hover:underline",
   };
 
