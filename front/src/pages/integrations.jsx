@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { base44 } from "../apiClient/base44Client";
 
 import { Button } from "@/components/ui/button.jsx";
@@ -415,6 +415,7 @@ function resolveMetaKey(kind) {
 }
 
 export default function Integrations() {
+  const navigate = useNavigate();
   const [activeKey, setActiveKey] = useState(null);
   const [comingSoonDefinition, setComingSoonDefinition] = useState(null);
   const [initialClientId, setInitialClientId] = useState("");
@@ -669,6 +670,10 @@ export default function Integrations() {
                       isConnectedStatus(tileStatus) ? "Gerenciar conexão" : "Conectar"
                     }
                     onConnect={() => {
+                      if (integration.key === "google-analytics") {
+                        navigate("/integrations/ga4");
+                        return;
+                      }
                       setActiveKey(integration.key);
                       setInitialClientId("");
                     }}
@@ -771,7 +776,9 @@ export default function Integrations() {
                     icon={<Icon className="w-5 h-5 text-white" />}
                     meta={tileMeta}
                     actionLabel={
-                      isSoon
+                      integration.key === "google-analytics"
+                        ? "Abrir GA4"
+                        : isSoon
                         ? "Saiba mais"
                         : isConnectedStatus(tileStatus)
                         ? "Gerenciar conexão"
@@ -779,6 +786,10 @@ export default function Integrations() {
                     }
                     disabled={!selectedClientId && !isSoon}
                     onConnect={() => {
+                      if (integration.key === "google-analytics") {
+                        navigate("/integrations/ga4");
+                        return;
+                      }
                       if (isSoon) {
                         setComingSoonDefinition(integration);
                         return;

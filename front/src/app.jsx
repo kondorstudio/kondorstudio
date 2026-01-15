@@ -18,6 +18,7 @@ const Biblioteca = lazy(() => import("./pages/biblioteca.jsx"));
 const Metrics = lazy(() => import("./pages/metrics.jsx"));
 const Competitors = lazy(() => import("./pages/competitors.jsx"));
 const Integrations = lazy(() => import("./pages/integrations.jsx"));
+const Ga4Integration = lazy(() => import("./pages/integrations/ga4.jsx"));
 const Settings = lazy(() => import("./pages/settings.jsx"));
 const ReportsHome = lazy(() => import("./pages/reports/ReportsHome.jsx"));
 const ReportsTemplates = lazy(() => import("./pages/reports/ReportsTemplates.jsx"));
@@ -27,6 +28,10 @@ const ReportViewer = lazy(() => import("./pages/reports/ReportViewer.jsx"));
 const DashboardsHome = lazy(() => import("./pages/reports/DashboardsHome.jsx"));
 const DashboardViewer = lazy(() => import("./pages/reports/DashboardViewer.jsx"));
 const DashboardBuilder = lazy(() => import("./pages/reports/DashboardBuilder.jsx"));
+const AnalyticsDashboards = lazy(() => import("./pages/analytics/dashboards.jsx"));
+const AnalyticsDashboardBuilder = lazy(() =>
+  import("./pages/analytics/dashboardBuilder.jsx")
+);
 
 const Home = lazy(() => import("./pages/home.jsx"));
 const Checkout = lazy(() => import("./pages/checkout.jsx"));
@@ -136,8 +141,15 @@ export default function App() {
             />
             <Route path="/competitors" element={<Competitors />} />
             <Route path="/integrations" element={<Integrations />} />
+            <Route path="/integrations/ga4" element={<Ga4Integration />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/onboarding" element={<Onboarding />} />
+            <Route path="/analytics/dashboards" element={<AnalyticsDashboards />} />
+            <Route path="/analytics/dashboards/new" element={<AnalyticsDashboardBuilder />} />
+            <Route
+              path="/analytics/dashboards/:dashboardId"
+              element={<AnalyticsDashboardBuilder />}
+            />
           </Route>
         </Route>
 

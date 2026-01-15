@@ -765,6 +765,111 @@ const Reporting = {
 };
 
 // --------------------
+// GA4 + Analytics
+// --------------------
+
+const GA4 = {
+  async oauthStart() {
+    return jsonFetch("/integrations/ga4/oauth/start", { method: "GET" });
+  },
+
+  async status() {
+    return jsonFetch("/integrations/ga4/status", { method: "GET" });
+  },
+
+  async disconnect() {
+    return jsonFetch("/integrations/ga4/disconnect", { method: "POST" });
+  },
+
+  async syncProperties() {
+    return jsonFetch("/integrations/ga4/properties/sync", { method: "GET" });
+  },
+
+  async listProperties() {
+    return jsonFetch("/integrations/ga4/properties", { method: "GET" });
+  },
+
+  async selectProperty(propertyId) {
+    if (!propertyId) throw new Error("propertyId obrigatorio");
+    return jsonFetch("/integrations/ga4/properties/select", {
+      method: "POST",
+      body: JSON.stringify({ propertyId }),
+    });
+  },
+
+  async metadata(propertyId) {
+    const qs = buildQuery(propertyId ? { propertyId } : {});
+    return jsonFetch(`/integrations/ga4/metadata${qs}`, { method: "GET" });
+  },
+};
+
+const Analytics = {
+  async runReport(payload = {}) {
+    return jsonFetch("/analytics/ga4/run-report", {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    });
+  },
+
+  async listDashboards() {
+    return jsonFetch("/analytics/dashboards", { method: "GET" });
+  },
+
+  async getDashboard(id) {
+    if (!id) throw new Error("dashboardId obrigatorio");
+    return jsonFetch(`/analytics/dashboards/${id}`, { method: "GET" });
+  },
+
+  async createDashboard(payload = {}) {
+    return jsonFetch("/analytics/dashboards", {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    });
+  },
+
+  async updateDashboard(id, payload = {}) {
+    if (!id) throw new Error("dashboardId obrigatorio");
+    return jsonFetch(`/analytics/dashboards/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload || {}),
+    });
+  },
+
+  async deleteDashboard(id) {
+    if (!id) throw new Error("dashboardId obrigatorio");
+    return jsonFetch(`/analytics/dashboards/${id}`, { method: "DELETE" });
+  },
+
+  async createWidget(dashboardId, payload = {}) {
+    if (!dashboardId) throw new Error("dashboardId obrigatorio");
+    return jsonFetch(`/analytics/dashboards/${dashboardId}/widgets`, {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    });
+  },
+
+  async updateWidget(widgetId, payload = {}) {
+    if (!widgetId) throw new Error("widgetId obrigatorio");
+    return jsonFetch(`/analytics/widgets/${widgetId}`, {
+      method: "PUT",
+      body: JSON.stringify(payload || {}),
+    });
+  },
+
+  async deleteWidget(widgetId) {
+    if (!widgetId) throw new Error("widgetId obrigatorio");
+    return jsonFetch(`/analytics/widgets/${widgetId}`, { method: "DELETE" });
+  },
+
+  async previewWidget(payload = {}) {
+    return jsonFetch("/analytics/widgets/preview", {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    });
+  },
+};
+
+// --------------------
 // Tasks
 // --------------------
 
@@ -1158,6 +1263,8 @@ export const base44 = {
     Competitor,
   },
   reporting: Reporting,
+  ga4: GA4,
+  analytics: Analytics,
   uploads: {
     uploadFile,
   },
