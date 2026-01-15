@@ -230,7 +230,15 @@ function WidgetConfigDialog({
     setAlertDismissed(false);
   }, [open, source, brandId, globalBrandId]);
 
-  if (!draft) return null;
+  if (!draft) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-md">
+          <div className="text-sm text-[var(--text-muted)]">Carregando widget...</div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   const selectedMetrics = Array.isArray(draft.metrics) ? draft.metrics : [];
   const options = draft.options && typeof draft.options === "object" ? draft.options : {};
@@ -1124,9 +1132,13 @@ export default function DashboardBuilder() {
                     return (
                       <Button
                         key={item.key}
+                        type="button"
                         variant="secondary"
                         className="justify-start"
-                        onClick={() => addWidget(item.key)}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          addWidget(item.key);
+                        }}
                       >
                         {Icon ? <Icon className="h-4 w-4" /> : null}
                         {item.label}
