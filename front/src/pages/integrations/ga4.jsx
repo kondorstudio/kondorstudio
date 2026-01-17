@@ -17,6 +17,7 @@ export default function Ga4IntegrationPage() {
   const queryClient = useQueryClient();
   const queryParams = useQueryParams();
   const [selectedPropertyId, setSelectedPropertyId] = useState("");
+  const [connectError, setConnectError] = useState("");
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["ga4-status"],
@@ -41,9 +42,17 @@ export default function Ga4IntegrationPage() {
   const connectMutation = useMutation({
     mutationFn: () => base44.ga4.oauthStart(),
     onSuccess: (payload) => {
+      setConnectError("");
       if (payload?.url) {
         window.location.href = payload.url;
       }
+    },
+    onError: (err) => {
+      const message =
+        err?.data?.error ||
+        err?.message ||
+        "Falha ao iniciar conexao com GA4.";
+      setConnectError(message);
     },
   });
 
@@ -138,7 +147,10 @@ export default function Ga4IntegrationPage() {
                       </Button>
                     ) : (
                       <Button
-                        onClick={() => connectMutation.mutate()}
+                        onClick={() => {
+                          setConnectError("");
+                          connectMutation.mutate();
+                        }}
                         disabled={connectMutation.isPending}
                       >
                         Conectar GA4
@@ -146,6 +158,9 @@ export default function Ga4IntegrationPage() {
                     )}
                   </div>
                 </div>
+                {connectError ? (
+                  <p className="text-xs text-rose-600">{connectError}</p>
+                ) : null}
                 <p className="text-xs text-[var(--text-muted)]">
                   Apenas leitura via API. Nenhum script do GA4 sera instalado no
                   front.
