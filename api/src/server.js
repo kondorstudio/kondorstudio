@@ -196,14 +196,18 @@ const devOrigins = [
 ];
 
 let envOrigins = [];
-if (process.env.CORS_ORIGIN) {
-  envOrigins = process.env.CORS_ORIGIN.split(",").map((o) => o.trim());
+const corsEnvRaw = process.env.CORS_ORIGINS || process.env.CORS_ORIGIN || "";
+if (corsEnvRaw) {
+  envOrigins = corsEnvRaw
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean);
 }
 
 const allowedOrigins = Array.from(new Set([...devOrigins, ...envOrigins]));
 
 if (isProduction && envOrigins.length === 0) {
-  console.error("⚠️  CORS_ORIGIN não definido. Configure no Render.");
+  console.error("⚠️  CORS_ORIGINS não definido. Configure no Render.");
 }
 
 const corsOptions = {
@@ -212,9 +216,21 @@ const corsOptions = {
       return callback(null, true);
     }
     console.warn(`🚫 CORS bloqueado para origem: ${origin}`);
-    return callback(new Error("Not allowed by CORS"));
+    const err = new Error("Not allowed by CORS");
+    err.status = 403;
+    return callback(err);
   },
   credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-Requested-With",
+    "X-Tenant",
+    "X-Tenant-Id",
+  ],
+  exposedHeaders: ["Set-Cookie"],
+  optionsSuccessStatus: 204,
 };
 
 app.use(cors(corsOptions));

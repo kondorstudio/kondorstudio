@@ -41,6 +41,9 @@ function extractToken(req) {
  */
 async function authMiddleware(req, res, next) {
   try {
+    if (req.method === 'OPTIONS') {
+      return next();
+    }
     const path = req.originalUrl || req.path || '';
 
     // Se a rota estiver na lista de públicas, não exige token

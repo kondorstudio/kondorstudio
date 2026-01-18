@@ -44,6 +44,9 @@ function resolveTenant(req) {
 
 module.exports = async function tenantMiddleware(req, res, next) {
   try {
+    if (req.method === 'OPTIONS') {
+      return next();
+    }
     const path = req.originalUrl || req.path || '';
 
     // Se a rota estiver na lista de rotas que não exigem tenantId, libera

@@ -73,6 +73,9 @@ function normalizeSubscriptionContext({ subscription, isTrial, trialEnds }) {
 
 async function checkSubscription(req, res, next) {
   try {
+    if (req.method === "OPTIONS") {
+      return next();
+    }
     const path = req.originalUrl || req.path || "";
 
     // Rotas públicas
