@@ -1,10 +1,14 @@
 // src/apiClient/base44Client.js
 
 // ⚙️ Base URL da API — usando variáveis do Vite, sem "process"
-function detectRenderApiUrl() {
+function detectHostedApiUrl() {
   if (typeof window === "undefined") return null;
   const host = window.location.hostname;
-  if (host && /onrender\.com$/.test(host)) {
+  if (!host) return null;
+  if (/onrender\.com$/.test(host)) {
+    return "https://kondor-api.onrender.com";
+  }
+  if (host === "kondorstudio.app" || host === "www.kondorstudio.app") {
     return "https://kondor-api.onrender.com";
   }
   return null;
@@ -43,7 +47,7 @@ const API_BASE_URL = preferPageProtocol(
     import.meta.env &&
     (import.meta.env.VITE_API_URL || import.meta.env.VITE_APP_API_URL)) ||
     (typeof window !== "undefined" && window.__KONDOR_API_URL) ||
-    detectRenderApiUrl() ||
+    detectHostedApiUrl() ||
     detectWindowOrigin() ||
     "http://localhost:4000"
 );
@@ -158,6 +162,7 @@ async function rawFetch(path, options = {}) {
       ...defaultHeaders,
       ...(options.headers || {}),
     },
+    credentials: options.credentials || "include",
   };
   if (options && options.body && typeof options.body !== "string") {
     opts.body = JSON.stringify(options.body);
