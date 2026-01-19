@@ -1,6 +1,7 @@
 const ga4OAuthService = require('../services/ga4OAuthService');
 const ga4AdminService = require('../services/ga4AdminService');
 const ga4MetadataService = require('../services/ga4MetadataService');
+const { useTenant } = require('../prisma');
 
 function getFrontUrl() {
   return process.env.APP_URL_FRONT || 'http://localhost:5173';
@@ -78,20 +79,31 @@ module.exports = {
         return res.status(400).json({ error: 'tenantId or userId missing' });
       }
 
-      const integration = await ga4OAuthService.disconnect({
-        tenantId,
-        userId,
-        clearTokens: true,
+      const db = req.db || useTenant(tenantId);
+      const integrations = await db.integrationGoogleGa4.findMany({
+        where: { userId: String(userId) },
       });
 
-      if (integration) {
-        await req.db.integrationGoogleGa4Property.updateMany({
-          where: { integrationId: integration.id },
+      await db.integrationGoogleGa4.updateMany({
+        where: { userId: String(userId) },
+        data: {
+          status: 'DISCONNECTED',
+          lastError: null,
+          accessToken: null,
+          refreshTokenEnc: null,
+          tokenExpiry: null,
+        },
+      });
+
+      const integrationIds = integrations.map((item) => item.id);
+      if (integrationIds.length) {
+        await db.integrationGoogleGa4Property.updateMany({
+          where: { integrationId: { in: integrationIds } },
           data: { isSelected: false },
         });
       }
 
-      return res.json({ ok: true });
+      return res.json({ ok: true, disconnected: integrations.length > 0 });
     } catch (error) {
       console.error('GA4 disconnect error:', error);
       return res.status(500).json({ error: 'Failed to disconnect GA4' });
