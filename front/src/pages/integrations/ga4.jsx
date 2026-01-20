@@ -18,6 +18,7 @@ export default function Ga4IntegrationPage() {
   const queryParams = useQueryParams();
   const [selectedPropertyId, setSelectedPropertyId] = useState("");
   const [connectError, setConnectError] = useState("");
+  const [disconnectError, setDisconnectError] = useState("");
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["ga4-status"],
@@ -68,7 +69,17 @@ export default function Ga4IntegrationPage() {
 
   const disconnectMutation = useMutation({
     mutationFn: () => base44.ga4.disconnect(),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["ga4-status"] }),
+    onSuccess: () => {
+      setDisconnectError("");
+      queryClient.invalidateQueries({ queryKey: ["ga4-status"] });
+    },
+    onError: (err) => {
+      const message =
+        err?.data?.error ||
+        err?.message ||
+        "Falha ao desconectar GA4.";
+      setDisconnectError(message);
+    },
   });
 
   const connectedParam = queryParams.get("connected");
@@ -160,6 +171,9 @@ export default function Ga4IntegrationPage() {
                 </div>
                 {connectError ? (
                   <p className="text-xs text-rose-600">{connectError}</p>
+                ) : null}
+                {disconnectError ? (
+                  <p className="text-xs text-rose-600">{disconnectError}</p>
                 ) : null}
                 <p className="text-xs text-[var(--text-muted)]">
                   Apenas leitura via API. Nenhum script do GA4 sera instalado no

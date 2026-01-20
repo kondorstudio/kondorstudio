@@ -1,7 +1,7 @@
 const ga4OAuthService = require('../services/ga4OAuthService');
 const ga4AdminService = require('../services/ga4AdminService');
 const ga4MetadataService = require('../services/ga4MetadataService');
-const { useTenant } = require('../prisma');
+const { prisma, useTenant } = require('../prisma');
 
 function getFrontUrl() {
   return process.env.APP_URL_FRONT || 'http://localhost:5173';
@@ -80,20 +80,33 @@ module.exports = {
       }
 
       const db = req.db || useTenant(tenantId);
-      const integrations = await db.integrationGoogleGa4.findMany({
-        where: { userId: String(userId) },
+      const integrationFilter = { userId: String(userId) };
+      let integrations = await db.integrationGoogleGa4.findMany({
+        where: integrationFilter,
       });
 
-      await db.integrationGoogleGa4.updateMany({
-        where: { userId: String(userId) },
-        data: {
-          status: 'DISCONNECTED',
-          lastError: null,
-          accessToken: null,
-          refreshTokenEnc: null,
-          tokenExpiry: null,
-        },
+      const disconnectPayload = {
+        status: 'DISCONNECTED',
+        lastError: null,
+        accessToken: null,
+        refreshTokenEnc: null,
+        tokenExpiry: null,
+      };
+
+      let updated = await db.integrationGoogleGa4.updateMany({
+        where: integrationFilter,
+        data: disconnectPayload,
       });
+
+      if (!updated?.count) {
+        integrations = await prisma.integrationGoogleGa4.findMany({
+          where: integrationFilter,
+        });
+        updated = await prisma.integrationGoogleGa4.updateMany({
+          where: integrationFilter,
+          data: disconnectPayload,
+        });
+      }
 
       const integrationIds = integrations.map((item) => item.id);
       if (integrationIds.length) {
@@ -103,7 +116,11 @@ module.exports = {
         });
       }
 
-      return res.json({ ok: true, disconnected: integrations.length > 0 });
+      return res.json({
+        ok: true,
+        disconnected: integrations.length > 0,
+        updated: updated?.count || 0,
+      });
     } catch (error) {
       console.error('GA4 disconnect error:', error);
       return res.status(500).json({ error: 'Failed to disconnect GA4' });
