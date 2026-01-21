@@ -277,6 +277,12 @@ function LayoutContent() {
                 Sair
               </Button>
             )}
+            {!collapsed ? (
+              <p className="text-[10px] text-center text-gray-400">
+                © 2026 KONDOR STUDIO LTDA - Todos os direitos reservados. CNPJ:
+                64.626.553/0001-37
+              </p>
+            ) : null}
           </div>
         </SidebarFooter>
       </Sidebar>

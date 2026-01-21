@@ -77,7 +77,10 @@ export default function SiteFooter({ className = "mt-20" }) {
       </div>
       <div className="border-t border-slate-800">
         <div className="max-w-6xl mx-auto px-6 py-4 text-xs text-slate-500 flex flex-col md:flex-row md:items-center justify-between gap-2">
-          <span>© {new Date().getFullYear()} Kondor Studio. Todos os direitos reservados.</span>
+          <span>
+            © 2026 KONDOR STUDIO LTDA - Todos os direitos reservados. CNPJ:
+            64.626.553/0001-37
+          </span>
           <div className="flex gap-4">
             <Link to="/terms" className="hover:text-white transition">
               Termos de uso
