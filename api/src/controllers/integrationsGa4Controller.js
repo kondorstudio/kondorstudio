@@ -17,6 +17,34 @@ function buildRedirectUrl(params) {
   return url.toString();
 }
 
+function normalizeGa4Error(error) {
+  const message = error?.message || 'GA4 error';
+  const lower = String(message).toLowerCase();
+
+  if (error?.code === 'GA4_REAUTH_REQUIRED') {
+    return 'Tokens invalidos ou expirados. Reconecte o GA4.';
+  }
+
+  if (error?.status === 403) {
+    if (
+      lower.includes('access not configured') ||
+      lower.includes('has not been used') ||
+      lower.includes('disabled')
+    ) {
+      return 'A API Google Analytics Admin nao esta habilitada no projeto. Ative no Google Cloud Console.';
+    }
+    if (
+      lower.includes('insufficient') ||
+      lower.includes('permission') ||
+      lower.includes('permiss')
+    ) {
+      return 'A conta Google nao tem permissao para acessar propriedades GA4.';
+    }
+  }
+
+  return message;
+}
+
 module.exports = {
   async oauthStart(req, res) {
     try {
@@ -199,9 +227,14 @@ module.exports = {
       return res.json({ items, selectedProperty });
     } catch (error) {
       console.error('GA4 propertiesSync error:', error);
+      const message = normalizeGa4Error(error);
       return res
         .status(error.status || 500)
-        .json({ error: error.message || 'Failed to sync GA4 properties' });
+        .json({
+          error: message || 'Failed to sync GA4 properties',
+          code: error?.code || null,
+          reason: error?.reason || null,
+        });
     }
   },
 

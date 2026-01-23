@@ -4,11 +4,19 @@ const ga4OAuthService = require('./ga4OAuthService');
 const ADMIN_API_URL =
   process.env.GA4_ADMIN_API_URL || 'https://analyticsadmin.googleapis.com/v1beta/accountSummaries';
 
+function extractErrorReason(payload) {
+  const details = payload?.error?.details;
+  if (!Array.isArray(details)) return null;
+  const reasonEntry = details.find((item) => item?.reason);
+  return reasonEntry?.reason || null;
+}
+
 function mapError(res, payload) {
   const message = payload?.error?.message || payload?.error || 'GA4 Admin API error';
   const err = new Error(message);
   err.status = res.status;
-  err.code = 'GA4_ADMIN_ERROR';
+  err.code = payload?.error?.status || 'GA4_ADMIN_ERROR';
+  err.reason = extractErrorReason(payload);
   return err;
 }
 
@@ -106,7 +114,24 @@ async function syncProperties({ tenantId, userId }) {
       tenantId,
       userId,
     });
-    properties = await fetchProperties(accessToken);
+    try {
+      properties = await fetchProperties(accessToken);
+    } catch (error) {
+      if (error?.status === 401) {
+        await ga4OAuthService.resetIntegration(
+          tenantId,
+          userId,
+          'Token GA4 expirado ou invalido. Reconecte.'
+        );
+      } else if (error?.status === 403) {
+        await ga4OAuthService.markIntegrationError(
+          tenantId,
+          userId,
+          error?.message || 'Permissao insuficiente para GA4.'
+        );
+      }
+      throw error;
+    }
   }
 
   if (!properties.length) return [];

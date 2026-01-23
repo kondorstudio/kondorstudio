@@ -109,6 +109,26 @@ async function markIntegrationError(tenantId, userId, message) {
   });
 }
 
+async function resetIntegration(
+  tenantId,
+  userId,
+  message,
+  { status = 'ERROR', clearTokens = true } = {}
+) {
+  const existing = await getIntegration(tenantId, userId);
+  if (!existing) return null;
+  return prisma.integrationGoogleGa4.update({
+    where: { id: existing.id },
+    data: {
+      status,
+      lastError: message || 'GA4 error',
+      accessToken: clearTokens ? null : existing.accessToken,
+      refreshTokenEnc: clearTokens ? null : existing.refreshTokenEnc,
+      tokenExpiry: clearTokens ? null : existing.tokenExpiry,
+    },
+  });
+}
+
 async function upsertIntegration({
   tenantId,
   userId,
@@ -169,7 +189,7 @@ async function exchangeCode({ code, state }) {
   }
 
   if (!refreshTokenEnc) {
-    await markIntegrationError(payload.tenantId, payload.userId, 'Missing refresh token');
+    await resetIntegration(payload.tenantId, payload.userId, 'Missing refresh token');
     const err = new Error('Refresh token missing. Reconnect with prompt=consent.');
     err.status = 400;
     err.code = 'GA4_REFRESH_TOKEN_MISSING';
@@ -206,15 +226,24 @@ async function getValidAccessToken({ tenantId, userId }) {
       try {
         return decrypt(integration.accessToken);
       } catch (error) {
-        await markIntegrationError(tenantId, userId, 'Access token decrypt failed');
+        await resetIntegration(
+          tenantId,
+          userId,
+          'Access token decrypt failed. Reconnect GA4.'
+        );
+        const err = new Error('Access token invalido. Reconecte o GA4.');
+        err.status = 400;
+        err.code = 'GA4_REAUTH_REQUIRED';
+        throw err;
       }
     }
   }
 
   if (!integration.refreshTokenEnc) {
-    const err = new Error('Missing refresh token');
+    await resetIntegration(tenantId, userId, 'Missing refresh token');
+    const err = new Error('Refresh token missing. Reconnect GA4.');
     err.status = 400;
-    err.code = 'GA4_REFRESH_TOKEN_MISSING';
+    err.code = 'GA4_REAUTH_REQUIRED';
     throw err;
   }
 
@@ -222,17 +251,23 @@ async function getValidAccessToken({ tenantId, userId }) {
   try {
     refreshToken = decrypt(integration.refreshTokenEnc);
   } catch (error) {
-    await markIntegrationError(tenantId, userId, 'Refresh token decrypt failed');
-    const err = new Error('Failed to decrypt refresh token');
+    await resetIntegration(
+      tenantId,
+      userId,
+      'Refresh token decrypt failed. Reconnect GA4.'
+    );
+    const err = new Error('Refresh token invalido. Reconecte o GA4.');
     err.status = 400;
+    err.code = 'GA4_REAUTH_REQUIRED';
     throw err;
   }
 
   const tokenResponse = await googleClient.refreshAccessToken(refreshToken);
   if (!tokenResponse.access_token) {
-    await markIntegrationError(tenantId, userId, 'OAuth refresh failed');
-    const err = new Error('OAuth refresh failed');
+    await resetIntegration(tenantId, userId, 'OAuth refresh failed. Reconnect GA4.');
+    const err = new Error('OAuth refresh failed. Reconnect GA4.');
     err.status = 400;
+    err.code = 'GA4_REAUTH_REQUIRED';
     throw err;
   }
 
@@ -277,4 +312,6 @@ module.exports = {
   disconnect,
   ensureMockIntegration,
   isMockMode,
+  markIntegrationError,
+  resetIntegration,
 };
