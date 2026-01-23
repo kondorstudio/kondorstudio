@@ -94,6 +94,9 @@ function useTenant(tenantId) {
     wrapper.create = (args = {}) => model.create(addDataTenant(args, tenantId));
     wrapper.createMany = (args = {}) => model.createMany(addDataTenant(args, tenantId));
 
+    // upsert (caller must include tenantId in unique where if needed)
+    wrapper.upsert = (args = {}) => model.upsert(args);
+
     // update/updateMany/delete/deleteMany - keep caller control but try to protect updateMany/deleteMany by adding tenant
     wrapper.update = (args = {}) => model.update(addWhereTenant(args, tenantId));
     wrapper.updateMany = (args = {}) => model.updateMany(addWhereTenant(args, tenantId));
