@@ -1,6 +1,7 @@
 const { prisma } = require('../../prisma');
 const { getAdapter, getIntegrationKind } = require('./providers');
 const ga4MetadataService = require('../../services/ga4MetadataService');
+const { resolveGa4IntegrationContext } = require('../../services/ga4IntegrationResolver');
 
 const SOURCE_INTEGRATION_MAP = {
   META_ADS: { providers: ['META'], kinds: ['meta_ads'] },
@@ -310,19 +311,42 @@ async function getGa4Metadata(tenantId, connectionId) {
     connection.externalAccountId ||
     connection.meta?.propertyId ||
     null;
-  const userId = connection.meta?.ga4UserId || null;
 
-  if (!propertyId || !userId) {
-    const err = new Error('Conexão GA4 sem metadados OAuth');
+  if (!propertyId) {
+    const err = new Error('Conexão GA4 sem propertyId');
     err.status = 400;
     throw err;
   }
 
+  const resolved = await resolveGa4IntegrationContext({
+    tenantId,
+    propertyId,
+    integrationId: connection.meta?.ga4IntegrationId,
+    userId: connection.meta?.ga4UserId,
+  });
+
   const metadata = await ga4MetadataService.getMetadata({
     tenantId,
-    userId,
+    userId: resolved.userId,
     propertyId: String(propertyId),
   });
+
+  if (
+    resolved.integrationId !== connection.meta?.ga4IntegrationId ||
+    resolved.userId !== connection.meta?.ga4UserId
+  ) {
+    await prisma.dataSourceConnection.update({
+      where: { id: connection.id },
+      data: {
+        meta: {
+          ...(connection.meta || {}),
+          ga4IntegrationId: resolved.integrationId,
+          ga4UserId: resolved.userId,
+          propertyId: String(propertyId),
+        },
+      },
+    });
+  }
 
   return {
     propertyId: String(propertyId),

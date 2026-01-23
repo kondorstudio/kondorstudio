@@ -5,24 +5,24 @@ const {
 } = require('./providerUtils');
 const googleAnalyticsMetricsService = require('../../../services/googleAnalyticsMetricsService');
 const ga4DataService = require('../../../services/ga4DataService');
+const { resolveGa4IntegrationContext } = require('../../../services/ga4IntegrationResolver');
 
 function normalizeString(value) {
   if (value === null || value === undefined) return '';
   return String(value).trim();
 }
 
-function buildDimensionFilter(filters) {
-  if (!filters || typeof filters !== 'object') return null;
-  const entries = Object.entries(filters).filter(([, value]) => {
+function buildDimensionFilterFromEntries(entries) {
+  const filtered = entries.filter(([, value]) => {
     if (value === null || value === undefined) return false;
     if (typeof value === 'string' && !value.trim()) return false;
     if (Array.isArray(value) && !value.length) return false;
     return true;
   });
 
-  if (!entries.length) return null;
+  if (!filtered.length) return null;
 
-  const expressions = entries.map(([fieldName, value]) => {
+  const expressions = filtered.map(([fieldName, value]) => {
     if (Array.isArray(value)) {
       return {
         filter: {
@@ -48,6 +48,46 @@ function buildDimensionFilter(filters) {
 
   if (expressions.length === 1) return expressions[0];
   return { andGroup: { expressions } };
+}
+
+function resolveGa4Filters(filters) {
+  if (!filters || typeof filters !== 'object') {
+    return { dimensionFilter: null, metricFilter: null };
+  }
+
+  const direct =
+    filters.ga4 && typeof filters.ga4 === 'object' ? filters.ga4 : null;
+
+  const dimensionFilter =
+    filters.dimensionFilter ||
+    filters.ga4DimensionFilter ||
+    direct?.dimensionFilter ||
+    null;
+  const metricFilter =
+    filters.metricFilter ||
+    filters.ga4MetricFilter ||
+    direct?.metricFilter ||
+    null;
+
+  if (dimensionFilter || metricFilter) {
+    return {
+      dimensionFilter: dimensionFilter || null,
+      metricFilter: metricFilter || null,
+    };
+  }
+
+  const reserved = new Set([
+    'dimensionFilter',
+    'metricFilter',
+    'ga4DimensionFilter',
+    'ga4MetricFilter',
+    'ga4',
+  ]);
+  const entries = Object.entries(filters).filter(([key]) => !reserved.has(key));
+  return {
+    dimensionFilter: buildDimensionFilterFromEntries(entries),
+    metricFilter: null,
+  };
 }
 
 function ensureDimension(list, value, { prepend } = {}) {
@@ -333,15 +373,21 @@ async function queryMetrics(connection, querySpec = {}) {
   }
 
   const tenantId = connection.tenantId;
-  const userId = connection.meta?.ga4UserId;
   const propertyId =
     connection.externalAccountId ||
     connection.meta?.propertyId ||
     null;
 
-  if (!tenantId || !userId || !propertyId) {
+  if (!tenantId || !propertyId) {
     return { series: [], table: [], totals: {}, meta: { source: 'GA4', mocked: true } };
   }
+
+  const resolved = await resolveGa4IntegrationContext({
+    tenantId,
+    propertyId,
+    integrationId: connection.meta?.ga4IntegrationId,
+    userId: connection.meta?.ga4UserId,
+  });
 
   const metrics = Array.isArray(querySpec.metrics) ? querySpec.metrics : [];
   if (!metrics.length) {
@@ -352,7 +398,7 @@ async function queryMetrics(connection, querySpec = {}) {
   const widgetType = normalizeString(querySpec.widgetType || querySpec.type);
   const dimensions = buildGa4Dimensions({ breakdown, widgetType });
   const dateRanges = buildGa4DateRanges(querySpec);
-  const dimensionFilter = buildDimensionFilter(querySpec.filters);
+  const { dimensionFilter, metricFilter } = resolveGa4Filters(querySpec.filters);
 
   const payload = {
     metrics,
@@ -360,13 +406,14 @@ async function queryMetrics(connection, querySpec = {}) {
   };
   if (dateRanges) payload.dateRanges = dateRanges;
   if (dimensionFilter) payload.dimensionFilter = dimensionFilter;
+  if (metricFilter) payload.metricFilter = metricFilter;
 
   const response = await ga4DataService.runReport({
     tenantId,
-    userId,
+    userId: resolved.userId,
     propertyId,
     payload,
-    rateKey: [tenantId, userId, propertyId].join(':'),
+    rateKey: [tenantId, resolved.userId, propertyId].join(':'),
   });
 
   const dimensionHeaders = Array.isArray(response.dimensionHeaders)

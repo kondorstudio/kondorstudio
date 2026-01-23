@@ -126,7 +126,7 @@ async function getMetadata({ tenantId, userId, propertyId }) {
     kind: 'metadata',
   });
 
-  const cached = ga4QuotaCache.getMetadataCache(cacheKey);
+  const cached = await ga4QuotaCache.getMetadataCache(cacheKey);
   if (cached) return cached;
 
   const accessToken = await ga4OAuthService.getValidAccessToken({
@@ -134,7 +134,7 @@ async function getMetadata({ tenantId, userId, propertyId }) {
     userId,
   });
   const metadata = await fetchMetadata(accessToken, propertyId);
-  ga4QuotaCache.setMetadataCache(cacheKey, metadata);
+  await ga4QuotaCache.setMetadataCache(cacheKey, metadata);
   return metadata;
 }
 

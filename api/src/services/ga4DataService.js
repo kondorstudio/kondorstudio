@@ -245,11 +245,11 @@ async function runReport({
     kind: 'report',
   });
 
-  const cached = ga4QuotaCache.getCache(cacheKey);
+  const cached = await ga4QuotaCache.getCache(cacheKey);
   if (cached) return cached;
 
   if (rateKey) {
-    ga4QuotaCache.assertWithinRateLimit(rateKey);
+    await ga4QuotaCache.assertWithinRateLimit(rateKey);
   }
 
   return ga4QuotaCache.withPropertyLimit(propertyId, async () => {
@@ -287,7 +287,7 @@ async function runReport({
     if (!res.ok) throw mapError(res, json);
 
     const normalizedResponse = normalizeResponse(json);
-    ga4QuotaCache.setCache(cacheKey, normalizedResponse, cacheTtlMs);
+    await ga4QuotaCache.setCache(cacheKey, normalizedResponse, cacheTtlMs);
     return normalizedResponse;
   });
 }

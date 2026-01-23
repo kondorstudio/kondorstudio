@@ -1,15 +1,32 @@
 const crypto = require('crypto');
+const Redis = require('ioredis');
 
 const CACHE_DISABLED = process.env.GA4_CACHE_DISABLED === 'true';
+const REDIS_DISABLED =
+  process.env.GA4_REDIS_DISABLED === 'true' ||
+  process.env.REDIS_DISABLED === 'true' ||
+  process.env.NODE_ENV === 'test';
 const DEFAULT_TTL_MS = Number(process.env.GA4_CACHE_TTL_MS || 120000);
 const METADATA_TTL_MS = Number(process.env.GA4_METADATA_TTL_MS || 24 * 60 * 60 * 1000);
 const MAX_CONCURRENT = Number(process.env.GA4_MAX_CONCURRENT || 5);
 const RATE_WINDOW_MS = Number(process.env.GA4_RATE_LIMIT_WINDOW_MS || 60000);
 const RATE_MAX = Number(process.env.GA4_RATE_LIMIT_MAX || 60);
+const CONCURRENCY_TTL_MS = Number(process.env.GA4_CONCURRENCY_TTL_MS || 30000);
+const CONCURRENCY_WAIT_MS = Number(process.env.GA4_CONCURRENCY_WAIT_MS || 200);
 
 const memoryCache = new Map();
 const propertyQueues = new Map();
 const rateCounters = new Map();
+let redisClient;
+
+function getRedisClient() {
+  if (REDIS_DISABLED) return null;
+  if (!redisClient) {
+    const url = process.env.GA4_REDIS_URL || process.env.REDIS_URL || 'redis://localhost:6379';
+    redisClient = new Redis(url);
+  }
+  return redisClient;
+}
 
 function stableStringify(value) {
   if (value === null || value === undefined) return '';
@@ -30,8 +47,18 @@ function buildCacheKey({ tenantId, propertyId, payload, kind }) {
   return ['ga4', kind || 'report', tenantId || 'unknown', propertyId || 'unknown', hash].join(':');
 }
 
-function getCache(key) {
+async function getCache(key) {
   if (CACHE_DISABLED || !key) return null;
+  const redis = getRedisClient();
+  if (redis) {
+    try {
+      const raw = await redis.get(key);
+      if (raw) return JSON.parse(raw);
+    } catch (_) {
+      // fallback to memory cache
+    }
+  }
+
   const entry = memoryCache.get(key);
   if (!entry) return null;
   if (entry.expiresAt && entry.expiresAt <= Date.now()) {
@@ -41,19 +68,34 @@ function getCache(key) {
   return entry.value;
 }
 
-function setCache(key, value, ttlMs = DEFAULT_TTL_MS) {
+async function setCache(key, value, ttlMs = DEFAULT_TTL_MS) {
   if (CACHE_DISABLED || !key) return null;
   const ttl = Number(ttlMs) || 0;
   const expiresAt = ttl > 0 ? Date.now() + ttl : null;
   memoryCache.set(key, { value, expiresAt });
+
+  const redis = getRedisClient();
+  if (redis) {
+    try {
+      const payload = JSON.stringify(value ?? {});
+      if (ttl > 0) {
+        await redis.set(key, payload, 'PX', ttl);
+      } else {
+        await redis.set(key, payload);
+      }
+    } catch (_) {
+      // ignore redis errors and rely on memory cache
+    }
+  }
+
   return value;
 }
 
-function getMetadataCache(key) {
+async function getMetadataCache(key) {
   return getCache(key);
 }
 
-function setMetadataCache(key, value) {
+async function setMetadataCache(key, value) {
   return setCache(key, value, METADATA_TTL_MS);
 }
 
@@ -66,6 +108,37 @@ function getQueueState(propertyId) {
 }
 
 async function withPropertyLimit(propertyId, task) {
+  if (!MAX_CONCURRENT || MAX_CONCURRENT <= 0) {
+    return task();
+  }
+
+  const redis = getRedisClient();
+  if (redis) {
+    try {
+      const key = `ga4:concurrency:${propertyId || 'global'}`;
+      while (true) {
+        const count = await redis.incr(key);
+        if (count === 1) {
+          await redis.pexpire(key, CONCURRENCY_TTL_MS);
+        }
+        if (count <= MAX_CONCURRENT) {
+          try {
+            return await task();
+          } finally {
+            const nextCount = await redis.decr(key);
+            if (nextCount <= 0) {
+              await redis.del(key);
+            }
+          }
+        }
+        await redis.decr(key);
+        await new Promise((resolve) => setTimeout(resolve, CONCURRENCY_WAIT_MS));
+      }
+    } catch (_) {
+      // fallback to in-memory limiter
+    }
+  }
+
   const state = getQueueState(propertyId);
 
   if (state.active >= MAX_CONCURRENT) {
@@ -82,8 +155,28 @@ async function withPropertyLimit(propertyId, task) {
   }
 }
 
-function assertWithinRateLimit(key) {
+async function assertWithinRateLimit(key) {
   if (!RATE_MAX || RATE_MAX <= 0) return;
+  const redis = getRedisClient();
+  if (redis) {
+    try {
+      const rateKey = `ga4:rate:${key}`;
+      const count = await redis.incr(rateKey);
+      if (count === 1) {
+        await redis.pexpire(rateKey, RATE_WINDOW_MS);
+      }
+      if (count > RATE_MAX) {
+        const err = new Error('GA4 rate limit exceeded');
+        err.status = 429;
+        err.code = 'GA4_RATE_LIMIT';
+        throw err;
+      }
+      return;
+    } catch (_) {
+      // fallback to in-memory limiter
+    }
+  }
+
   const now = Date.now();
   const entry = rateCounters.get(key);
   if (!entry || entry.resetAt <= now) {

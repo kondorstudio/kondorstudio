@@ -1,6 +1,9 @@
 const { useTenant } = require('../prisma');
 
 module.exports = function tenantGuard(req, res, next) {
+  if (req.method === 'OPTIONS') {
+    return next();
+  }
   const tenantId = req.tenantId || (req.user && req.user.tenantId);
   if (!tenantId) {
     return res.status(400).json({ error: 'tenantId missing' });

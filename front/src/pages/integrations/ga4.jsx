@@ -19,6 +19,7 @@ export default function Ga4IntegrationPage() {
   const [selectedPropertyId, setSelectedPropertyId] = useState("");
   const [connectError, setConnectError] = useState("");
   const [disconnectError, setDisconnectError] = useState("");
+  const [syncError, setSyncError] = useState("");
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["ga4-status"],
@@ -59,7 +60,17 @@ export default function Ga4IntegrationPage() {
 
   const syncMutation = useMutation({
     mutationFn: () => base44.ga4.syncProperties(),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["ga4-status"] }),
+    onSuccess: () => {
+      setSyncError("");
+      queryClient.invalidateQueries({ queryKey: ["ga4-status"] });
+    },
+    onError: (err) => {
+      const message =
+        err?.data?.error ||
+        err?.message ||
+        "Falha ao sincronizar propriedades.";
+      setSyncError(message);
+    },
   });
 
   const selectMutation = useMutation({
@@ -202,6 +213,9 @@ export default function Ga4IntegrationPage() {
                 >
                   Sincronizar propriedades
                 </Button>
+                {syncError ? (
+                  <p className="text-xs text-rose-600">{syncError}</p>
+                ) : null}
                 {properties.length ? (
                   <div className="flex flex-col gap-3">
                     <SelectNative

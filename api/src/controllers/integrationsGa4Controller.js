@@ -57,7 +57,16 @@ module.exports = {
     }
 
     try {
+      const payload = ga4OAuthService.verifyState(state);
       await ga4OAuthService.exchangeCode({ code, state });
+      try {
+        await ga4AdminService.syncProperties({
+          tenantId: payload.tenantId,
+          userId: payload.userId,
+        });
+      } catch (syncError) {
+        console.warn('GA4 oauthCallback syncProperties warning:', syncError);
+      }
       const redirectUrl = buildRedirectUrl({ connected: 1 });
       return res.redirect(redirectUrl);
     } catch (error) {
@@ -147,10 +156,21 @@ module.exports = {
         });
       }
 
-      const properties = await req.db.integrationGoogleGa4Property.findMany({
+      let properties = await req.db.integrationGoogleGa4Property.findMany({
         where: { integrationId: integration.id },
         orderBy: { displayName: 'asc' },
       });
+
+      if (integration.status === 'CONNECTED' && properties.length === 0) {
+        try {
+          properties = await ga4AdminService.syncProperties({
+            tenantId,
+            userId,
+          });
+        } catch (syncError) {
+          console.warn('GA4 status syncProperties warning:', syncError);
+        }
+      }
 
       const selectedProperty = properties.find((p) => p.isSelected) || null;
 

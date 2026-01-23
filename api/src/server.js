@@ -204,14 +204,45 @@ if (corsEnvRaw) {
     .filter(Boolean);
 }
 
-const allowedOrigins = Array.from(new Set([...devOrigins, ...envOrigins]));
+function normalizeOrigin(value) {
+  if (!value) return "";
+  const trimmed = String(value).trim();
+  if (!trimmed) return "";
+  try {
+    return new URL(trimmed).origin;
+  } catch (_) {
+    return trimmed.replace(/\/+$/, "");
+  }
+}
+
+const extraOrigins = [
+  process.env.APP_URL_FRONT,
+  process.env.PUBLIC_APP_URL,
+  process.env.APP_PUBLIC_URL,
+]
+  .map(normalizeOrigin)
+  .filter(Boolean);
+
+const allowedOrigins = Array.from(
+  new Set([...devOrigins, ...envOrigins, ...extraOrigins])
+);
 
 if (isProduction && envOrigins.length === 0) {
   console.error("⚠️  CORS_ORIGINS não definido. Configure no Render.");
 }
 
+const allowAllOrigins =
+  process.env.CORS_ALLOW_ALL === "true" ||
+  (!isProduction && envOrigins.length === 0);
+
 const corsOptions = {
   origin(origin, callback) {
+    if (allowAllOrigins) {
+      if (origin) {
+        return callback(null, true);
+      }
+      return callback(null, true);
+    }
     if (!origin || allowedOrigins.includes(origin)) {
       return callback(null, true);
     }

@@ -53,6 +53,8 @@ services:
         sync: false
       - key: CORS_ORIGINS
         sync: false
+      - key: CORS_ALLOW_ALL
+        sync: false
       - key: PUBLIC_APP_URL
         sync: false
       - key: APPROVAL_PUBLIC_LINK_TTL_HOURS
@@ -74,6 +76,14 @@ services:
       - key: ENCRYPTION_KEY
         sync: false
       - key: GA4_MOCK_MODE
+        sync: false
+      - key: GA4_REDIS_DISABLED
+        sync: false
+      - key: GA4_REDIS_URL
+        sync: false
+      - key: GA4_CONCURRENCY_TTL_MS
+        sync: false
+      - key: GA4_CONCURRENCY_WAIT_MS
         sync: false
 
       # ==== S3 ====
