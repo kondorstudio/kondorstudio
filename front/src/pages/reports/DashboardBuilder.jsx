@@ -331,18 +331,9 @@ function WidgetConfigDialog({
     setAlertDismissed(false);
   }, [open, source, brandId, globalBrandId]);
 
-  if (!draft) {
-    return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-md">
-          <div className="text-sm text-[var(--text-muted)]">Carregando widget...</div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
-
-  const selectedMetrics = Array.isArray(draft.metrics) ? draft.metrics : [];
-  const options = draft.options && typeof draft.options === "object" ? draft.options : {};
+  const selectedMetrics = Array.isArray(draft?.metrics) ? draft.metrics : [];
+  const options =
+    draft?.options && typeof draft.options === "object" ? draft.options : {};
   const globalHasConnection =
     globalBrandId && globalConnections?.length ? true : false;
 
@@ -407,6 +398,16 @@ function WidgetConfigDialog({
       : availableConnections.some((item) => item.source === source);
   const showConnectionAlert =
     source && canCheckConnection && !hasConnectionForSource && !alertDismissed;
+
+  if (!draft) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-md">
+          <div className="text-sm text-[var(--text-muted)]">Carregando widget...</div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
