@@ -76,6 +76,7 @@ function buildMetricsCacheKey({
   breakdown,
   metrics,
   filters,
+  widgetType,
 }) {
   const metricsHash = hashValue(normalizeList(metrics));
   const filtersHash = hashValue(filters || {});
@@ -83,6 +84,7 @@ function buildMetricsCacheKey({
   const dateToKey = normalizeDateKey(dateTo);
   const levelKey = level ? String(level) : 'all';
   const breakdownKey = breakdown ? String(breakdown) : 'none';
+  const widgetTypeKey = widgetType ? String(widgetType) : 'any';
   return [
     'metrics',
     tenantId || 'unknown',
@@ -92,6 +94,7 @@ function buildMetricsCacheKey({
     dateToKey || 'end',
     levelKey,
     breakdownKey,
+    widgetTypeKey,
     metricsHash,
     filtersHash,
   ].join(':');

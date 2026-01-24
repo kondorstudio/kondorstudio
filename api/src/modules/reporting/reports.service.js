@@ -34,7 +34,13 @@ async function assertGroup(tenantId, groupId) {
   });
 }
 
-function buildWidgetPayloads(tenantId, reportId, layoutSchema, widgetsSchema) {
+function buildWidgetPayloads(
+  tenantId,
+  reportId,
+  layoutSchema,
+  widgetsSchema,
+  connectionMap,
+) {
   const layoutMap = new Map();
   if (Array.isArray(layoutSchema)) {
     layoutSchema.forEach((item) => {
@@ -46,6 +52,10 @@ function buildWidgetPayloads(tenantId, reportId, layoutSchema, widgetsSchema) {
   return widgets.map((widget) => {
     const widgetId = widget.id ? String(widget.id) : null;
     const layout = widgetId ? layoutMap.get(widgetId) || null : null;
+    const connectionId =
+      widget.connectionId ||
+      (widget.source ? connectionMap?.get(widget.source) : null) ||
+      null;
 
     if (!widget.source) {
       const err = new Error(`Widget ${widgetId || ''} sem source definido`);
@@ -59,7 +69,7 @@ function buildWidgetPayloads(tenantId, reportId, layoutSchema, widgetsSchema) {
       widgetType: widget.widgetType || 'KPI',
       title: widget.title || null,
       source: widget.source,
-      connectionId: widget.connectionId || null,
+      connectionId,
       level: widget.level || null,
       breakdown: widget.breakdown || null,
       metrics: widget.metrics || [],
@@ -157,11 +167,27 @@ async function createReport(tenantId, payload) {
     },
   });
 
+  let connectionMap = null;
+  if (payload.brandId) {
+    const connections = await prisma.dataSourceConnection.findMany({
+      where: { tenantId, brandId: payload.brandId, status: 'CONNECTED' },
+      orderBy: { createdAt: 'desc' },
+    });
+    connectionMap = new Map();
+    connections.forEach((connection) => {
+      if (!connection?.source) return;
+      if (!connectionMap.has(connection.source)) {
+        connectionMap.set(connection.source, connection.id);
+      }
+    });
+  }
+
   const widgetPayloads = buildWidgetPayloads(
     tenantId,
     report.id,
     template.layoutSchema,
     template.widgetsSchema,
+    connectionMap,
   );
 
   if (widgetPayloads.length) {

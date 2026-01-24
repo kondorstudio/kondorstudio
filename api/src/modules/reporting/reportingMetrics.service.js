@@ -229,6 +229,7 @@ async function queryMetrics(tenantId, payload = {}) {
     breakdown: querySpec.breakdown,
     metrics: querySpec.metrics,
     filters: querySpec.filters,
+    widgetType: querySpec.widgetType || querySpec.type,
   });
 
   if (querySpec.forceMock) {

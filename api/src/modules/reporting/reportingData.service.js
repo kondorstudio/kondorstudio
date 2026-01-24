@@ -64,6 +64,7 @@ async function queryMetrics(tenantId, querySpec = {}) {
     breakdown: querySpec.breakdown,
     metrics,
     filters: querySpec.filters,
+    widgetType: querySpec.widgetType || querySpec.type,
   });
 
   const cached = await cache.getMetricsCache(cacheKey);

@@ -5,6 +5,23 @@ const cache = require('./reportingCache.service');
 const DEFAULT_RANGE_DAYS =
   Number(process.env.REPORTING_DEFAULT_RANGE_DAYS) || 30;
 
+async function buildConnectionMapForReport(report, tenantId) {
+  const brandId = report?.brandId || report?.params?.brandId || null;
+  if (!brandId) return new Map();
+  const connections = await prisma.dataSourceConnection.findMany({
+    where: { tenantId, brandId, status: 'CONNECTED' },
+    orderBy: { createdAt: 'desc' },
+  });
+  const map = new Map();
+  connections.forEach((connection) => {
+    if (!connection?.source) return;
+    if (!map.has(connection.source)) {
+      map.set(connection.source, connection.id);
+    }
+  });
+  return map;
+}
+
 function parseDate(value) {
   if (!value) return null;
   if (value instanceof Date) {
@@ -65,20 +82,40 @@ async function generateReportData(tenantId, reportId) {
 
   const errors = [];
   const widgets = Array.isArray(report.widgets) ? report.widgets : [];
+  const connectionMap = await buildConnectionMapForReport(report, tenantId);
 
   for (const widget of widgets) {
-    if (!widget?.source || !widget?.connectionId) {
+    if (!widget?.source) {
       errors.push({
         widgetId: widget?.id || null,
-        message: 'Widget sem conexao configurada',
+        message: 'Widget sem fonte configurada',
       });
       continue;
     }
 
     try {
+      let connectionId = widget.connectionId || null;
+      if (!connectionId) {
+        connectionId = connectionMap.get(widget.source) || null;
+        if (connectionId) {
+          await prisma.reportWidget.update({
+            where: { id: widget.id },
+            data: { connectionId },
+          });
+        }
+      }
+
+      if (!connectionId) {
+        errors.push({
+          widgetId: widget?.id || null,
+          message: `Sem conexao para fonte ${widget.source}`,
+        });
+        continue;
+      }
+
       const result = await reportingData.queryMetrics(tenantId, {
         source: widget.source,
-        connectionId: widget.connectionId,
+        connectionId,
         dateFrom,
         dateTo,
         level: widget.level,
@@ -86,6 +123,7 @@ async function generateReportData(tenantId, reportId) {
         metrics: Array.isArray(widget.metrics) ? widget.metrics : [],
         filters: widget.filters || null,
         options: widget.options || null,
+        widgetType: widget.widgetType,
       });
 
       const snapshotKey = cache.buildReportSnapshotKey(
@@ -187,6 +225,7 @@ async function refreshDashboards(tenantId, payload = {}) {
           metrics: Array.isArray(widget.metrics) ? widget.metrics : [],
           filters: mergeFilters(filters, widget.filters),
           options: widget.options || null,
+          widgetType: widget.widgetType,
         });
       } catch (err) {
         errors.push({
