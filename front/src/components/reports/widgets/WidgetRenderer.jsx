@@ -107,6 +107,7 @@ export default function WidgetRenderer({
   enableQuery = true,
   forceMock = false,
   dataOverride = null,
+  isGenerating = false,
   onConnect,
   onEdit,
   variant = "default",
@@ -125,6 +126,7 @@ export default function WidgetRenderer({
     needsData &&
     hasMetrics &&
     (Boolean(connectionId) || forceMock) &&
+    !isGenerating &&
     !hasOverride;
   const widgetFiltersKey = useMemo(
     () => JSON.stringify(widget?.filters || {}),
@@ -245,6 +247,10 @@ export default function WidgetRenderer({
         }
       />
     );
+  }
+
+  if (isGenerating && needsData && !hasOverride) {
+    return <WidgetSkeleton />;
   }
 
   if (!connectionId && !forceMock && !hasOverride) {

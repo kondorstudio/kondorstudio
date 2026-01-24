@@ -147,6 +147,8 @@ export default function ReportViewer() {
   });
 
   const widgets = useMemo(() => report?.widgets || [], [report]);
+  const isGenerating =
+    report?.status && report.status !== "READY" && report.status !== "ERROR";
   const snapshotsByWidget = useMemo(() => {
     const map = new Map();
     const items = snapshotsData?.items || [];
@@ -254,6 +256,11 @@ export default function ReportViewer() {
             Atualizado em {new Date(report.generatedAt).toLocaleString("pt-BR")}
           </p>
         ) : null}
+        {isGenerating ? (
+          <div className="rounded-[12px] border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+            Relatorio em geracao. Assim que finalizar, os dados serao exibidos.
+          </div>
+        ) : null}
         {exportUrl ? (
           <a
             href={exportUrl}
@@ -296,6 +303,7 @@ export default function ReportViewer() {
                 "";
               const snapshot = snapshotsByWidget.get(widget.id);
               const snapshotData = snapshot?.data || null;
+              const allowQuery = !snapshotData && !isGenerating;
 
               return (
                 <WidgetCard widget={widget} showActions={false}>
@@ -303,7 +311,8 @@ export default function ReportViewer() {
                     widget={widget}
                     connectionId={connection}
                     dataOverride={snapshotData}
-                    enableQuery={!snapshotData}
+                    enableQuery={allowQuery}
+                    isGenerating={isGenerating}
                     filters={{
                       dateFrom: report?.dateFrom,
                       dateTo: report?.dateTo,
