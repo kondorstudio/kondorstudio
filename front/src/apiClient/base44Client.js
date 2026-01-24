@@ -683,6 +683,14 @@ const Reporting = {
     });
   },
 
+  async checkGa4Compatibility(connectionId, payload = {}) {
+    if (!connectionId) throw new Error("connectionId obrigatorio");
+    return jsonFetch(`/reporting/connections/${connectionId}/ga4/compatibility`, {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    });
+  },
+
   async listReports(params = {}) {
     const qs = buildQuery(params);
     return jsonFetch(`/reporting/reports${qs}`, { method: "GET" });

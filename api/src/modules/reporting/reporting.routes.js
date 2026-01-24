@@ -29,6 +29,11 @@ router.get(
   allowViewer,
   connectionsController.ga4Metadata,
 );
+router.post(
+  '/connections/:connectionId/ga4/compatibility',
+  allowViewer,
+  connectionsController.ga4Compatibility,
+);
 router.get('/brand-groups', allowViewer, brandGroupsController.list);
 router.get('/brand-groups/:groupId/members', allowViewer, brandGroupsController.listMembers);
 router.get('/metric-catalog', allowViewer, metricCatalogController.list);

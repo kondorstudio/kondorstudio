@@ -39,6 +39,23 @@ module.exports = {
     }
   },
 
+  async ga4Compatibility(req, res) {
+    try {
+      const { connectionId } = req.params;
+      const data = await connectionsService.checkGa4Compatibility(
+        req.tenantId,
+        connectionId,
+        req.body || {},
+      );
+      return res.json(data);
+    } catch (err) {
+      const status = err.status || 500;
+      return res
+        .status(status)
+        .json({ error: err.message || 'Erro ao validar compatibilidade GA4' });
+    }
+  },
+
   async link(req, res) {
     try {
       const { brandId } = req.params;

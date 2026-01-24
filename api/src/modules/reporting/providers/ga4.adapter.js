@@ -111,6 +111,61 @@ function buildGa4Dimensions({ breakdown, widgetType }) {
   return dimensions;
 }
 
+function resolveNumericLimit(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return Math.floor(parsed);
+}
+
+function resolveGa4Limit({ widgetType, breakdown, options }) {
+  const explicit =
+    resolveNumericLimit(options?.ga4Limit) ??
+    resolveNumericLimit(options?.limit) ??
+    null;
+  if (explicit) return explicit;
+
+  if (!breakdown && (widgetType === 'BAR' || widgetType === 'PIE')) {
+    return null;
+  }
+
+  if (widgetType === 'PIE') return 12;
+  if (widgetType === 'BAR') return 12;
+  if (widgetType === 'TABLE') return 100;
+  return null;
+}
+
+function buildGa4OrderBys({ widgetType, metrics, dimensions, options }) {
+  const manual = options?.ga4OrderBys || options?.orderBys;
+  if (Array.isArray(manual) && manual.length) return manual;
+
+  if (dimensions.includes('date')) {
+    return [
+      {
+        dimension: {
+          dimensionName: 'date',
+        },
+      },
+    ];
+  }
+
+  const primaryMetric = metrics?.[0];
+  if (!primaryMetric) return null;
+
+  if (widgetType === 'BAR' || widgetType === 'PIE' || widgetType === 'TABLE') {
+    return [
+      {
+        desc: true,
+        metric: {
+          metricName: primaryMetric,
+        },
+      },
+    ];
+  }
+
+  return null;
+}
+
 function buildGa4DateRanges(querySpec = {}) {
   const dateFrom = normalizeString(querySpec.dateFrom);
   const dateTo = normalizeString(querySpec.dateTo);
@@ -399,6 +454,13 @@ async function queryMetrics(connection, querySpec = {}) {
   const dimensions = buildGa4Dimensions({ breakdown, widgetType });
   const dateRanges = buildGa4DateRanges(querySpec);
   const { dimensionFilter, metricFilter } = resolveGa4Filters(querySpec.filters);
+  const limit = resolveGa4Limit({ widgetType, breakdown, options: querySpec.options });
+  const orderBys = buildGa4OrderBys({
+    widgetType,
+    metrics,
+    dimensions,
+    options: querySpec.options,
+  });
 
   const payload = {
     metrics,
@@ -407,6 +469,8 @@ async function queryMetrics(connection, querySpec = {}) {
   if (dateRanges) payload.dateRanges = dateRanges;
   if (dimensionFilter) payload.dimensionFilter = dimensionFilter;
   if (metricFilter) payload.metricFilter = metricFilter;
+  if (orderBys) payload.orderBys = orderBys;
+  if (limit) payload.limit = limit;
 
   const response = await ga4DataService.runReport({
     tenantId,
@@ -438,7 +502,77 @@ async function queryMetrics(connection, querySpec = {}) {
   };
 }
 
+async function checkCompatibility(connection, querySpec = {}) {
+  if (!connection) {
+    return {
+      compatible: true,
+      metrics: [],
+      dimensions: [],
+      incompatibleMetrics: [],
+      incompatibleDimensions: [],
+      meta: { source: 'GA4', skipped: true },
+    };
+  }
+
+  const tenantId = connection.tenantId;
+  const propertyId =
+    connection.externalAccountId ||
+    connection.meta?.propertyId ||
+    null;
+
+  if (!tenantId || !propertyId) {
+    const err = new Error('Conexao GA4 sem propertyId');
+    err.status = 400;
+    throw err;
+  }
+
+  const metrics = Array.isArray(querySpec.metrics) ? querySpec.metrics : [];
+  if (!metrics.length) {
+    return {
+      compatible: true,
+      metrics: [],
+      dimensions: [],
+      incompatibleMetrics: [],
+      incompatibleDimensions: [],
+      meta: { source: 'GA4', skipped: true },
+    };
+  }
+
+  const breakdown = normalizeString(querySpec.breakdown);
+  const widgetType = normalizeString(querySpec.widgetType || querySpec.type);
+  const dimensions = buildGa4Dimensions({ breakdown, widgetType });
+  const { dimensionFilter, metricFilter } = resolveGa4Filters(querySpec.filters);
+
+  const resolved = await resolveGa4IntegrationContext({
+    tenantId,
+    propertyId,
+    integrationId: connection.meta?.ga4IntegrationId,
+    userId: connection.meta?.ga4UserId,
+  });
+
+  const response = await ga4DataService.checkCompatibility({
+    tenantId,
+    userId: resolved.userId,
+    propertyId,
+    payload: {
+      metrics,
+      dimensions,
+      dimensionFilter,
+      metricFilter,
+    },
+    rateKey: [tenantId, resolved.userId, propertyId].join(':'),
+  });
+
+  return {
+    ...response,
+    metrics,
+    dimensions,
+    meta: { source: 'GA4', propertyId },
+  };
+}
+
 module.exports = {
   listSelectableAccounts,
   queryMetrics,
+  checkCompatibility,
 };

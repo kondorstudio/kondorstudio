@@ -116,6 +116,22 @@ function normalizeRunReportPayload(payload) {
   };
 }
 
+function normalizeCompatibilityPayload(payload) {
+  const metrics = normalizeList(payload.metrics);
+  const dimensions = normalizeList(payload.dimensions);
+
+  ensureArrayLimit(metrics, MAX_METRICS, 'metrics');
+  ensureArrayLimit(dimensions, MAX_DIMENSIONS, 'dimensions');
+
+  return {
+    metrics,
+    dimensions,
+    dimensionFilter: payload.dimensionFilter || null,
+    metricFilter: payload.metricFilter || null,
+    compatibilityFilter: payload.compatibilityFilter || null,
+  };
+}
+
 function normalizeResponse(raw) {
   const dimensionHeaders = Array.isArray(raw.dimensionHeaders)
     ? raw.dimensionHeaders.map((h) => h.name)
@@ -292,8 +308,146 @@ async function runReport({
   });
 }
 
+async function checkCompatibility({
+  tenantId,
+  userId,
+  propertyId,
+  payload,
+  rateKey,
+  cacheTtlMs,
+}) {
+  if (!propertyId) {
+    const err = new Error('propertyId missing');
+    err.status = 400;
+    throw err;
+  }
+
+  const normalized = normalizeCompatibilityPayload(payload || {});
+
+  if (!normalized.metrics.length) {
+    return {
+      compatible: true,
+      metrics: normalized.metrics,
+      dimensions: normalized.dimensions,
+      incompatibleMetrics: [],
+      incompatibleDimensions: [],
+      meta: { skipped: true },
+    };
+  }
+
+  if (ga4OAuthService.isMockMode()) {
+    return {
+      compatible: true,
+      metrics: normalized.metrics,
+      dimensions: normalized.dimensions,
+      incompatibleMetrics: [],
+      incompatibleDimensions: [],
+      meta: { mocked: true },
+    };
+  }
+
+  try {
+    await validateAgainstMetadata({
+      tenantId,
+      userId,
+      propertyId,
+      metrics: normalized.metrics,
+      dimensions: normalized.dimensions,
+    });
+  } catch (err) {
+    if (err.details) {
+      return {
+        compatible: false,
+        metrics: normalized.metrics,
+        dimensions: normalized.dimensions,
+        incompatibleMetrics: err.details.invalidMetrics || [],
+        incompatibleDimensions: err.details.invalidDimensions || [],
+        meta: { invalid: true },
+      };
+    }
+    throw err;
+  }
+
+  const cacheKey = ga4QuotaCache.buildCacheKey({
+    tenantId,
+    propertyId,
+    payload: { ...normalized, kind: 'compatibility' },
+    kind: 'compatibility',
+  });
+
+  const cached = await ga4QuotaCache.getCache(cacheKey);
+  if (cached) return cached;
+
+  if (rateKey) {
+    await ga4QuotaCache.assertWithinRateLimit(rateKey);
+  }
+
+  return ga4QuotaCache.withPropertyLimit(propertyId, async () => {
+    const accessToken = await ga4OAuthService.getValidAccessToken({
+      tenantId,
+      userId,
+    });
+
+    const url = `${DATA_API_BASE}/properties/${encodeURIComponent(
+      propertyId
+    )}:checkCompatibility`;
+
+    const body = {
+      metrics: normalized.metrics.map((name) => ({ name })),
+      dimensions: normalized.dimensions.map((name) => ({ name })),
+    };
+
+    if (normalized.dimensionFilter) body.dimensionFilter = normalized.dimensionFilter;
+    if (normalized.metricFilter) body.metricFilter = normalized.metricFilter;
+    if (normalized.compatibilityFilter) {
+      body.compatibilityFilter = normalized.compatibilityFilter;
+    }
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw mapError(res, json);
+
+    const metricCompat = Array.isArray(json.metricCompatibilities)
+      ? json.metricCompatibilities
+      : [];
+    const dimensionCompat = Array.isArray(json.dimensionCompatibilities)
+      ? json.dimensionCompatibilities
+      : [];
+
+    const incompatibleMetrics = metricCompat
+      .filter((item) => item.compatibility && item.compatibility !== 'COMPATIBLE')
+      .map((item) => item.metricMetadata?.apiName)
+      .filter(Boolean);
+
+    const incompatibleDimensions = dimensionCompat
+      .filter((item) => item.compatibility && item.compatibility !== 'COMPATIBLE')
+      .map((item) => item.dimensionMetadata?.apiName)
+      .filter(Boolean);
+
+    const result = {
+      compatible: !incompatibleMetrics.length && !incompatibleDimensions.length,
+      metrics: normalized.metrics,
+      dimensions: normalized.dimensions,
+      incompatibleMetrics,
+      incompatibleDimensions,
+    };
+
+    await ga4QuotaCache.setCache(cacheKey, result, cacheTtlMs);
+    return result;
+  });
+}
+
 module.exports = {
   runReport,
+  checkCompatibility,
   normalizeRunReportPayload,
   normalizeResponse,
   buildMockReport,

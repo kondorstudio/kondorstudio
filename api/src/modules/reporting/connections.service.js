@@ -354,9 +354,46 @@ async function getGa4Metadata(tenantId, connectionId) {
   };
 }
 
+async function checkGa4Compatibility(tenantId, connectionId, payload = {}) {
+  if (!connectionId) {
+    const err = new Error('connectionId é obrigatório');
+    err.status = 400;
+    throw err;
+  }
+
+  const connection = await prisma.dataSourceConnection.findFirst({
+    where: { id: connectionId, tenantId },
+    include: {
+      integration: true,
+    },
+  });
+
+  if (!connection) {
+    const err = new Error('Conexão não encontrada');
+    err.status = 404;
+    throw err;
+  }
+
+  if (connection.source !== 'GA4') {
+    const err = new Error('Conexão não é GA4');
+    err.status = 400;
+    throw err;
+  }
+
+  const adapter = getAdapter('GA4');
+  if (!adapter || typeof adapter.checkCompatibility !== 'function') {
+    const err = new Error('Compatibilidade GA4 indisponivel');
+    err.status = 400;
+    throw err;
+  }
+
+  return adapter.checkCompatibility(connection, payload);
+}
+
 module.exports = {
   listConnections,
   listIntegrationAccounts,
   linkConnection,
   getGa4Metadata,
+  checkGa4Compatibility,
 };

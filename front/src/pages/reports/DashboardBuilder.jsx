@@ -198,6 +198,7 @@ function WidgetConfigDialog({
   const widgetType = draft?.widgetType || "KPI";
   const source = draft?.source || "";
   const level = draft?.level || "";
+  const breakdown = draft?.breakdown || "";
   const isGa4Source = source === "GA4";
   const inheritBrand = draft?.inheritBrand !== false;
   const brandId = inheritBrand ? globalBrandId : draft?.brandId || "";
@@ -344,6 +345,50 @@ function WidgetConfigDialog({
   const options = draft.options && typeof draft.options === "object" ? draft.options : {};
   const globalHasConnection =
     globalBrandId && globalConnections?.length ? true : false;
+
+  const metricsKey = useMemo(
+    () => [...selectedMetrics].map(String).sort().join(","),
+    [selectedMetrics]
+  );
+
+  const {
+    data: ga4Compatibility,
+    isFetching: ga4CompatibilityLoading,
+    isError: ga4CompatibilityError,
+    error: ga4CompatibilityErrorDetails,
+  } = useQuery({
+    queryKey: [
+      "ga4-compatibility",
+      previewConnectionId,
+      widgetType,
+      breakdown,
+      metricsKey,
+    ],
+    queryFn: () =>
+      base44.reporting.checkGa4Compatibility(previewConnectionId, {
+        metrics: selectedMetrics,
+        breakdown,
+        widgetType,
+      }),
+    enabled:
+      open && isGa4Source && Boolean(previewConnectionId) && selectedMetrics.length > 0,
+    staleTime: 60 * 1000,
+  });
+
+  const incompatMetrics = ga4Compatibility?.incompatibleMetrics || [];
+  const incompatDimensions = ga4Compatibility?.incompatibleDimensions || [];
+  const hasCompatibilityIssue =
+    isGa4Source &&
+    selectedMetrics.length > 0 &&
+    ga4Compatibility?.compatible === false;
+  const compatibilityMessage = [
+    incompatMetrics.length ? `Metricas incompativeis: ${incompatMetrics.join(", ")}` : "",
+    incompatDimensions.length
+      ? `Dimensoes incompativeis: ${incompatDimensions.join(", ")}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" | ");
 
   const showBrandSelector = scope !== "BRAND" && !inheritBrand;
   const metricOptions = useMemo(
@@ -574,7 +619,7 @@ function WidgetConfigDialog({
               <div>
                 <Label>Breakdown</Label>
                 <SelectNative
-                  value={draft.breakdown || ""}
+                  value={breakdown}
                   onChange={(event) =>
                     setDraft({ ...draft, breakdown: event.target.value })
                   }
@@ -587,6 +632,32 @@ function WidgetConfigDialog({
                   ))}
                 </SelectNative>
               </div>
+
+              {isGa4Source && selectedMetrics.length ? (
+                <div className="space-y-2">
+                  {ga4CompatibilityLoading ? (
+                    <div className="text-xs text-[var(--text-muted)]">
+                      Validando combinacao GA4...
+                    </div>
+                  ) : null}
+                  {ga4CompatibilityError ? (
+                    <div className="text-xs text-red-600">
+                      {ga4CompatibilityErrorDetails?.message ||
+                        "Erro ao validar combinacao GA4."}
+                    </div>
+                  ) : null}
+                  {hasCompatibilityIssue ? (
+                    <AlertBanner
+                      title="Combinacao invalida"
+                      description={
+                        compatibilityMessage ||
+                        "As metricas e dimensoes selecionadas nao sao compativeis."
+                      }
+                      variant="warning"
+                    />
+                  ) : null}
+                </div>
+              ) : null}
 
               {widgetType === "TEXT" ? (
                 <div>
@@ -702,6 +773,7 @@ function WidgetConfigDialog({
               Cancelar
             </Button>
             <Button
+              disabled={hasCompatibilityIssue}
               onClick={() => {
                 let parsedFilters = {};
                 if (filtersInput.trim()) {
