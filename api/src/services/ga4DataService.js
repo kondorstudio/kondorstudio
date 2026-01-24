@@ -51,23 +51,48 @@ function normalizeDateRanges(input) {
 }
 
 function mapError(res, payload) {
-  let message =
+  const rawMessage =
     payload?.error?.message ||
     payload?.error_description ||
     payload?.error ||
-    'GA4 Data API error';
+    '';
+  let message = rawMessage || 'GA4 Data API error';
 
-  if (res.status === 403) {
-    message = 'GA4 access denied for this property';
-  } else if (res.status === 429) {
-    message = 'GA4 quota exceeded. Try again later.';
-  } else if (res.status === 400) {
-    message = 'GA4 query is invalid';
+  const details = Array.isArray(payload?.error?.details)
+    ? payload.error.details
+    : [];
+  const reasonEntry = details.find((item) => item?.reason);
+  const reason = reasonEntry?.reason || null;
+  const badRequest = details.find((item) => Array.isArray(item?.fieldViolations));
+  const violations = Array.isArray(badRequest?.fieldViolations)
+    ? badRequest.fieldViolations.map((item) => ({
+        field: item.field || null,
+        description: item.description || null,
+      }))
+    : [];
+
+  if (!rawMessage) {
+    if (res.status === 403) {
+      message = 'GA4 access denied for this property';
+    } else if (res.status === 429) {
+      message = 'GA4 quota exceeded. Try again later.';
+    } else if (res.status === 400) {
+      message = 'GA4 query is invalid';
+    }
+  }
+
+  if (reason === 'SERVICE_DISABLED') {
+    message = `${message}. Habilite a Google Analytics Data API no projeto.`;
   }
 
   const err = new Error(message);
   err.status = res.status;
   err.code = 'GA4_DATA_ERROR';
+  err.details = {
+    reason,
+    violations,
+    status: payload?.error?.status || null,
+  };
   return err;
 }
 

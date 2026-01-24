@@ -243,10 +243,24 @@ export default function WidgetRenderer({
   }
 
   if (isError) {
+    const apiDetails = error?.data?.details || null;
+    const violationText =
+      Array.isArray(apiDetails?.violations) && apiDetails.violations.length
+        ? apiDetails.violations
+            .map((item) =>
+              [item.field, item.description].filter(Boolean).join(": ")
+            )
+            .filter(Boolean)
+            .join(" | ")
+        : "";
+    const descriptionParts = [
+      error?.data?.error || error?.message || "Erro inesperado.",
+      violationText,
+    ].filter(Boolean);
     return (
       <EmptyStateCard
         title="Falha ao carregar dados"
-        description={error?.data?.error || error?.message || "Erro inesperado."}
+        description={descriptionParts.join(" ")}
         icon={AlertTriangle}
         action={
           <Button size="sm" variant="ghost" onClick={() => refetch()}>

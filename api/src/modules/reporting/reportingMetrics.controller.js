@@ -9,6 +9,8 @@ module.exports = {
       const status = err.status || 500;
       return res.status(status).json({
         error: err.message || 'Erro ao consultar metricas',
+        details: err.details || null,
+        code: err.code || null,
       });
     }
   },
