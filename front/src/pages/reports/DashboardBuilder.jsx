@@ -385,10 +385,11 @@ function WidgetConfigDialog({
 
   const incompatMetrics = ga4Compatibility?.incompatibleMetrics || [];
   const incompatDimensions = ga4Compatibility?.incompatibleDimensions || [];
+  const ga4CompatibilityStatus = ga4CompatibilityErrorDetails?.status || null;
   const hasCompatibilityIssue =
     isGa4Source &&
     selectedMetrics.length > 0 &&
-    ga4Compatibility?.compatible === false;
+    (ga4Compatibility?.compatible === false || ga4CompatibilityStatus === 400);
   const compatibilityMessage = [
     incompatMetrics.length ? `Metricas incompativeis: ${incompatMetrics.join(", ")}` : "",
     incompatDimensions.length
@@ -397,6 +398,26 @@ function WidgetConfigDialog({
   ]
     .filter(Boolean)
     .join(" | ");
+  const shouldBlockPreview =
+    isGa4Source && selectedMetrics.length > 0 && (hasCompatibilityIssue || ga4CompatibilityError);
+
+  const handleCompatibilityFix = () => {
+    if (!incompatMetrics.length && !incompatDimensions.length) return;
+    setDraft((prev) => {
+      if (!prev) return prev;
+      const nextMetrics = Array.isArray(prev.metrics)
+        ? prev.metrics.filter((metric) => !incompatMetrics.includes(metric))
+        : [];
+      const nextBreakdown = incompatDimensions.includes(prev.breakdown)
+        ? ""
+        : prev.breakdown || "";
+      return {
+        ...prev,
+        metrics: nextMetrics,
+        breakdown: nextBreakdown,
+      };
+    });
+  };
 
   const showBrandSelector = scope !== "BRAND" && !effectiveInheritBrand;
   const metricOptions = useMemo(
@@ -685,7 +706,8 @@ function WidgetConfigDialog({
                   ) : null}
                   {ga4CompatibilityError ? (
                     <div className="text-xs text-red-600">
-                      {ga4CompatibilityErrorDetails?.message ||
+                      {ga4CompatibilityErrorDetails?.data?.error ||
+                        ga4CompatibilityErrorDetails?.message ||
                         "Erro ao validar combinacao GA4."}
                     </div>
                   ) : null}
@@ -697,6 +719,13 @@ function WidgetConfigDialog({
                         "As metricas e dimensoes selecionadas nao sao compativeis."
                       }
                       variant="warning"
+                      action={
+                        incompatMetrics.length || incompatDimensions.length ? (
+                          <Button size="sm" variant="secondary" onClick={handleCompatibilityFix}>
+                            Remover incompatíveis
+                          </Button>
+                        ) : null
+                      }
                     />
                   ) : null}
                 </div>
@@ -736,16 +765,22 @@ function WidgetConfigDialog({
               <div>
                 <Label>Preview</Label>
                 <div className="mt-2 rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-3 py-3">
-                  <WidgetRenderer
-                    widget={draft}
-                    connectionId={previewConnectionId}
-                    filters={previewRange}
-                    enableQuery={Boolean(
-                      source && (level || widgetType === "TEXT" || widgetType === "IMAGE")
-                    )}
-                    forceMock={!previewConnectionId}
-                    variant="mini"
-                  />
+                  {shouldBlockPreview ? (
+                    <div className="rounded-[12px] border border-dashed border-[var(--border)] bg-white px-4 py-4 text-center text-xs text-[var(--text-muted)]">
+                      Ajuste as metricas ou o breakdown para gerar o preview.
+                    </div>
+                  ) : (
+                    <WidgetRenderer
+                      widget={draft}
+                      connectionId={previewConnectionId}
+                      filters={previewRange}
+                      enableQuery={Boolean(
+                        source && (level || widgetType === "TEXT" || widgetType === "IMAGE")
+                      )}
+                      forceMock={!previewConnectionId}
+                      variant="mini"
+                    />
+                  )}
                 </div>
               </div>
             </div>
