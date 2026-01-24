@@ -87,6 +87,7 @@ export default function ConnectDataSourceDialog({
   const [accountId, setAccountId] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [error, setError] = useState("");
+  const [ga4SyncError, setGa4SyncError] = useState("");
   const isGa4 = source === "GA4";
 
   useEffect(() => {
@@ -96,6 +97,7 @@ export default function ConnectDataSourceDialog({
     setAccountId("");
     setDisplayName("");
     setError("");
+    setGa4SyncError("");
   }, [open, defaultSource]);
 
   const { data: integrationData, isLoading: integrationsLoading } = useQuery({
@@ -148,6 +150,7 @@ export default function ConnectDataSourceDialog({
   }, [accountData, ga4Accounts, isGa4]);
 
   const isGa4Connected = ga4Status?.status === "CONNECTED";
+  const ga4HasProperties = ga4Accounts.length > 0;
 
   useEffect(() => {
     if (!integrations.length) {
@@ -169,6 +172,21 @@ export default function ConnectDataSourceDialog({
       setDisplayName(accounts[0].displayName || "");
     }
   }, [accounts, accountId]);
+
+  const syncMutation = useMutation({
+    mutationFn: () => base44.ga4.syncProperties(),
+    onSuccess: () => {
+      setGa4SyncError("");
+      queryClient.invalidateQueries({ queryKey: ["ga4-status"] });
+    },
+    onError: (err) => {
+      const message =
+        err?.data?.error ||
+        err?.message ||
+        "Falha ao sincronizar propriedades GA4.";
+      setGa4SyncError(message);
+    },
+  });
 
   const linkMutation = useMutation({
     mutationFn: async () => {
@@ -247,6 +265,19 @@ export default function ConnectDataSourceDialog({
                   Conectar GA4
                 </Button>
               ) : null}
+              {isGa4Connected && !ga4HasProperties ? (
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[var(--text-muted)]">
+                  <span>Nenhuma propriedade sincronizada ainda.</span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => syncMutation.mutate()}
+                    disabled={syncMutation.isPending}
+                  >
+                    {syncMutation.isPending ? "Sincronizando..." : "Sincronizar"}
+                  </Button>
+                </div>
+              ) : null}
             </div>
           ) : (
             <div>
@@ -286,14 +317,21 @@ export default function ConnectDataSourceDialog({
                 const match = accounts.find((acc) => acc.id === value);
                 if (match) setDisplayName(match.displayName || "");
               }}
-              disabled={(!integrationId && !isGa4) || (isGa4 && !isGa4Connected)}
+              disabled={
+                (!integrationId && !isGa4) ||
+                (isGa4 && (!isGa4Connected || !ga4HasProperties))
+              }
             >
               <option value="">
                 {(isGa4 ? ga4Loading : accountsLoading)
-                  ? "Carregando contas..."
+                  ? isGa4
+                    ? "Carregando propriedades..."
+                    : "Carregando contas..."
                   : accounts.length
                   ? "Selecione"
-                  : "Nenhuma conta retornada"}
+                  : isGa4
+                    ? "Nenhuma propriedade retornada"
+                    : "Nenhuma conta retornada"}
               </option>
               {accounts.map((account) => (
                 <option key={account.id} value={account.id}>
@@ -313,6 +351,12 @@ export default function ConnectDataSourceDialog({
           </div>
 
           {error ? <p className="text-xs text-red-600">{error}</p> : null}
+          {ga4SyncError ? (
+            <p className="text-xs text-rose-600">{ga4SyncError}</p>
+          ) : null}
+          {isGa4 && ga4Status?.lastError ? (
+            <p className="text-xs text-rose-600">{ga4Status.lastError}</p>
+          ) : null}
 
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => onOpenChange(false)}>

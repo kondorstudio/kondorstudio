@@ -201,7 +201,16 @@ function WidgetConfigDialog({
   const breakdown = draft?.breakdown || "";
   const isGa4Source = source === "GA4";
   const inheritBrand = draft?.inheritBrand !== false;
-  const brandId = inheritBrand ? globalBrandId : draft?.brandId || "";
+  const canInheritBrand = Boolean(globalBrandId);
+  const effectiveInheritBrand = inheritBrand && canInheritBrand;
+  const brandId = effectiveInheritBrand ? globalBrandId : draft?.brandId || "";
+
+  useEffect(() => {
+    if (!open) return;
+    if (!globalBrandId && draft?.inheritBrand !== false) {
+      setDraft((prev) => (prev ? { ...prev, inheritBrand: false } : prev));
+    }
+  }, [open, globalBrandId, draft]);
 
   const { data: levelsData } = useQuery({
     queryKey: ["reporting-metric-levels", source],
@@ -248,7 +257,7 @@ function WidgetConfigDialog({
 
   const previewConnectionId = useMemo(() => {
     if (!source) return "";
-    if (inheritBrand) {
+    if (effectiveInheritBrand) {
       const match = (globalConnections || []).find(
         (item) => item.source === source
       );
@@ -256,12 +265,21 @@ function WidgetConfigDialog({
     }
     const match = availableConnections.find((item) => item.source === source);
     return draft?.connectionId || match?.id || "";
-  }, [inheritBrand, globalConnections, availableConnections, draft, source]);
+  }, [effectiveInheritBrand, globalConnections, availableConnections, draft, source]);
 
-  const { data: ga4Metadata } = useQuery({
-    queryKey: ["ga4-reporting-metadata", previewConnectionId],
-    queryFn: () => base44.reporting.getGa4MetadataByConnection(previewConnectionId),
-    enabled: open && isGa4Source && Boolean(previewConnectionId),
+  const {
+    data: ga4Metadata,
+    isLoading: ga4MetadataLoading,
+    isError: ga4MetadataError,
+    error: ga4MetadataErrorDetails,
+  } = useQuery({
+    queryKey: ["ga4-reporting-metadata", previewConnectionId || "selected"],
+    queryFn: () =>
+      previewConnectionId
+        ? base44.reporting.getGa4MetadataByConnection(previewConnectionId)
+        : base44.ga4.metadata(),
+    enabled: open && isGa4Source,
+    retry: false,
   });
 
   const ga4Metrics = useMemo(() => {
@@ -334,8 +352,7 @@ function WidgetConfigDialog({
   const selectedMetrics = Array.isArray(draft?.metrics) ? draft.metrics : [];
   const options =
     draft?.options && typeof draft.options === "object" ? draft.options : {};
-  const globalHasConnection =
-    globalBrandId && globalConnections?.length ? true : false;
+  const globalHasConnection = canInheritBrand ? globalConnections?.length > 0 : null;
 
   const metricsKey = useMemo(
     () => [...selectedMetrics].map(String).sort().join(","),
@@ -381,7 +398,7 @@ function WidgetConfigDialog({
     .filter(Boolean)
     .join(" | ");
 
-  const showBrandSelector = scope !== "BRAND" && !inheritBrand;
+  const showBrandSelector = scope !== "BRAND" && !effectiveInheritBrand;
   const metricOptions = useMemo(
     () =>
       metrics.map((metric) => ({
@@ -390,10 +407,12 @@ function WidgetConfigDialog({
       })),
     [metrics]
   );
-  const canCheckConnection = inheritBrand ? Boolean(globalBrandId) : Boolean(brandId);
+  const canCheckConnection = effectiveInheritBrand
+    ? Boolean(globalBrandId)
+    : Boolean(brandId);
   const hasConnectionForSource = !source
     ? true
-    : inheritBrand
+    : effectiveInheritBrand
       ? globalConnections.some((item) => item.source === source)
       : availableConnections.some((item) => item.source === source);
   const showConnectionAlert =
@@ -499,7 +518,8 @@ function WidgetConfigDialog({
                 <label className="flex items-center gap-2 text-[var(--text)]">
                   <input
                     type="checkbox"
-                    checked={inheritBrand}
+                    checked={effectiveInheritBrand}
+                    disabled={!canInheritBrand}
                     onChange={(event) =>
                       setDraft({
                         ...draft,
@@ -511,7 +531,12 @@ function WidgetConfigDialog({
                   />
                   Usar marca global
                 </label>
-                {inheritBrand ? (
+                {!globalBrandId ? (
+                  <p className="mt-1 text-[var(--text-muted)]">
+                    Marca global nao definida. Selecione no painel do dashboard ou
+                    desative para escolher uma marca do widget.
+                  </p>
+                ) : effectiveInheritBrand ? (
                   <p className="mt-1 text-[var(--text-muted)]">
                     Widget segue a marca selecionada nos filtros globais.
                   </p>
@@ -543,11 +568,7 @@ function WidgetConfigDialog({
 
               <div>
                 <Label>Conexao</Label>
-                {inheritBrand && !globalBrandId ? (
-                  <div className="mt-2 text-xs text-[var(--text-muted)]">
-                    Selecione uma marca global para usar conexoes.
-                  </div>
-                ) : inheritBrand ? (
+                {effectiveInheritBrand ? (
                   <div className="mt-2 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs text-[var(--text-muted)]">
                     Usando conexao da marca global. Para escolher uma conta
                     especifica, desative a marca global.
@@ -558,6 +579,7 @@ function WidgetConfigDialog({
                     onChange={(event) =>
                       setDraft({ ...draft, connectionId: event.target.value })
                     }
+                    disabled={!brandId}
                   >
                     <option value="">Selecione a conexao</option>
                     {availableConnections.map((connection) => (
@@ -567,6 +589,11 @@ function WidgetConfigDialog({
                     ))}
                   </SelectNative>
                 )}
+                {!effectiveInheritBrand && !brandId ? (
+                  <div className="mt-2 text-xs text-[var(--text-muted)]">
+                    Selecione uma marca para listar conexoes.
+                  </div>
+                ) : null}
                 {!availableConnections.length && source && brandId ? (
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[var(--text-muted)]">
                     <span>Sem conexao para esta fonte.</span>
@@ -579,7 +606,7 @@ function WidgetConfigDialog({
                     </Button>
                   </div>
                 ) : null}
-                {inheritBrand && globalHasConnection === false && source ? (
+                {effectiveInheritBrand && globalHasConnection === false && source ? (
                   <div className="mt-2 text-xs text-[var(--text-muted)]">
                     Nenhuma conexao encontrada para a marca global.
                   </div>
@@ -598,7 +625,10 @@ function WidgetConfigDialog({
                         variant="secondary"
                         className="border-red-200 text-red-600 hover:bg-white"
                         onClick={() =>
-                          onConnect(inheritBrand ? globalBrandId : brandId, source)
+                          onConnect(
+                            effectiveInheritBrand ? globalBrandId : brandId,
+                            source
+                          )
                         }
                       >
                         Associar conta
@@ -610,6 +640,15 @@ function WidgetConfigDialog({
 
               <div>
                 <Label>Metricas</Label>
+                {isGa4Source && (ga4MetadataLoading || ga4MetadataError) ? (
+                  <div className="mt-1 text-xs text-[var(--text-muted)]">
+                    {ga4MetadataLoading
+                      ? "Carregando metadados do GA4..."
+                      : ga4MetadataErrorDetails?.data?.error ||
+                        ga4MetadataErrorDetails?.message ||
+                        "Nao foi possivel carregar todas as metricas do GA4."}
+                  </div>
+                ) : null}
                 <MetricMultiSelect
                   options={metricOptions}
                   value={selectedMetrics}
@@ -627,7 +666,10 @@ function WidgetConfigDialog({
                 >
                   <option value="">Sem breakdown</option>
                   {dimensions.map((dimension) => (
-                    <option key={dimension.id} value={dimension.metricKey}>
+                    <option
+                      key={dimension.metricKey || dimension.dimensionKey || dimension.id}
+                      value={dimension.metricKey}
+                    >
                       {dimension.label}
                     </option>
                   ))}
@@ -787,6 +829,7 @@ function WidgetConfigDialog({
                 }
                 onSave({
                   ...draft,
+                  inheritBrand: effectiveInheritBrand,
                   metrics: Array.isArray(draft.metrics) ? draft.metrics : [],
                   filters: parsedFilters,
                   options,
@@ -888,7 +931,8 @@ export default function DashboardBuilder() {
     const ids = new Set();
     widgets.forEach((widget) => {
       const inheritBrand = widget?.inheritBrand !== false;
-      const brand = inheritBrand ? globalBrandId : widget?.brandId;
+      const effectiveInheritBrand = inheritBrand && Boolean(globalBrandId);
+      const brand = effectiveInheritBrand ? globalBrandId : widget?.brandId;
       if (brand) ids.add(brand);
     });
     return Array.from(ids);
@@ -982,7 +1026,7 @@ export default function DashboardBuilder() {
       source: "",
       connectionId: "",
       brandId: "",
-      inheritBrand: true,
+      inheritBrand: scope === "BRAND" || Boolean(globalBrandId),
       level: "",
       breakdown: "",
       metrics: [],
@@ -1334,10 +1378,11 @@ export default function DashboardBuilder() {
               isEditable={viewMode === "edit"}
               renderItem={(widget) => {
                 const inheritBrand = widget?.inheritBrand !== false;
-                const brand = inheritBrand ? globalBrandId : widget?.brandId;
+                const effectiveInheritBrand = inheritBrand && Boolean(globalBrandId);
+                const brand = effectiveInheritBrand ? globalBrandId : widget?.brandId;
                 const connections = brand ? connectionsByBrand.get(brand) || [] : [];
                 const connectionId =
-                  widget?.connectionId ||
+                  (!effectiveInheritBrand ? widget?.connectionId : "") ||
                   connections.find((item) => item.source === widget?.source)?.id ||
                   "";
                 const connectHandler =

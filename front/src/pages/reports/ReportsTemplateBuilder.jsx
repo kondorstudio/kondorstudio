@@ -319,7 +319,10 @@ function WidgetConfigDialog({ open, onOpenChange, widget, onSave }) {
                 >
                   <option value="">Sem breakdown</option>
                   {dimensions.map((dimension) => (
-                    <option key={dimension.id} value={dimension.metricKey}>
+                    <option
+                      key={dimension.metricKey || dimension.dimensionKey || dimension.id}
+                      value={dimension.metricKey}
+                    >
                       {dimension.label}
                     </option>
                   ))}
