@@ -2,7 +2,8 @@ const { prisma, useTenant } = require('../prisma');
 const ga4OAuthService = require('./ga4OAuthService');
 
 const ADMIN_API_URL =
-  process.env.GA4_ADMIN_API_URL || 'https://analyticsadmin.googleapis.com/v1beta/accountSummaries';
+  process.env.GA4_ADMIN_API_URL || 'https://analyticsadmin.googleapis.com/v1/accountSummaries';
+const ADMIN_PAGE_SIZE = Number(process.env.GA4_ADMIN_PAGE_SIZE || 200);
 
 function extractErrorReason(payload) {
   const details = payload?.error?.details;
@@ -49,18 +50,39 @@ function buildMockProperties() {
   ];
 }
 
+async function fetchAccountSummaries(accessToken) {
+  const summaries = [];
+  let pageToken = null;
+
+  do {
+    const url = new URL(ADMIN_API_URL);
+    if (ADMIN_PAGE_SIZE) {
+      url.searchParams.set('pageSize', String(ADMIN_PAGE_SIZE));
+    }
+    if (pageToken) {
+      url.searchParams.set('pageToken', pageToken);
+    }
+
+    const res = await fetch(url.toString(), {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw mapError(res, json);
+
+    const batch = Array.isArray(json.accountSummaries)
+      ? json.accountSummaries
+      : [];
+    summaries.push(...batch);
+    pageToken = json.nextPageToken || null;
+  } while (pageToken);
+
+  return summaries;
+}
+
 async function fetchProperties(accessToken) {
-  const res = await fetch(ADMIN_API_URL, {
-    method: 'GET',
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw mapError(res, json);
-
-  const summaries = Array.isArray(json.accountSummaries)
-    ? json.accountSummaries
-    : [];
+  const summaries = await fetchAccountSummaries(accessToken);
 
   const properties = [];
   summaries.forEach((summary) => {
@@ -160,6 +182,13 @@ async function syncProperties({ tenantId, userId }) {
       })
     )
   );
+
+  await db.integrationGoogleGa4Property.deleteMany({
+    where: {
+      integrationId: integration.id,
+      propertyId: { notIn: properties.map((prop) => String(prop.propertyId)) },
+    },
+  });
 
   const items = await db.integrationGoogleGa4Property.findMany({
     where: { integrationId: integration.id },

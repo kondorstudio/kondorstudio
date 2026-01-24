@@ -229,6 +229,7 @@ async function queryMetrics(tenantId, payload = {}) {
     breakdown: querySpec.breakdown,
     metrics: querySpec.metrics,
     filters: querySpec.filters,
+    options: querySpec.options,
     widgetType: querySpec.widgetType || querySpec.type,
   });
 

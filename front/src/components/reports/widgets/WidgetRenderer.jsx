@@ -218,10 +218,13 @@ export default function WidgetRenderer({
   }
 
   if (!connectionId && !forceMock) {
+    const connectionHint = onEdit
+      ? "Clique no lapis no canto direito deste widget e confirme se a conta do cliente/marca esta selecionada. Com a conta selecionada, clique em SALVAR para atualizar os dados."
+      : "Clique em Associar conta para selecionar a conta correta.";
     return (
       <EmptyStateCard
-        title="Acao necessaria"
-        description={`Widget sem conta selecionada para ${source}. Clique em configurar para vincular.`}
+        title="Acao necessaria - Widget sem conta selecionada"
+        description={connectionHint}
         icon={Link2}
         action={
           onConnect ? (
@@ -281,6 +284,7 @@ export default function WidgetRenderer({
   const hasChart = chartData.length;
   const hasTotals = Object.keys(totals || {}).length > 0;
   const meta = data?.meta || {};
+  const compareMeta = meta?.compare || null;
 
   if (!hasChart && !hasTotals && !pieData.length && !hasTable) {
     return (
@@ -294,12 +298,43 @@ export default function WidgetRenderer({
   if (widgetType === "KPI") {
     const metricKey = metrics[0] || Object.keys(totals || {})[0] || null;
     const value = metricKey ? totals[metricKey] : null;
+    const compareTotals =
+      compareMeta && compareMeta.totals && typeof compareMeta.totals === "object"
+        ? compareMeta.totals
+        : null;
+    const compareKey =
+      compareTotals && (metricKey || Object.keys(compareTotals || {})[0] || null);
+    const compareValue = compareKey ? compareTotals?.[compareKey] : null;
+    let delta = null;
+    let deltaPct = null;
+    if (
+      typeof value === "number" &&
+      typeof compareValue === "number" &&
+      Number.isFinite(compareValue) &&
+      compareValue !== 0
+    ) {
+      delta = value - compareValue;
+      deltaPct = (delta / compareValue) * 100;
+    }
     return (
       <div className="rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-4 py-4">
         <p className="text-xs text-[var(--text-muted)]">{metricKey || "Metrica"}</p>
         <p className="mt-1 text-2xl font-semibold text-[var(--text)]">
           {formatValue(value, meta)}
         </p>
+        {compareValue !== null && compareValue !== undefined ? (
+          <div className="mt-2 text-xs text-[var(--text-muted)]">
+            <span>
+              {compareMeta?.label || "Comparacao"}: {formatValue(compareValue, meta)}
+            </span>
+            {delta !== null && deltaPct !== null ? (
+              <span className="ml-2 font-semibold text-[var(--text)]">
+                {delta >= 0 ? "+" : ""}
+                {formatValue(delta, meta)} ({deltaPct.toFixed(1)}%)
+              </span>
+            ) : null}
+          </div>
+        ) : null}
         {meta?.mocked ? (
           <p className="mt-2 text-[10px] uppercase tracking-[0.2em] text-[var(--text-muted)]">
             Dados simulados

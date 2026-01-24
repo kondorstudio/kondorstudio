@@ -76,10 +76,12 @@ function buildMetricsCacheKey({
   breakdown,
   metrics,
   filters,
+  options,
   widgetType,
 }) {
   const metricsHash = hashValue(normalizeList(metrics));
   const filtersHash = hashValue(filters || {});
+  const optionsHash = hashValue(options || {});
   const dateFromKey = normalizeDateKey(dateFrom);
   const dateToKey = normalizeDateKey(dateTo);
   const levelKey = level ? String(level) : 'all';
@@ -97,6 +99,7 @@ function buildMetricsCacheKey({
     widgetTypeKey,
     metricsHash,
     filtersHash,
+    optionsHash,
   ].join(':');
 }
 

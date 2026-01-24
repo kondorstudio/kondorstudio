@@ -82,6 +82,10 @@ function resolveGa4Filters(filters) {
     'ga4DimensionFilter',
     'ga4MetricFilter',
     'ga4',
+    'compareMode',
+    'compareDateFrom',
+    'compareDateTo',
+    'compare',
   ]);
   const entries = Object.entries(filters).filter(([key]) => !reserved.has(key));
   return {
@@ -332,6 +336,37 @@ async function fetchServiceAccountToken(serviceAccount, scopes) {
   }
 }
 
+async function fetchAccountSummaries(accessToken) {
+  const summaries = [];
+  let pageToken = null;
+  const pageSize = Number(process.env.GA4_ADMIN_PAGE_SIZE || 200);
+
+  do {
+    const url = new URL('https://analyticsadmin.googleapis.com/v1/accountSummaries');
+    if (pageSize) url.searchParams.set('pageSize', String(pageSize));
+    if (pageToken) url.searchParams.set('pageToken', pageToken);
+
+    try {
+      /* eslint-disable no-undef */
+      const res = await fetch(url.toString(), {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) return summaries;
+      const json = await res.json();
+      const batch = Array.isArray(json.accountSummaries)
+        ? json.accountSummaries
+        : [];
+      summaries.push(...batch);
+      pageToken = json.nextPageToken || null;
+    } catch (_) {
+      return summaries;
+    }
+  } while (pageToken);
+
+  return summaries;
+}
+
 async function listSelectableAccounts(integration) {
   const settings = getIntegrationSettings(integration);
   const propertyId = settings.propertyId || settings.property_id || null;
@@ -364,17 +399,8 @@ async function listSelectableAccounts(integration) {
 
   if (!accessToken) return [];
 
-  const url = 'https://analyticsadmin.googleapis.com/v1beta/accountSummaries';
-
   try {
-    /* eslint-disable no-undef */
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    if (!res.ok) return [];
-    const json = await res.json();
-    const summaries = Array.isArray(json.accountSummaries) ? json.accountSummaries : [];
+    const summaries = await fetchAccountSummaries(accessToken);
     const properties = [];
     summaries.forEach((summary) => {
       const props = Array.isArray(summary.propertySummaries)

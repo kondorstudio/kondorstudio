@@ -18,6 +18,49 @@ function formatDateLabel(value) {
   return String(value);
 }
 
+function resolveCompareDates({ dateFrom, dateTo, compareMode, compareDateFrom, compareDateTo }) {
+  const mode = compareMode ? String(compareMode).toUpperCase() : 'NONE';
+  if (mode === 'CUSTOM') {
+    if (compareDateFrom && compareDateTo) {
+      return { compareDateFrom, compareDateTo };
+    }
+    return { compareDateFrom: null, compareDateTo: null };
+  }
+  if (!dateFrom || !dateTo || mode === 'NONE') {
+    return { compareDateFrom: null, compareDateTo: null };
+  }
+
+  const baseFrom = new Date(dateFrom);
+  const baseTo = new Date(dateTo);
+  if (Number.isNaN(baseFrom.getTime()) || Number.isNaN(baseTo.getTime())) {
+    return { compareDateFrom: null, compareDateTo: null };
+  }
+
+  if (mode === 'PREVIOUS_YEAR') {
+    const prevFrom = new Date(baseFrom.getTime());
+    const prevTo = new Date(baseTo.getTime());
+    prevFrom.setFullYear(prevFrom.getFullYear() - 1);
+    prevTo.setFullYear(prevTo.getFullYear() - 1);
+    return {
+      compareDateFrom: prevFrom.toISOString().slice(0, 10),
+      compareDateTo: prevTo.toISOString().slice(0, 10),
+    };
+  }
+
+  if (mode === 'PREVIOUS_PERIOD') {
+    const dayMs = 86400000;
+    const diffDays = Math.floor((baseTo - baseFrom) / dayMs) + 1;
+    const prevTo = new Date(baseFrom.getTime() - dayMs);
+    const prevFrom = new Date(prevTo.getTime() - (diffDays - 1) * dayMs);
+    return {
+      compareDateFrom: prevFrom.toISOString().slice(0, 10),
+      compareDateTo: prevTo.toISOString().slice(0, 10),
+    };
+  }
+
+  return { compareDateFrom: null, compareDateTo: null };
+}
+
 async function assertBrand(tenantId, brandId) {
   if (!brandId) return null;
   return prisma.client.findFirst({
@@ -147,6 +190,14 @@ async function createReport(tenantId, payload) {
     templateId: template.id,
   };
 
+  const resolvedCompare = resolveCompareDates({
+    dateFrom: payload.dateFrom,
+    dateTo: payload.dateTo,
+    compareMode: payload.compareMode,
+    compareDateFrom: payload.compareDateFrom,
+    compareDateTo: payload.compareDateTo,
+  });
+
   const report = await prisma.report.create({
     data: {
       tenantId,
@@ -160,8 +211,8 @@ async function createReport(tenantId, payload) {
       dateFrom: payload.dateFrom,
       dateTo: payload.dateTo,
       compareMode: payload.compareMode || 'NONE',
-      compareDateFrom: payload.compareDateFrom || null,
-      compareDateTo: payload.compareDateTo || null,
+      compareDateFrom: resolvedCompare.compareDateFrom,
+      compareDateTo: resolvedCompare.compareDateTo,
       status: 'DRAFT',
       snapshotTemplate,
     },

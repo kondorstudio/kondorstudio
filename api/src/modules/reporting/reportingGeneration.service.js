@@ -48,12 +48,26 @@ function mergeFilters(globalFilters, widgetFilters) {
     value && typeof value === 'object' && !Array.isArray(value);
 
   if (isPlainObject(globalFilters) && isPlainObject(widgetFilters)) {
-    const { dateFrom, dateTo, ...restGlobal } = globalFilters;
+    const {
+      dateFrom,
+      dateTo,
+      compareMode,
+      compareDateFrom,
+      compareDateTo,
+      ...restGlobal
+    } = globalFilters;
     return { ...restGlobal, ...widgetFilters };
   }
 
   if (isPlainObject(globalFilters)) {
-    const { dateFrom, dateTo, ...restGlobal } = globalFilters;
+    const {
+      dateFrom,
+      dateTo,
+      compareMode,
+      compareDateFrom,
+      compareDateTo,
+      ...restGlobal
+    } = globalFilters;
     return restGlobal;
   }
 
@@ -118,6 +132,9 @@ async function generateReportData(tenantId, reportId) {
         connectionId,
         dateFrom,
         dateTo,
+        compareMode: report.compareMode,
+        compareDateFrom: report.compareDateFrom,
+        compareDateTo: report.compareDateTo,
         level: widget.level,
         breakdown: widget.breakdown,
         metrics: Array.isArray(widget.metrics) ? widget.metrics : [],
@@ -207,6 +224,9 @@ async function refreshDashboards(tenantId, payload = {}) {
       },
       fallbackDays,
     );
+    const compareMode = filters?.compareMode || null;
+    const compareDateFrom = filters?.compareDateFrom || null;
+    const compareDateTo = filters?.compareDateTo || null;
 
     const widgets = Array.isArray(dashboard.widgetsSchema)
       ? dashboard.widgetsSchema
@@ -220,6 +240,9 @@ async function refreshDashboards(tenantId, payload = {}) {
           connectionId: widget.connectionId,
           dateFrom,
           dateTo,
+          compareMode,
+          compareDateFrom,
+          compareDateTo,
           level: widget.level || null,
           breakdown: widget.breakdown || null,
           metrics: Array.isArray(widget.metrics) ? widget.metrics : [],

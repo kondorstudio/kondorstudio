@@ -51,19 +51,19 @@ const DATA_SOURCES = [
   },
   {
     key: "GA4",
-    label: "GA4",
+    label: "Google Analytics 4",
     description: "Analytics do site",
     icon: BarChart3,
   },
   {
     key: "GBP",
-    label: "Google Business Profile",
+    label: "Google Meu Negocio",
     description: "Visibilidade local",
     icon: MapPin,
   },
   {
     key: "META_SOCIAL",
-    label: "Meta Social",
+    label: "Facebook/Instagram",
     description: "Paginas e Instagram",
     icon: Instagram,
   },
@@ -359,7 +359,7 @@ export default function ReportsHome() {
                         size="sm"
                         onClick={() => openDialog(source.key)}
                       >
-                        Associar
+                        Associar conta
                       </Button>
                     </div>
 

@@ -36,9 +36,9 @@ const SOURCE_OPTIONS = [
   { value: "GOOGLE_ADS", label: "Google Ads" },
   { value: "TIKTOK_ADS", label: "TikTok Ads" },
   { value: "LINKEDIN_ADS", label: "LinkedIn Ads" },
-  { value: "GA4", label: "GA4" },
-  { value: "GBP", label: "Google Business Profile" },
-  { value: "META_SOCIAL", label: "Meta Social" },
+  { value: "GA4", label: "Google Analytics 4" },
+  { value: "GBP", label: "Google Meu Negocio" },
+  { value: "META_SOCIAL", label: "Facebook/Instagram" },
 ];
 
 const COMPARE_OPTIONS = [
@@ -47,6 +47,20 @@ const COMPARE_OPTIONS = [
   { value: "PREVIOUS_YEAR", label: "Ano anterior" },
   { value: "CUSTOM", label: "Personalizado" },
 ];
+
+const LEVEL_LABELS = {
+  ACCOUNT: "Conta",
+  CUSTOMER: "Conta",
+  ADVERTISER: "Conta",
+  CAMPAIGN: "Campanhas",
+  ADSET: "Grupo de anuncios",
+  AD_GROUP: "Grupo de anuncios",
+  ADGROUP: "Grupo de anuncios",
+  AD: "Anuncios",
+  CREATIVE: "Criativos",
+  PROPERTY: "Propriedade",
+  PAGE: "Pagina",
+};
 
 function createWidgetId() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
@@ -519,7 +533,7 @@ function WidgetConfigDialog({
                       <option value="">Selecione</option>
                       {levels.map((item) => (
                         <option key={item} value={item}>
-                          {item}
+                          {LEVEL_LABELS[item] || item}
                         </option>
                       ))}
                     </SelectNative>
@@ -588,7 +602,7 @@ function WidgetConfigDialog({
               ) : null}
 
               <div>
-                <Label>Conexao</Label>
+                <Label>Conta</Label>
                 {effectiveInheritBrand ? (
                   <div className="mt-2 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs text-[var(--text-muted)]">
                     Usando conexao da marca global. Para escolher uma conta
@@ -637,7 +651,7 @@ function WidgetConfigDialog({
               {showConnectionAlert ? (
                 <AlertBanner
                   title="Importante"
-                  description="Este cliente nao possui conta associada para essa fonte."
+                  description="Este cliente nao possui conta associada para essa fonte de dados."
                   onDismiss={() => setAlertDismissed(true)}
                   action={
                     onConnect && canCheckConnection ? (
@@ -823,7 +837,7 @@ function WidgetConfigDialog({
                         })
                       }
                     />
-                    Ocultar resultados com 0
+                    Ocultar resultados com 0 (nao oculta com comparacao ativa)
                   </label>
                 </div>
               </div>

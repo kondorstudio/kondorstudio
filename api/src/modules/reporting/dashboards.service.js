@@ -9,7 +9,16 @@ function isPlainObject(value) {
 function mergeFilters(globalFilters, widgetFilters) {
   const normalizedGlobal = isPlainObject(globalFilters) ? globalFilters : {};
   const normalizedWidget = isPlainObject(widgetFilters) ? widgetFilters : {};
-  const { dateFrom, dateTo, from, to, ...restGlobal } = normalizedGlobal;
+  const {
+    dateFrom,
+    dateTo,
+    from,
+    to,
+    compareMode,
+    compareDateFrom,
+    compareDateTo,
+    ...restGlobal
+  } = normalizedGlobal;
   return { ...restGlobal, ...normalizedWidget };
 }
 
@@ -215,6 +224,9 @@ async function queryDashboardData(tenantId, id, overrides = {}) {
         connectionId: finalConnectionId,
         dateFrom,
         dateTo,
+        compareMode,
+        compareDateFrom,
+        compareDateTo,
         level: widget.level || null,
         breakdown: widget.breakdown || null,
         metrics: Array.isArray(widget.metrics) ? widget.metrics : [],
@@ -223,9 +235,6 @@ async function queryDashboardData(tenantId, id, overrides = {}) {
             ...globalFilters,
             brandId: effectiveBrandId,
             groupId: effectiveGroupId,
-            compareMode,
-            compareDateFrom,
-            compareDateTo,
           },
           widget.filters,
         ),

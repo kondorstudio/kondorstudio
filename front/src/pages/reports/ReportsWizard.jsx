@@ -18,12 +18,89 @@ const STEPS = [
   "Revisao",
 ];
 
+const DATE_RANGE_OPTIONS = [
+  { value: "LAST_7_DAYS", label: "Ultimos 7 dias" },
+  { value: "LAST_30_DAYS", label: "Ultimos 30 dias" },
+  { value: "LAST_90_DAYS", label: "Ultimos 90 dias" },
+  { value: "THIS_MONTH", label: "Este mes" },
+  { value: "LAST_MONTH", label: "Mes passado" },
+  { value: "CUSTOM", label: "Personalizado" },
+];
+
 const COMPARE_OPTIONS = [
   { value: "NONE", label: "Sem comparacao" },
-  { value: "PREVIOUS_PERIOD", label: "Periodo anterior" },
+  { value: "PREVIOUS_PERIOD", label: "Periodo anterior (padrao)" },
   { value: "PREVIOUS_YEAR", label: "Ano anterior" },
   { value: "CUSTOM", label: "Personalizado" },
 ];
+
+function toDateKey(value) {
+  if (!value) return "";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+}
+
+function resolveDatePreset(preset) {
+  const today = new Date();
+  let from = new Date(today);
+  let to = new Date(today);
+
+  switch (preset) {
+    case "LAST_7_DAYS":
+      from.setDate(today.getDate() - 7);
+      break;
+    case "LAST_30_DAYS":
+      from.setDate(today.getDate() - 30);
+      break;
+    case "LAST_90_DAYS":
+      from.setDate(today.getDate() - 90);
+      break;
+    case "THIS_MONTH":
+      from = new Date(today.getFullYear(), today.getMonth(), 1);
+      break;
+    case "LAST_MONTH":
+      from = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      to = new Date(today.getFullYear(), today.getMonth(), 0);
+      break;
+    default:
+      break;
+  }
+
+  return { dateFrom: toDateKey(from), dateTo: toDateKey(to) };
+}
+
+function parseDateKey(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date;
+}
+
+function buildCompareRange({ dateFrom, dateTo, compareMode }) {
+  if (!compareMode || compareMode === "NONE") return null;
+  const from = parseDateKey(dateFrom);
+  const to = parseDateKey(dateTo);
+  if (!from || !to) return null;
+
+  if (compareMode === "PREVIOUS_YEAR") {
+    const prevFrom = new Date(from);
+    prevFrom.setFullYear(from.getFullYear() - 1);
+    const prevTo = new Date(to);
+    prevTo.setFullYear(to.getFullYear() - 1);
+    return { dateFrom: toDateKey(prevFrom), dateTo: toDateKey(prevTo) };
+  }
+
+  if (compareMode === "PREVIOUS_PERIOD") {
+    const dayMs = 24 * 60 * 60 * 1000;
+    const diffDays = Math.round((to.getTime() - from.getTime()) / dayMs) + 1;
+    const prevTo = new Date(from.getTime() - dayMs);
+    const prevFrom = new Date(prevTo.getTime() - (diffDays - 1) * dayMs);
+    return { dateFrom: toDateKey(prevFrom), dateTo: toDateKey(prevTo) };
+  }
+
+  return null;
+}
 
 export default function ReportsWizard() {
   const navigate = useNavigate();
@@ -32,6 +109,7 @@ export default function ReportsWizard() {
   const [brandId, setBrandId] = useState("");
   const [groupId, setGroupId] = useState("");
   const [templateId, setTemplateId] = useState("");
+  const [datePreset, setDatePreset] = useState("LAST_30_DAYS");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [compareMode, setCompareMode] = useState("NONE");
@@ -48,6 +126,26 @@ export default function ReportsWizard() {
     setBrandQuery("");
     setGroupQuery("");
   }, [scope]);
+
+  useEffect(() => {
+    if (datePreset === "CUSTOM") return;
+    const range = resolveDatePreset(datePreset);
+    setDateFrom(range.dateFrom);
+    setDateTo(range.dateTo);
+  }, [datePreset]);
+
+  useEffect(() => {
+    if (compareMode !== "CUSTOM") return;
+    if (compareFrom || compareTo) return;
+    const range = buildCompareRange({
+      dateFrom,
+      dateTo,
+      compareMode: "PREVIOUS_PERIOD",
+    });
+    if (!range) return;
+    setCompareFrom(range.dateFrom);
+    setCompareTo(range.dateTo);
+  }, [compareMode, compareFrom, compareTo, dateFrom, dateTo]);
 
   const { data: clientsData } = useQuery({
     queryKey: ["clients"],
@@ -88,6 +186,16 @@ export default function ReportsWizard() {
     () => templates.find((template) => template.id === templateId) || null,
     [templates, templateId]
   );
+
+  const compareRange = useMemo(() => {
+    if (compareMode === "CUSTOM") {
+      return { dateFrom: compareFrom, dateTo: compareTo };
+    }
+    return buildCompareRange({ dateFrom, dateTo, compareMode }) || {
+      dateFrom: "",
+      dateTo: "",
+    };
+  }, [compareMode, compareFrom, compareTo, dateFrom, dateTo]);
 
   const canProceed = useMemo(() => {
     if (step === 0) return true;
@@ -321,20 +429,43 @@ export default function ReportsWizard() {
 
         {step === 3 ? (
           <section className="rounded-[18px] border border-[var(--border)] bg-white px-6 py-6 shadow-[var(--shadow-sm)]">
-            <h2 className="text-lg font-semibold text-[var(--text)]">Periodo</h2>
+            <h2 className="text-lg font-semibold text-[var(--text)]">
+              Periodo para analise
+            </h2>
+            <div className="mt-4 max-w-md">
+              <Label>Periodo de tempo da analise</Label>
+              <SelectNative
+                value={datePreset}
+                onChange={(event) => setDatePreset(event.target.value)}
+              >
+                {DATE_RANGE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </SelectNative>
+            </div>
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <div>
-                <Label>Data inicial</Label>
-                <DateField value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
+                <Label>Periodo inicial</Label>
+                <DateField
+                  value={dateFrom}
+                  onChange={(event) => setDateFrom(event.target.value)}
+                  disabled={datePreset !== "CUSTOM"}
+                />
               </div>
               <div>
-                <Label>Data final</Label>
-                <DateField value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
+                <Label>Periodo final</Label>
+                <DateField
+                  value={dateTo}
+                  onChange={(event) => setDateTo(event.target.value)}
+                  disabled={datePreset !== "CUSTOM"}
+                />
               </div>
             </div>
 
             <div className="mt-4 max-w-md">
-              <Label>Comparacao</Label>
+              <Label>Comparar com</Label>
               <SelectNative
                 value={compareMode}
                 onChange={(event) => setCompareMode(event.target.value)}
@@ -347,20 +478,22 @@ export default function ReportsWizard() {
               </SelectNative>
             </div>
 
-            {compareMode === "CUSTOM" ? (
+            {compareMode !== "NONE" ? (
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <div>
                   <Label>Comparar de</Label>
                   <DateField
-                    value={compareFrom}
+                    value={compareRange.dateFrom}
                     onChange={(event) => setCompareFrom(event.target.value)}
+                    disabled={compareMode !== "CUSTOM"}
                   />
                 </div>
                 <div>
                   <Label>Comparar ate</Label>
                   <DateField
-                    value={compareTo}
+                    value={compareRange.dateTo}
                     onChange={(event) => setCompareTo(event.target.value)}
+                    disabled={compareMode !== "CUSTOM"}
                   />
                 </div>
               </div>

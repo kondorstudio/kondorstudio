@@ -33,9 +33,9 @@ const SOURCE_OPTIONS = [
   { value: "GOOGLE_ADS", label: "Google Ads" },
   { value: "TIKTOK_ADS", label: "TikTok Ads" },
   { value: "LINKEDIN_ADS", label: "LinkedIn Ads" },
-  { value: "GA4", label: "GA4" },
-  { value: "GBP", label: "Google Business Profile" },
-  { value: "META_SOCIAL", label: "Meta Social" },
+  { value: "GA4", label: "Google Analytics 4" },
+  { value: "GBP", label: "Google Meu Negocio" },
+  { value: "META_SOCIAL", label: "Facebook/Instagram" },
 ];
 
 const VISIBILITY_OPTIONS = [
@@ -43,6 +43,20 @@ const VISIBILITY_OPTIONS = [
   { value: "TENANT", label: "Tenant" },
   { value: "PUBLIC", label: "Publico" },
 ];
+
+const LEVEL_LABELS = {
+  ACCOUNT: "Conta",
+  CUSTOMER: "Conta",
+  ADVERTISER: "Conta",
+  CAMPAIGN: "Campanhas",
+  ADSET: "Grupo de anuncios",
+  AD_GROUP: "Grupo de anuncios",
+  ADGROUP: "Grupo de anuncios",
+  AD: "Anuncios",
+  CREATIVE: "Criativos",
+  PROPERTY: "Propriedade",
+  PAGE: "Pagina",
+};
 
 function createWidgetId() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
@@ -255,7 +269,7 @@ function WidgetConfigDialog({ open, onOpenChange, widget, onSave }) {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <Label>Fonte</Label>
+                  <Label>Fonte de dados</Label>
                   <SelectNative
                     value={source}
                     onChange={(event) =>
@@ -293,7 +307,7 @@ function WidgetConfigDialog({ open, onOpenChange, widget, onSave }) {
                       <option value="">Selecione</option>
                       {levels.map((item) => (
                         <option key={item} value={item}>
-                          {item}
+                          {LEVEL_LABELS[item] || item}
                         </option>
                       ))}
                     </SelectNative>
@@ -423,7 +437,7 @@ function WidgetConfigDialog({ open, onOpenChange, widget, onSave }) {
                         })
                       }
                     />
-                    Ocultar resultados com 0
+                    Ocultar resultados com 0 (nao oculta com comparacao ativa)
                   </label>
                 </div>
               </div>

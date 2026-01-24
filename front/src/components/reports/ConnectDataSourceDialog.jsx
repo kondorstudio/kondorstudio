@@ -16,7 +16,7 @@ const SOURCE_FILTERS = {
   META_SOCIAL: {
     providers: ["META"],
     kinds: ["meta_business", "instagram_only"],
-    label: "Meta Social",
+    label: "Facebook/Instagram",
   },
   GOOGLE_ADS: {
     providers: ["GOOGLE", "GOOGLE_ADS"],
@@ -26,12 +26,12 @@ const SOURCE_FILTERS = {
   GA4: {
     providers: ["GOOGLE"],
     kinds: ["google_analytics"],
-    label: "GA4",
+    label: "Google Analytics 4",
   },
   GBP: {
     providers: ["GOOGLE"],
     kinds: ["google_business"],
-    label: "Google Business Profile",
+    label: "Google Meu Negocio",
   },
   TIKTOK_ADS: {
     providers: ["TIKTOK"],
@@ -56,8 +56,10 @@ function getIntegrationParams(source, brandId) {
   const params = {
     clientId: brandId,
     status: "CONNECTED",
-    provider: filter.providers[0],
   };
+  if (filter.providers.length === 1) {
+    params.provider = filter.providers[0];
+  }
   if (filter.kinds.length === 1) {
     params.kind = filter.kinds[0];
   }
@@ -69,7 +71,9 @@ function filterIntegrations(source, integrations = []) {
   if (!filter) return integrations;
   return integrations.filter((integration) => {
     const providerMatch = filter.providers.includes(integration.provider);
-    const kind = normalizeIntegrationKind(integration.settings?.kind);
+    const kind = normalizeIntegrationKind(
+      integration.settings?.kind || integration.config?.kind
+    );
     const kindMatch = filter.kinds.length ? filter.kinds.includes(kind) : true;
     return providerMatch && kindMatch;
   });
@@ -229,7 +233,7 @@ export default function ConnectDataSourceDialog({
 
         <div className="space-y-4">
           <div>
-            <Label>Fonte</Label>
+            <Label>Fonte de dados</Label>
             <SelectNative
               value={source}
               onChange={(event) => {

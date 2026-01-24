@@ -12,9 +12,9 @@ const SOURCE_OPTIONS = [
   { value: "GOOGLE_ADS", label: "Google Ads" },
   { value: "TIKTOK_ADS", label: "TikTok Ads" },
   { value: "LINKEDIN_ADS", label: "LinkedIn Ads" },
-  { value: "GA4", label: "GA4" },
-  { value: "GBP", label: "Google Business Profile" },
-  { value: "META_SOCIAL", label: "Meta Social" },
+  { value: "GA4", label: "Google Analytics 4" },
+  { value: "GBP", label: "Google Meu Negocio" },
+  { value: "META_SOCIAL", label: "Facebook/Instagram" },
 ];
 
 const TYPE_OPTIONS = [
@@ -95,7 +95,7 @@ function MetricCatalogDialog({ open, onOpenChange, defaults }) {
         <div className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <Label>Fonte</Label>
+              <Label>Fonte de dados</Label>
               <SelectNative value={source} onChange={(event) => setSource(event.target.value)}>
                 {SOURCE_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -211,7 +211,7 @@ export default function MetricCatalogPanel() {
 
       <div className="mt-4 grid gap-4 md:grid-cols-3">
         <div>
-          <Label>Fonte</Label>
+          <Label>Fonte de dados</Label>
           <SelectNative value={source} onChange={(event) => setSource(event.target.value)}>
             {SOURCE_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>

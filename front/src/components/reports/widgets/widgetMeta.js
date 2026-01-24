@@ -30,7 +30,7 @@ export const SOURCE_META = {
     accent: "bg-blue-50 text-blue-600 border-blue-100",
   },
   META_SOCIAL: {
-    label: "Meta Social",
+    label: "Facebook/Instagram",
     icon: Instagram,
     accent: "bg-pink-50 text-pink-600 border-pink-100",
   },
@@ -40,7 +40,7 @@ export const SOURCE_META = {
     accent: "bg-amber-50 text-amber-700 border-amber-100",
   },
   GA4: {
-    label: "GA4",
+    label: "Google Analytics 4",
     icon: BarChart3,
     accent: "bg-orange-50 text-orange-600 border-orange-100",
   },
@@ -55,7 +55,7 @@ export const SOURCE_META = {
     accent: "bg-sky-50 text-sky-700 border-sky-100",
   },
   GBP: {
-    label: "Google Business",
+    label: "Google Meu Negocio",
     icon: MapPin,
     accent: "bg-emerald-50 text-emerald-700 border-emerald-100",
   },
