@@ -20,6 +20,11 @@ import DashboardCanvas from "@/components/reports/widgets/DashboardCanvas.jsx";
 import WidgetCard from "@/components/reports/widgets/WidgetCard.jsx";
 import WidgetRenderer from "@/components/reports/widgets/WidgetRenderer.jsx";
 import { getWidgetTypeMeta } from "@/components/reports/widgets/widgetMeta.js";
+import {
+  filterConnected,
+  hasConnectedForSource,
+  pickConnectionId,
+} from "@/components/reports/utils/connectionResolver.js";
 
 const WIDGET_TYPES = [
   { key: "KPI", label: "KPI" },
@@ -262,26 +267,32 @@ function WidgetConfigDialog({
     enabled: open && Boolean(brandId),
   });
 
+  const connections = useMemo(
+    () => filterConnected(connectionsData?.items || []),
+    [connectionsData]
+  );
+
   const availableConnections = useMemo(() => {
-    const list = connectionsData?.items || [];
-    return list.filter(
-      (item) =>
-        item.status === "CONNECTED" && (source ? item.source === source : true)
-    );
-  }, [connectionsData, source]);
+    if (!source) return connections;
+    return connections.filter((item) => item?.source === source);
+  }, [connections, source]);
 
   const previewRange = useMemo(() => buildDefaultDateRange(), []);
 
   const previewConnectionId = useMemo(() => {
     if (!source) return "";
     if (effectiveInheritBrand) {
-      const match = (globalConnections || []).find(
-        (item) => item.source === source
-      );
-      return match?.id || "";
+      return pickConnectionId({
+        connections: globalConnections,
+        source,
+        preferredId: "",
+      });
     }
-    const match = availableConnections.find((item) => item.source === source);
-    return draft?.connectionId || match?.id || "";
+    return pickConnectionId({
+      connections: availableConnections,
+      source,
+      preferredId: draft?.connectionId || "",
+    });
   }, [effectiveInheritBrand, globalConnections, availableConnections, draft, source]);
 
   const {
@@ -451,8 +462,8 @@ function WidgetConfigDialog({
   const hasConnectionForSource = !source
     ? true
     : effectiveInheritBrand
-      ? globalConnections.some((item) => item.source === source)
-      : availableConnections.some((item) => item.source === source);
+      ? hasConnectedForSource({ connections: globalConnections, source })
+      : hasConnectedForSource({ connections: availableConnections, source });
   const showConnectionAlert =
     source && canCheckConnection && !hasConnectionForSource && !alertDismissed;
 
@@ -977,7 +988,7 @@ export default function DashboardBuilder() {
     enabled: Boolean(globalBrandId),
   });
 
-  const globalConnections = globalConnectionsData?.items || [];
+  const globalConnections = filterConnected(globalConnectionsData?.items || []);
 
   const brandIds = useMemo(() => {
     const ids = new Set();
@@ -1432,11 +1443,13 @@ export default function DashboardBuilder() {
                 const inheritBrand = widget?.inheritBrand !== false;
                 const effectiveInheritBrand = inheritBrand && Boolean(globalBrandId);
                 const brand = effectiveInheritBrand ? globalBrandId : widget?.brandId;
-                const connections = brand ? connectionsByBrand.get(brand) || [] : [];
-                const connectionId =
-                  (!effectiveInheritBrand ? widget?.connectionId : "") ||
-                  connections.find((item) => item.source === widget?.source)?.id ||
-                  "";
+                const rawConnections = brand ? connectionsByBrand.get(brand) || [] : [];
+                const connections = filterConnected(rawConnections);
+                const connectionId = pickConnectionId({
+                  connections,
+                  source: widget?.source,
+                  preferredId: !effectiveInheritBrand ? widget?.connectionId : "",
+                });
                 const connectHandler =
                   brand && widget?.source
                     ? () => handleConnectDialog(brand, widget?.source)
