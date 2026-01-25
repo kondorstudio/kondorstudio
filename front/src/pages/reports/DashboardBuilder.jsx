@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useContainerWidth } from "react-grid-layout";
@@ -932,6 +932,7 @@ export default function DashboardBuilder() {
   const [compareDateTo, setCompareDateTo] = useState("");
   const [layout, setLayout] = useState([]);
   const [widgets, setWidgets] = useState([]);
+  const [widgetStatusMap, setWidgetStatusMap] = useState({});
   const [viewMode, setViewMode] = useState("edit");
   const [configOpen, setConfigOpen] = useState(false);
   const [activeWidgetId, setActiveWidgetId] = useState(null);
@@ -1195,6 +1196,14 @@ export default function DashboardBuilder() {
       source: source || "META_ADS",
     });
   };
+
+  const handleStatusChange = useCallback((widgetId, nextStatus) => {
+    if (!widgetId) return;
+    setWidgetStatusMap((prev) => {
+      if (prev[widgetId] === nextStatus) return prev;
+      return { ...prev, [widgetId]: nextStatus };
+    });
+  }, []);
 
   if (!isNew && isLoading) {
     return (
@@ -1477,6 +1486,7 @@ export default function DashboardBuilder() {
                   <WidgetCard
                     widget={widget}
                     showActions={viewMode === "edit"}
+                    status={widgetStatusMap[widget.id]}
                     onEdit={viewMode === "edit" ? editHandler : null}
                     onDuplicate={() => handleDuplicateWidget(widget.id)}
                     onRemove={() => handleRemoveWidget(widget.id)}
@@ -1494,6 +1504,9 @@ export default function DashboardBuilder() {
                       enableQuery
                       onConnect={connectHandler}
                       onEdit={viewMode === "edit" ? editHandler : null}
+                      onStatusChange={(nextStatus) =>
+                        handleStatusChange(widget.id, nextStatus)
+                      }
                     />
                   </WidgetCard>
                 );

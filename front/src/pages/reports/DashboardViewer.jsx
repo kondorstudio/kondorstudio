@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useContainerWidth } from "react-grid-layout";
@@ -11,6 +11,7 @@ import ConnectDataSourceDialog from "@/components/reports/ConnectDataSourceDialo
 import DashboardCanvas from "@/components/reports/widgets/DashboardCanvas.jsx";
 import WidgetCard from "@/components/reports/widgets/WidgetCard.jsx";
 import WidgetRenderer from "@/components/reports/widgets/WidgetRenderer.jsx";
+import { pickConnectionId } from "@/components/reports/utils/connectionResolver.js";
 
 const COMPARE_OPTIONS = [
   { value: "NONE", label: "Sem comparacao" },
@@ -59,6 +60,7 @@ export default function DashboardViewer() {
   const [compareDateTo, setCompareDateTo] = useState("");
   const [globalBrandId, setGlobalBrandId] = useState("");
   const [globalGroupId, setGlobalGroupId] = useState("");
+  const [widgetStatusMap, setWidgetStatusMap] = useState({});
   const [connectDialog, setConnectDialog] = useState({
     open: false,
     brandId: "",
@@ -164,6 +166,14 @@ export default function DashboardViewer() {
     if (!brandId || !source) return;
     setConnectDialog({ open: true, brandId, source });
   };
+
+  const handleStatusChange = useCallback((widgetId, nextStatus) => {
+    if (!widgetId) return;
+    setWidgetStatusMap((prev) => {
+      if (prev[widgetId] === nextStatus) return prev;
+      return { ...prev, [widgetId]: nextStatus };
+    });
+  }, []);
 
   if (isLoading) {
     return (
@@ -348,21 +358,25 @@ export default function DashboardViewer() {
               isEditable={false}
               renderItem={(widget) => {
                 const inheritBrand = widget?.inheritBrand !== false;
-                const brandId = inheritBrand ? globalBrandId : widget?.brandId;
-                const connections = brandId
-                  ? connectionsByBrand.get(brandId) || []
-                  : [];
-                const connection =
-                  widget?.connectionId ||
-                  connections.find((item) => item.source === widget?.source)?.id ||
-                  "";
+                const effectiveInheritBrand = inheritBrand && Boolean(globalBrandId);
+                const brandId = effectiveInheritBrand ? globalBrandId : widget?.brandId;
+                const connections = brandId ? connectionsByBrand.get(brandId) || [] : [];
+                const connection = pickConnectionId({
+                  connections,
+                  source: widget?.source,
+                  preferredId: effectiveInheritBrand ? "" : widget?.connectionId,
+                });
                 const connectHandler =
                   brandId && widget?.source
                     ? () => handleConnect(brandId, widget?.source)
                     : null;
 
                 return (
-                  <WidgetCard widget={widget} showActions={false}>
+                  <WidgetCard
+                    widget={widget}
+                    showActions={false}
+                    status={widgetStatusMap[widget.id]}
+                  >
                     <WidgetRenderer
                       widget={widget}
                       connectionId={connection}
@@ -374,6 +388,9 @@ export default function DashboardViewer() {
                         compareDateTo,
                       }}
                       onConnect={connectHandler}
+                      onStatusChange={(nextStatus) =>
+                        handleStatusChange(widget.id, nextStatus)
+                      }
                     />
                   </WidgetCard>
                 );

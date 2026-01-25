@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   BarChart,
@@ -14,11 +14,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { AlertTriangle, Link2, RefreshCw, Sliders } from "lucide-react";
 import { base44 } from "@/apiClient/base44Client";
-import { Button } from "@/components/ui/button.jsx";
-import EmptyStateCard from "./EmptyStateCard.jsx";
-import WidgetSkeleton from "./WidgetSkeleton.jsx";
+import { WidgetEmpty, WidgetSkeleton } from "./WidgetStates.jsx";
 
 const CHART_COLORS = ["#0ea5e9", "#22c55e", "#f97316", "#a855f7", "#ef4444"];
 const CONNECT_ERROR_CODES = new Set([
@@ -129,6 +126,8 @@ export default function WidgetRenderer({
   isGenerating = false,
   onConnect,
   onEdit,
+  onQuickRange,
+  onStatusChange,
   variant = "default",
 }) {
   const widgetType = widget?.widgetType || "KPI";
@@ -211,6 +210,92 @@ export default function WidgetRenderer({
     keepPreviousData: true,
   });
 
+  const isMini = variant === "mini";
+  const resolvedData = hasOverride ? dataOverride : data;
+  const totals =
+    resolvedData?.totals && typeof resolvedData.totals === "object"
+      ? resolvedData.totals
+      : {};
+  const seriesList = normalizeSeries(resolvedData?.series || [], metrics);
+  const chartData = buildChartData(seriesList);
+  const rawPie = Array.isArray(resolvedData?.pie) ? resolvedData.pie : [];
+  const pieData = rawPie.length ? rawPie : buildPieFromTotals(totals, metrics);
+  const table = normalizeTableData(resolvedData?.table);
+  const hasTable = table.rows.length;
+  const hasChart = chartData.length;
+  const hasTotals = Object.keys(totals || {}).length > 0;
+  const meta = resolvedData?.meta || {};
+  const metaWithCurrency =
+    meta?.currency || widget?.options?.currency
+      ? { ...meta, currency: meta.currency || widget?.options?.currency }
+      : meta;
+  const compareMeta = meta?.compare || null;
+  const hasAnyData = hasChart || hasTotals || pieData.length || hasTable;
+  const hasDataByType = (() => {
+    switch (widgetType) {
+      case "KPI":
+        return hasTotals;
+      case "TABLE":
+        return hasTable;
+      case "PIE":
+        return pieData.length > 0;
+      case "LINE":
+      case "BAR":
+        return hasChart;
+      default:
+        return hasAnyData;
+    }
+  })();
+
+  const noConnection =
+    needsData &&
+    hasSource &&
+    hasMetrics &&
+    !connectionId &&
+    !forceMock &&
+    !hasOverride;
+  const hasConnectError = isError && isConnectError(error);
+  const isInitialLoading = canFetch && (isLoading || (isFetching && !resolvedData));
+  const isUpdating = canFetch && isFetching && Boolean(resolvedData);
+  const noData =
+    needsData &&
+    resolvedData &&
+    !hasDataByType &&
+    !isInitialLoading &&
+    !hasConnectError &&
+    !isError;
+
+  const status = useMemo(() => {
+    if (!needsData) return "LIVE";
+    if (!hasSource || !hasMetrics) return "EMPTY";
+    if (noConnection || hasConnectError) return "EMPTY";
+    if (isError && !hasConnectError) return "ERROR";
+    if (isInitialLoading) return "LOADING";
+    if (noData) return "EMPTY";
+    if (isUpdating) return "LOADING";
+    if (resolvedData) return "LIVE";
+    return "EMPTY";
+  }, [
+    needsData,
+    hasSource,
+    hasMetrics,
+    noConnection,
+    hasConnectError,
+    isError,
+    isInitialLoading,
+    noData,
+    isUpdating,
+    resolvedData,
+  ]);
+
+  const statusRef = useRef(null);
+  useEffect(() => {
+    if (!onStatusChange || !status) return;
+    if (statusRef.current === status) return;
+    statusRef.current = status;
+    onStatusChange(status);
+  }, [onStatusChange, status]);
+
   if (!needsData) {
     if (widgetType === "TEXT") {
       return (
@@ -236,152 +321,94 @@ export default function WidgetRenderer({
 
   if (!hasSource) {
     return (
-      <EmptyStateCard
+      <WidgetEmpty
         title="Configure este widget"
         description="Selecione fonte, nivel e metricas."
-        icon={Sliders}
-        action={
-          onEdit ? (
-            <Button size="sm" onClick={onEdit}>
-              Configurar
-            </Button>
-          ) : null
-        }
+        actionLabel={onEdit ? "Configurar" : ""}
+        onAction={onEdit || undefined}
+        className={isMini ? "px-3 py-3" : ""}
       />
     );
   }
 
   if (!hasMetrics) {
     return (
-      <EmptyStateCard
+      <WidgetEmpty
         title="Selecione metricas"
         description="Adicione pelo menos uma metrica para exibir dados."
-        icon={Sliders}
-        action={
-          onEdit ? (
-            <Button size="sm" onClick={onEdit}>
-              Configurar
-            </Button>
-          ) : null
-        }
+        actionLabel={onEdit ? "Configurar" : ""}
+        onAction={onEdit || undefined}
+        className={isMini ? "px-3 py-3" : ""}
       />
     );
   }
 
   if (isGenerating && needsData && !hasOverride) {
-    return <WidgetSkeleton />;
-  }
-
-  if (!connectionId && !forceMock && !hasOverride) {
-    const connectionHint = onEdit
-      ? "Clique no lapis no canto direito deste widget e confirme se a conta do cliente/marca esta selecionada. Com a conta selecionada, clique em SALVAR para atualizar os dados."
-      : "Clique em Associar conta para selecionar a conta correta.";
     return (
-      <EmptyStateCard
-        title="Acao necessaria - Widget sem conta selecionada"
-        description={connectionHint}
-        icon={Link2}
-        action={
-          onConnect ? (
-            <Button size="sm" variant="accent" onClick={() => onConnect()}>
-              Associar conta
-            </Button>
-          ) : null
-        }
+      <WidgetSkeleton
+        type={widgetType}
+        className={isMini ? "p-3" : ""}
       />
     );
   }
 
-  if ((isLoading || isFetching) && !data) {
-    return <WidgetSkeleton />;
+  if (noConnection || hasConnectError) {
+    const connectionHint = onEdit
+      ? "Clique no lapis no canto direito deste widget e selecione uma conta conectada."
+      : "Associe uma conta para carregar os dados deste widget.";
+    return (
+      <WidgetEmpty
+        title="Conta nao conectada"
+        description={connectionHint}
+        actionLabel={onConnect ? "Associar conta" : ""}
+        onAction={onConnect || undefined}
+        variant="no-connection"
+        className={isMini ? "px-3 py-3" : ""}
+      />
+    );
   }
 
-  if (isFetching && data) {
-    return <WidgetSkeleton />;
+  if (isInitialLoading) {
+    return (
+      <WidgetSkeleton
+        type={widgetType}
+        className={isMini ? "p-3" : ""}
+      />
+    );
   }
 
   if (isError) {
-    if (isConnectError(error)) {
-      const reconnectHint = onEdit
-        ? "Clique no lapis no canto direito deste widget e associe a conta novamente."
-        : "Clique em Associar conta para selecionar a conta correta.";
-      return (
-        <EmptyStateCard
-          title="Acao necessaria - Conexao desconectada"
-          description={reconnectHint}
-          icon={Link2}
-          action={
-            onConnect ? (
-              <Button size="sm" variant="accent" onClick={() => onConnect()}>
-                Associar conta
-              </Button>
-            ) : null
-          }
-        />
-      );
-    }
-    const apiDetails = error?.data?.details || null;
-    const violationText =
-      Array.isArray(apiDetails?.violations) && apiDetails.violations.length
-        ? apiDetails.violations
-            .map((item) =>
-              [item.field, item.description].filter(Boolean).join(": ")
-            )
-            .filter(Boolean)
-            .join(" | ")
-        : "";
-    const descriptionParts = [
-      error?.data?.error || error?.message || "Erro inesperado.",
-      violationText,
-    ].filter(Boolean);
     return (
-      <EmptyStateCard
-        title="Falha ao carregar dados"
-        description={descriptionParts.join(" ")}
-        icon={AlertTriangle}
-        action={
-          <Button size="sm" variant="ghost" onClick={() => refetch()}>
-            <RefreshCw className="mr-2 h-3.5 w-3.5" />
-            Tentar novamente
-          </Button>
-        }
+      <WidgetEmpty
+        title="Nao foi possivel carregar este widget."
+        description="Tente novamente em alguns instantes."
+        actionLabel="Tentar novamente"
+        onAction={refetch}
+        variant="error"
+        className={isMini ? "px-3 py-3" : ""}
       />
     );
   }
 
-  const resolvedData = hasOverride ? dataOverride : data;
-  const totals =
-    resolvedData?.totals && typeof resolvedData.totals === "object"
-      ? resolvedData.totals
-      : {};
-  const seriesList = normalizeSeries(resolvedData?.series || [], metrics);
-  const chartData = buildChartData(seriesList);
-  const rawPie = Array.isArray(resolvedData?.pie) ? resolvedData.pie : [];
-  const pieData = rawPie.length ? rawPie : buildPieFromTotals(totals, metrics);
-  const table = normalizeTableData(resolvedData?.table);
-  const hasTable = table.rows.length;
-  const hasChart = chartData.length;
-  const hasTotals = Object.keys(totals || {}).length > 0;
-  const meta = resolvedData?.meta || {};
-  const metaWithCurrency =
-    meta?.currency || widget?.options?.currency
-      ? { ...meta, currency: meta.currency || widget?.options?.currency }
-      : meta;
-  const compareMeta = meta?.compare || null;
-
-  if (!hasChart && !hasTotals && !pieData.length && !hasTable) {
+  if (noData) {
     if (meta?.mocked) {
       return (
-        <EmptyStateCard
+        <WidgetEmpty
           title="Fonte ainda nao disponivel"
           description="Os dados desta fonte ainda nao foram implementados."
+          variant="no-data"
+          className={isMini ? "px-3 py-3" : ""}
         />
       );
     }
     return (
-      <EmptyStateCard
-        title="Sem dados no periodo"
+      <WidgetEmpty
+        title="Sem dados para este periodo."
         description="Tente ajustar o intervalo ou filtros."
+        actionLabel={onQuickRange ? "Usar ultimos 30 dias" : ""}
+        onAction={onQuickRange || undefined}
+        variant="no-data"
+        className={isMini ? "px-3 py-3" : ""}
       />
     );
   }
@@ -512,9 +539,13 @@ export default function WidgetRenderer({
   if (widgetType === "TABLE") {
     if (!hasTable) {
       return (
-        <EmptyStateCard
-          title="Sem dados no periodo"
+        <WidgetEmpty
+          title="Sem dados para este periodo."
           description="Tente ajustar o intervalo ou filtros."
+          actionLabel={onQuickRange ? "Usar ultimos 30 dias" : ""}
+          onAction={onQuickRange || undefined}
+          variant="no-data"
+          className={isMini ? "px-3 py-3" : ""}
         />
       );
     }
@@ -547,9 +578,11 @@ export default function WidgetRenderer({
   }
 
   return (
-    <EmptyStateCard
+    <WidgetEmpty
       title="Widget sem suporte"
       description={`Tipo ${widgetType} ainda nao suportado.`}
+      variant="error"
+      className={isMini ? "px-3 py-3" : ""}
     />
   );
 }

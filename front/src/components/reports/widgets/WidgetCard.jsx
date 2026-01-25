@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { MoreHorizontal, Pencil, Copy, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge.jsx";
 import { cn } from "@/utils/classnames.js";
 import { getSourceMeta, getWidgetTypeMeta } from "./widgetMeta.js";
+import { WidgetStatusPill } from "./WidgetStates.jsx";
 
 function SourcePill({ source }) {
   const meta = getSourceMeta(source);
@@ -85,12 +86,23 @@ export default function WidgetCard({
   children,
   className = "",
   showActions = true,
+  status,
+  sourceLabel,
   onEdit,
   onDuplicate,
   onRemove,
 }) {
   const typeMeta = getWidgetTypeMeta(widget?.widgetType);
   const TitleIcon = typeMeta?.icon;
+  const sourceMeta = getSourceMeta(widget?.source);
+  const resolvedSourceLabel = sourceLabel || sourceMeta?.label || "";
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
+
+  useEffect(() => {
+    if (status === "LIVE") {
+      setLastUpdatedAt(Date.now());
+    }
+  }, [status]);
 
   return (
     <div
@@ -115,9 +127,21 @@ export default function WidgetCard({
             </div>
           </div>
         </div>
-        {showActions ? (
-          <WidgetMenu onEdit={onEdit} onDuplicate={onDuplicate} onRemove={onRemove} />
-        ) : null}
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex items-center gap-2">
+            {status ? (
+              <WidgetStatusPill status={status} sourceLabel={resolvedSourceLabel} />
+            ) : null}
+            {showActions ? (
+              <WidgetMenu onEdit={onEdit} onDuplicate={onDuplicate} onRemove={onRemove} />
+            ) : null}
+          </div>
+          {status === "LIVE" && lastUpdatedAt ? (
+            <span className="text-[11px] text-[var(--text-muted)]">
+              Atualizado agora
+            </span>
+          ) : null}
+        </div>
       </div>
       <div className="mt-4 flex-1">{children}</div>
     </div>
