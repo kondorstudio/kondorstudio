@@ -206,7 +206,15 @@ const WidgetRenderer = React.memo(function WidgetRenderer({
     ]
   );
 
-  const { data, isLoading, isFetching, isError, error, refetch } = useQuery({
+  const {
+    data,
+    dataUpdatedAt,
+    isLoading,
+    isFetching,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey,
     queryFn: () =>
       widgetRequestQueue.add(() =>
@@ -279,6 +287,8 @@ const WidgetRenderer = React.memo(function WidgetRenderer({
     !forceMock &&
     !hasOverride;
   const hasConnectError = isError && isConnectError(error);
+  const hasAuthError = isError && isAuthError(error);
+  const hasConnectIssue = hasConnectError || hasAuthError;
   const isInitialLoading = canFetch && (isLoading || (isFetching && !resolvedData));
   const isUpdating = canFetch && isFetching && Boolean(resolvedData);
   const noData =
@@ -286,14 +296,14 @@ const WidgetRenderer = React.memo(function WidgetRenderer({
     resolvedData &&
     !hasDataByType &&
     !isInitialLoading &&
-    !hasConnectError &&
+    !hasConnectIssue &&
     !isError;
 
   const status = useMemo(() => {
     if (!needsData) return "LIVE";
     if (!hasSource || !hasMetrics) return "EMPTY";
-    if (noConnection || hasConnectError) return "EMPTY";
-    if (isError && !hasConnectError) return "ERROR";
+    if (noConnection || hasConnectIssue) return "EMPTY";
+    if (isError && !hasConnectIssue) return "ERROR";
     if (isInitialLoading) return "LOADING";
     if (noData) return "EMPTY";
     if (isUpdating) return "LOADING";
@@ -304,7 +314,7 @@ const WidgetRenderer = React.memo(function WidgetRenderer({
     hasSource,
     hasMetrics,
     noConnection,
-    hasConnectError,
+    hasConnectIssue,
     isError,
     isInitialLoading,
     noData,
@@ -321,10 +331,14 @@ const WidgetRenderer = React.memo(function WidgetRenderer({
   }, [onStatusChange, status]);
 
   useEffect(() => {
-    if (status !== "LIVE") return;
-    if (!resolvedData) return;
+    if (!dataUpdatedAt) return;
+    setLastSuccessAt(dataUpdatedAt);
+  }, [dataUpdatedAt]);
+
+  useEffect(() => {
+    if (!hasOverride) return;
     setLastSuccessAt(Date.now());
-  }, [resolvedData, status]);
+  }, [hasOverride, dataOverride]);
 
   useEffect(() => {
     if (!lastSuccessAt) return;
@@ -410,7 +424,7 @@ const WidgetRenderer = React.memo(function WidgetRenderer({
     );
   }
 
-  if (noConnection || hasConnectError) {
+  if (noConnection || hasConnectIssue) {
     const connectionHint = onEdit
       ? "Clique no lapis no canto direito deste widget e selecione uma conta conectada."
       : "Associe uma conta para carregar os dados deste widget.";
@@ -432,16 +446,13 @@ const WidgetRenderer = React.memo(function WidgetRenderer({
     );
   }
 
-  if (isError) {
+  if (isError && !hasConnectIssue) {
     const errorMessage = buildErrorMessage(error);
-    const showConnectAction = Boolean(onConnect && (hasConnectError || isAuthError(error)));
     return (
       <WidgetErrorState
         title="Nao foi possivel carregar este widget."
         description={errorMessage}
         onRetry={refetch}
-        onConnect={onConnect || undefined}
-        showConnect={showConnectAction}
         className={isMini ? "px-3 py-3" : ""}
       />
     );
