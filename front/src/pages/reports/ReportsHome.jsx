@@ -19,6 +19,7 @@ import EmptyState from "@/components/ui/empty-state.jsx";
 import { Button } from "@/components/ui/button.jsx";
 import { Input } from "@/components/ui/input.jsx";
 import { SelectNative } from "@/components/ui/select-native.jsx";
+import { Badge } from "@/components/ui/badge.jsx";
 import { useActiveClient } from "@/hooks/useActiveClient.js";
 import ReportsIntro from "@/components/reports/ReportsIntro.jsx";
 import ConnectDataSourceDialog from "@/components/reports/ConnectDataSourceDialog.jsx";
@@ -162,16 +163,88 @@ export default function ReportsHome() {
     setDialogOpen(true);
   };
 
+  const totalReports = reports.length;
+  const totalBrands = clients.length;
+  const totalGroups = groupsData?.items?.length || 0;
+  const connectedCount = selectedBrandId ? connections.length : null;
+  const connectionBadgeVariant =
+    selectedBrandId && connectedCount
+      ? "success"
+      : selectedBrandId
+        ? "warning"
+        : "outline";
+  const connectionBadgeLabel = selectedBrandId
+    ? connectedCount
+      ? "Conexoes ok"
+      : "Sem conexoes"
+    : "Selecione marca";
+
   return (
     <PageShell>
       <div className="space-y-8">
         <ReportsIntro />
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {[
+            {
+              title: "Relatorios ativos",
+              value: totalReports,
+              helper: totalReports ? "Total criados" : "Crie o primeiro relatorio",
+              accent: "rgba(31,111,235,0.12)",
+            },
+            {
+              title: "Marcas",
+              value: totalBrands,
+              helper: totalBrands ? "No workspace" : "Sem marcas cadastradas",
+              accent: "rgba(15,118,110,0.12)",
+            },
+            {
+              title: "Grupos",
+              value: totalGroups,
+              helper: totalGroups ? "Organizacao por grupos" : "Sem grupos ativos",
+              accent: "rgba(245,158,11,0.12)",
+            },
+            {
+              title: "Conexoes ativas",
+              value: connectedCount ?? "—",
+              helper: selectedBrandId ? "Marca selecionada" : "Selecione uma marca",
+              accent: "rgba(249,115,22,0.12)",
+              badge: (
+                <Badge variant={connectionBadgeVariant} className="text-[10px] uppercase tracking-[0.16em]">
+                  {connectionBadgeLabel}
+                </Badge>
+              ),
+            },
+          ].map((stat) => (
+            <div
+              key={stat.title}
+              className="relative overflow-hidden rounded-[18px] border border-[var(--border)] bg-white px-5 py-4 shadow-[var(--shadow-sm)]"
+            >
+              <div
+                className="pointer-events-none absolute -right-10 -top-10 h-24 w-24 rounded-full"
+                style={{ background: `radial-gradient(circle, ${stat.accent} 0%, rgba(255,255,255,0) 70%)` }}
+              />
+              <div className="relative flex items-start justify-between gap-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
+                  {stat.title}
+                </p>
+                {stat.badge || null}
+              </div>
+              <p className="mt-2 text-2xl font-semibold text-[var(--text)]">{stat.value}</p>
+              <p className="mt-1 text-xs text-[var(--text-muted)]">{stat.helper}</p>
+            </div>
+          ))}
+        </section>
         <section className="rounded-[18px] border border-[var(--border)] bg-white px-6 py-6 shadow-[var(--shadow-sm)]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-semibold text-[var(--text)]">
-                Relatorios
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-semibold text-[var(--text)]">
+                  Relatorios
+                </h2>
+                <Badge variant="outline" className="text-[10px] uppercase tracking-[0.18em]">
+                  {filteredReports.length} itens
+                </Badge>
+              </div>
               <p className="text-sm text-[var(--text-muted)]">
                 Gerencie aqui seus relatorios por marca e grupo.
               </p>
@@ -186,7 +259,7 @@ export default function ReportsHome() {
             </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-3">
+          <div className="mt-5 flex flex-wrap items-center gap-3">
             <div className="relative w-full max-w-md">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
               <Input
@@ -196,14 +269,17 @@ export default function ReportsHome() {
                 className="pl-9"
               />
             </div>
+            <Badge variant="outline" className="text-[10px] uppercase tracking-[0.2em]">
+              Atualizado agora
+            </Badge>
           </div>
 
-          <div className="mt-4 rounded-[16px] border border-[var(--border)] bg-white">
+          <div className="mt-4 overflow-hidden rounded-[16px] border border-[var(--border)] bg-white">
             {reportsLoading ? (
               <div className="h-32 animate-pulse rounded-[16px] bg-[var(--surface-muted)]" />
             ) : filteredReports.length ? (
               <table className="w-full text-sm">
-                <thead className="text-xs uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                <thead className="bg-[var(--surface-muted)] text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">
                   <tr className="border-b border-[var(--border)]">
                     <th className="px-4 py-3 text-left">Nome</th>
                     <th className="px-4 py-3 text-left">Marca/Grupo</th>
@@ -216,15 +292,22 @@ export default function ReportsHome() {
                   {filteredReports.map((report) => (
                     <tr
                       key={report.id}
-                      className="border-b border-[var(--border)] last:border-b-0"
+                      className="border-b border-[var(--border)] transition-colors duration-150 hover:bg-[var(--surface-muted)] last:border-b-0"
                     >
                       <td className="px-4 py-3 font-medium text-[var(--text)]">
                         {report.name}
                       </td>
                       <td className="px-4 py-3 text-[var(--text-muted)]">
-                        {report.scope === "GROUP"
-                          ? groupMap.get(report.groupId) || "Grupo"
-                          : brandMap.get(report.brandId) || "Marca"}
+                        <div className="flex items-center gap-2">
+                          <span>
+                            {report.scope === "GROUP"
+                              ? groupMap.get(report.groupId) || "Grupo"
+                              : brandMap.get(report.brandId) || "Marca"}
+                          </span>
+                          <Badge variant="outline" className="text-[10px] uppercase tracking-[0.16em]">
+                            {report.scope === "GROUP" ? "Grupo" : "Marca"}
+                          </Badge>
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-[var(--text-muted)]">
                         {formatDateRange(report)}
@@ -271,124 +354,167 @@ export default function ReportsHome() {
             )}
           </div>
         </section>
-        <section className="rounded-[18px] border border-[var(--border)] bg-white px-6 py-6 shadow-[var(--shadow-sm)]">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold text-[var(--text)]">
-                Dashboards ao vivo
-              </h2>
-              <p className="text-sm text-[var(--text-muted)]">
-                Ajuste filtros globais e acompanhe os dados em tempo real.
-              </p>
+        <div className="grid gap-6 lg:grid-cols-[1.1fr_1fr]">
+          <section className="relative overflow-hidden rounded-[18px] border border-[var(--border)] bg-white px-6 py-6 shadow-[var(--shadow-sm)]">
+            <div className="pointer-events-none absolute -right-10 top-6 h-24 w-24 rounded-full bg-[radial-gradient(circle,rgba(31,111,235,0.12),rgba(31,111,235,0))]" />
+            <div className="relative flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-semibold text-[var(--text)]">
+                    Dashboards ao vivo
+                  </h2>
+                  <Badge variant="outline" className="text-[10px] uppercase tracking-[0.18em]">
+                    Live
+                  </Badge>
+                </div>
+                <p className="text-sm text-[var(--text-muted)]">
+                  Ajuste filtros globais e acompanhe os dados em tempo real.
+                </p>
+              </div>
+              <Button onClick={() => navigate("/reports/dashboards")}>
+                Ver dashboards
+              </Button>
             </div>
-            <Button onClick={() => navigate("/reports/dashboards")}>
-              Ver dashboards
-            </Button>
-          </div>
-        </section>
-        <section className="rounded-[18px] border border-[var(--border)] bg-white px-6 py-6 shadow-[var(--shadow-sm)]">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold text-[var(--text)]">
-                Conexoes por marca
-              </h2>
-              <p className="text-sm text-[var(--text-muted)]">
-                Vincule contas das fontes para desbloquear widgets.
-              </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {[
+                { title: "Filtros globais", description: "Controle total do periodo" },
+                { title: "Auto-refresh", description: "Atualizacao rapida" },
+              ].map((item) => (
+                <div
+                  key={item.title}
+                  className="rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 shadow-[var(--shadow-sm)]"
+                >
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
+                    {item.title}
+                  </p>
+                  <p className="mt-1 text-sm text-[var(--text)]">{item.description}</p>
+                </div>
+              ))}
             </div>
-            <div className="min-w-[220px]">
-              <SelectNative
-                value={selectedBrandId}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setSelectedBrandId(value);
-                  setActiveClientId(value);
-                }}
-              >
-                <option value="">
-                  {clients.length ? "Selecione a marca" : "Sem marcas"}
-                </option>
-                {clients.map((client) => (
-                  <option key={client.id} value={client.id}>
-                    {client.name}
+          </section>
+
+          <section className="rounded-[18px] border border-[var(--border)] bg-white px-6 py-6 shadow-[var(--shadow-sm)]">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-semibold text-[var(--text)]">
+                    Conexoes por marca
+                  </h2>
+                  <Badge variant={connectionBadgeVariant} className="text-[10px] uppercase tracking-[0.16em]">
+                    {connectionBadgeLabel}
+                  </Badge>
+                </div>
+                <p className="text-sm text-[var(--text-muted)]">
+                  Vincule contas das fontes para desbloquear widgets.
+                </p>
+              </div>
+              <div className="min-w-[220px]">
+                <SelectNative
+                  value={selectedBrandId}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setSelectedBrandId(value);
+                    setActiveClientId(value);
+                  }}
+                >
+                  <option value="">
+                    {clients.length ? "Selecione a marca" : "Sem marcas"}
                   </option>
-                ))}
-              </SelectNative>
+                  {clients.map((client) => (
+                    <option key={client.id} value={client.id}>
+                      {client.name}
+                    </option>
+                  ))}
+                </SelectNative>
+              </div>
             </div>
-          </div>
 
-          {!selectedBrandId ? (
-            <div className="mt-6">
-              <EmptyState
-                icon={Facebook}
-                title="Selecione uma marca"
-                description="Escolha uma marca para visualizar ou associar contas."
-                action={
-                  <Button variant="secondary" onClick={() => navigate("/clients")}>
-                    Ver clientes
-                  </Button>
-                }
-              />
-            </div>
-          ) : (
-            <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {DATA_SOURCES.map((source) => {
-                const Icon = source.icon;
-                const items = connectionsBySource[source.key] || [];
-                return (
-                  <div
-                    key={source.key}
-                    className="rounded-[16px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-sm)]"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="flex h-9 w-9 items-center justify-center rounded-[12px] bg-[var(--surface-muted)]">
-                          <Icon className="h-4 w-4 text-[var(--text-muted)]" />
-                        </span>
-                        <div>
-                          <p className="text-sm font-semibold text-[var(--text)]">
-                            {source.label}
-                          </p>
-                          <p className="text-xs text-[var(--text-muted)]">
-                            {source.description}
-                          </p>
+            {!selectedBrandId ? (
+              <div className="mt-6">
+                <EmptyState
+                  icon={Facebook}
+                  title="Selecione uma marca"
+                  description="Escolha uma marca para visualizar ou associar contas."
+                  action={
+                    <Button variant="secondary" onClick={() => navigate("/clients")}>
+                      Ver clientes
+                    </Button>
+                  }
+                />
+              </div>
+            ) : (
+              <div className="mt-6 grid gap-4 md:grid-cols-2">
+                {DATA_SOURCES.map((source) => {
+                  const Icon = source.icon;
+                  const items = connectionsBySource[source.key] || [];
+                  const statusVariant = items.length ? "success" : "outline";
+                  const statusLabel = items.length
+                    ? `${items.length} conta${items.length > 1 ? "s" : ""}`
+                    : "Sem conta";
+                  return (
+                    <div
+                      key={source.key}
+                      className="rounded-[16px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-sm)]"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="flex h-9 w-9 items-center justify-center rounded-[12px] bg-[var(--surface-muted)]">
+                            <Icon className="h-4 w-4 text-[var(--text-muted)]" />
+                          </span>
+                          <div>
+                            <p className="text-sm font-semibold text-[var(--text)]">
+                              {source.label}
+                            </p>
+                            <p className="text-xs text-[var(--text-muted)]">
+                              {source.description}
+                            </p>
+                          </div>
                         </div>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => openDialog(source.key)}
+                        >
+                          Associar conta
+                        </Button>
                       </div>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => openDialog(source.key)}
-                      >
-                        Associar conta
-                      </Button>
-                    </div>
 
-                    <div className="mt-4 text-sm text-[var(--text-muted)]">
-                      {connectionsLoading ? (
-                        "Carregando conexoes..."
-                      ) : items.length ? (
-                        <div className="space-y-1">
-                          {items.slice(0, 3).map((item) => (
-                            <div key={item.id} className="text-[var(--text)]">
-                              {item.displayName}
-                            </div>
-                          ))}
-                          {items.length > 3 ? (
-                            <div className="text-xs text-[var(--text-muted)]">
-                              +{items.length - 3} outras contas
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : (
-                        "Sem conta associada"
-                      )}
+                      <div className="mt-4 flex items-center justify-between gap-2 text-sm text-[var(--text-muted)]">
+                        <Badge variant={statusVariant} className="text-[10px] uppercase tracking-[0.16em]">
+                          {connectionsLoading ? "Carregando" : statusLabel}
+                        </Badge>
+                        <span className="text-xs text-[var(--text-muted)]">
+                          {connectionsLoading ? "Buscando conexoes..." : "Resumo da fonte"}
+                        </span>
+                      </div>
+
+                      <div className="mt-3 text-sm text-[var(--text-muted)]">
+                        {connectionsLoading ? (
+                          "Carregando conexoes..."
+                        ) : items.length ? (
+                          <div className="space-y-1">
+                            {items.slice(0, 3).map((item) => (
+                              <div key={item.id} className="text-[var(--text)]">
+                                {item.displayName}
+                              </div>
+                            ))}
+                            {items.length > 3 ? (
+                              <div className="text-xs text-[var(--text-muted)]">
+                                +{items.length - 3} outras contas
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : (
+                          "Sem conta associada"
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </div>
 
         <MetricCatalogPanel />
       </div>
