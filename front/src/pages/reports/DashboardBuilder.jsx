@@ -35,6 +35,7 @@ import {
   hasConnectedForSource,
   pickConnectionId,
 } from "@/components/reports/utils/connectionResolver.js";
+import { formatTimeAgo } from "@/utils/timeAgo.js";
 
 const WIDGET_TYPES = [
   { key: "KPI", label: "KPI" },
@@ -863,6 +864,10 @@ export default function DashboardBuilder() {
   const [widgetStatusMap, setWidgetStatusMap] = useState({});
   const [viewMode, setViewMode] = useState("edit");
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [autoRefreshOption, setAutoRefreshOption] = useState("OFF");
+  const [lastDashboardUpdatedAt, setLastDashboardUpdatedAt] = useState(null);
+  const [isInteracting, setIsInteracting] = useState(false);
+  const [tvMode, setTvMode] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(isNew);
   const [lastSelectedSource, setLastSelectedSource] = useState("");
   const [configOpen, setConfigOpen] = useState(false);
@@ -896,6 +901,12 @@ export default function DashboardBuilder() {
       debouncedCompareDateTo,
     ]
   );
+
+  const autoRefreshMs = useMemo(() => {
+    if (autoRefreshOption === "5m") return 5 * 60 * 1000;
+    if (autoRefreshOption === "15m") return 15 * 60 * 1000;
+    return 0;
+  }, [autoRefreshOption]);
 
   useEffect(() => {
     if (connectDialog.open || !connectDialog.brandId) return;
@@ -1031,6 +1042,41 @@ export default function DashboardBuilder() {
   useEffect(() => {
     if (!isNew) setShowTemplatePicker(false);
   }, [isNew]);
+
+  useEffect(() => {
+    if (!autoRefreshMs) return;
+    const interval = setInterval(() => {
+      if (!isInteracting) {
+        handleRefreshAll();
+      }
+    }, autoRefreshMs);
+    return () => clearInterval(interval);
+  }, [autoRefreshMs, handleRefreshAll, isInteracting]);
+
+  useEffect(() => {
+    if (!tvMode) return;
+    if (viewMode !== "preview") setViewMode("preview");
+  }, [tvMode, viewMode]);
+
+  useEffect(() => {
+    if (!tvMode) return;
+    if (typeof document === "undefined") return;
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        setTvMode(false);
+      }
+    };
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    if (document.documentElement?.requestFullscreen) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    }
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      if (document.fullscreenElement && document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      }
+    };
+  }, [tvMode]);
 
   useEffect(() => {
     if (!widgets.length) return;
@@ -1176,6 +1222,7 @@ export default function DashboardBuilder() {
       setIsRefreshing(true);
       queryClient.invalidateQueries({ predicate });
       await queryClient.refetchQueries({ predicate, type: "active" });
+      setLastDashboardUpdatedAt(Date.now());
     } finally {
       setIsRefreshing(false);
     }
@@ -1209,6 +1256,10 @@ export default function DashboardBuilder() {
   const recommendedSourceMeta = useMemo(
     () => getSourceMeta(recommendedSource),
     [recommendedSource]
+  );
+  const lastUpdatedLabel = useMemo(
+    () => (lastDashboardUpdatedAt ? formatTimeAgo(lastDashboardUpdatedAt) : ""),
+    [lastDashboardUpdatedAt]
   );
 
   const handleApplyTemplate = useCallback(
@@ -1280,10 +1331,21 @@ export default function DashboardBuilder() {
       if (prev[widgetId] === nextStatus) return prev;
       return { ...prev, [widgetId]: nextStatus };
     });
+    if (nextStatus === "LIVE") {
+      setLastDashboardUpdatedAt(Date.now());
+    }
   }, []);
 
   const handleLayoutChange = useCallback((nextLayout) => {
     setLayout(nextLayout);
+  }, []);
+
+  const handleInteractionStart = useCallback(() => {
+    setIsInteracting(true);
+  }, []);
+
+  const handleInteractionStop = useCallback(() => {
+    setIsInteracting(false);
   }, []);
 
   const renderCanvasItem = useCallback(
@@ -1310,11 +1372,11 @@ export default function DashboardBuilder() {
       return (
         <WidgetCard
           widget={widget}
-          showActions={viewMode === "edit"}
+          showActions={viewMode === "edit" && !tvMode}
           status={widgetStatusMap[widget.id]}
-          onEdit={viewMode === "edit" ? editHandler : null}
-          onDuplicate={() => handleDuplicateWidget(widget.id)}
-          onRemove={() => handleRemoveWidget(widget.id)}
+          onEdit={viewMode === "edit" && !tvMode ? editHandler : null}
+          onDuplicate={viewMode === "edit" && !tvMode ? () => handleDuplicateWidget(widget.id) : null}
+          onRemove={viewMode === "edit" && !tvMode ? () => handleRemoveWidget(widget.id) : null}
         >
           <WidgetRenderer
             widget={widget}
@@ -1337,6 +1399,7 @@ export default function DashboardBuilder() {
       handleRemoveWidget,
       handleStatusChange,
       viewMode,
+      tvMode,
       widgetStatusMap,
     ]
   );
@@ -1365,32 +1428,59 @@ export default function DashboardBuilder() {
             <Button variant="ghost" onClick={() => navigate("/reports/dashboards")}>
               Voltar
             </Button>
-            <div className="flex items-center gap-1 rounded-full border border-[var(--border)] bg-white p-1">
-              <Button
-                size="sm"
-                variant={viewMode === "edit" ? "secondary" : "ghost"}
-                onClick={() => setViewMode("edit")}
-              >
-                Editar
-              </Button>
-              <Button
-                size="sm"
-                variant={viewMode === "preview" ? "secondary" : "ghost"}
-                onClick={() => setViewMode("preview")}
-              >
-                Preview
-              </Button>
-            </div>
+            {!tvMode ? (
+              <div className="flex items-center gap-1 rounded-full border border-[var(--border)] bg-white p-1">
+                <Button
+                  size="sm"
+                  variant={viewMode === "edit" ? "secondary" : "ghost"}
+                  onClick={() => setViewMode("edit")}
+                >
+                  Editar
+                </Button>
+                <Button
+                  size="sm"
+                  variant={viewMode === "preview" ? "secondary" : "ghost"}
+                  onClick={() => setViewMode("preview")}
+                >
+                  Preview
+                </Button>
+              </div>
+            ) : null}
             <Button
-              variant="secondary"
-              onClick={handleRefreshAll}
-              disabled={isRefreshing || !widgets.length}
+              variant={tvMode ? "secondary" : "ghost"}
+              onClick={() => setTvMode((prev) => !prev)}
             >
-              {isRefreshing ? "Atualizando..." : "Atualizar dados"}
+              {tvMode ? "Sair do modo TV" : "Modo TV"}
             </Button>
-            <Button onClick={() => handleSave()} disabled={saveMutation.isLoading}>
-              {saveMutation.isLoading ? "Salvando..." : "Salvar"}
-            </Button>
+            {!tvMode ? (
+              <>
+                <div className="min-w-[150px]">
+                  <SelectNative
+                    value={autoRefreshOption}
+                    onChange={(event) => setAutoRefreshOption(event.target.value)}
+                  >
+                    <option value="OFF">Auto-refresh: OFF</option>
+                    <option value="5m">Auto-refresh: 5m</option>
+                    <option value="15m">Auto-refresh: 15m</option>
+                  </SelectNative>
+                </div>
+                <Button
+                  variant="secondary"
+                  onClick={handleRefreshAll}
+                  disabled={isRefreshing || !widgets.length}
+                >
+                  {isRefreshing ? "Atualizando..." : "Atualizar dados"}
+                </Button>
+                {lastUpdatedLabel ? (
+                  <span className="text-xs text-[var(--text-muted)]">
+                    {lastUpdatedLabel}
+                  </span>
+                ) : null}
+                <Button onClick={() => handleSave()} disabled={saveMutation.isLoading}>
+                  {saveMutation.isLoading ? "Salvando..." : "Salvar"}
+                </Button>
+              </>
+            ) : null}
             {!isNew && dashboardId ? (
               <Button
                 variant="secondary"
@@ -1444,8 +1534,86 @@ export default function DashboardBuilder() {
           </section>
         ) : null}
 
-        <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
-          <aside className="space-y-4">
+        {tvMode ? (
+          <section className="rounded-[18px] border border-[var(--border)] bg-white px-6 py-5 shadow-[var(--shadow-sm)]">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
+                  Modo TV
+                </p>
+                <p className="text-lg font-semibold text-[var(--text)]">{name || "Dashboard"}</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                {lastUpdatedLabel ? (
+                  <span className="text-xs text-[var(--text-muted)]">{lastUpdatedLabel}</span>
+                ) : null}
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={handleRefreshAll}
+                  disabled={isRefreshing || !widgets.length}
+                >
+                  {isRefreshing ? "Atualizando..." : "Atualizar dados"}
+                </Button>
+              </div>
+            </div>
+            <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <Label>Periodo inicial</Label>
+                <DateField value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
+              </div>
+              <div>
+                <Label>Periodo final</Label>
+                <DateField value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
+              </div>
+              <div>
+                <Label>Comparacao</Label>
+                <SelectNative
+                  value={compareMode}
+                  onChange={(event) => setCompareMode(event.target.value)}
+                >
+                  {COMPARE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </SelectNative>
+              </div>
+              <div>
+                <Label>Auto-refresh</Label>
+                <SelectNative
+                  value={autoRefreshOption}
+                  onChange={(event) => setAutoRefreshOption(event.target.value)}
+                >
+                  <option value="OFF">OFF</option>
+                  <option value="5m">5 minutos</option>
+                  <option value="15m">15 minutos</option>
+                </SelectNative>
+              </div>
+            </div>
+            {compareMode === "CUSTOM" ? (
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <div>
+                  <Label>Comparar de</Label>
+                  <DateField
+                    value={compareDateFrom}
+                    onChange={(event) => setCompareDateFrom(event.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label>Comparar ate</Label>
+                  <DateField
+                    value={compareDateTo}
+                    onChange={(event) => setCompareDateTo(event.target.value)}
+                  />
+                </div>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+
+        <div className={tvMode ? "grid gap-6" : "grid gap-6 lg:grid-cols-[280px_1fr]"}>
+          {!tvMode ? <aside className="space-y-4">
             <div className="rounded-[16px] border border-[var(--border)] bg-white px-4 py-4 shadow-[var(--shadow-sm)]">
               <p className="text-sm font-semibold text-[var(--text)]">Config</p>
               <div className="mt-3 space-y-3">
@@ -1668,7 +1836,7 @@ export default function DashboardBuilder() {
                 ))}
               </div>
             </div>
-          </aside>
+          </aside> : null}
 
           <section className="rounded-[18px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-sm)]">
             <DashboardCanvas
@@ -1679,6 +1847,10 @@ export default function DashboardBuilder() {
               onLayoutChange={handleLayoutChange}
               isEditable={viewMode === "edit"}
               renderItem={renderCanvasItem}
+              onDragStart={handleInteractionStart}
+              onDragStop={handleInteractionStop}
+              onResizeStart={handleInteractionStart}
+              onResizeStop={handleInteractionStop}
             />
           </section>
         </div>

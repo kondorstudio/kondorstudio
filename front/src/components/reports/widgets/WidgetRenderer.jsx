@@ -16,7 +16,11 @@ import {
 } from "recharts";
 import { base44 } from "@/apiClient/base44Client";
 import { createRequestQueue } from "@/utils/requestQueue.js";
-import { WidgetEmpty, WidgetSkeleton } from "./WidgetStates.jsx";
+import { formatNumber } from "@/utils/formatNumber.js";
+import { formatTimeAgo } from "@/utils/timeAgo.js";
+import WidgetEmptyState from "./WidgetEmptyState.jsx";
+import WidgetErrorState from "./WidgetErrorState.jsx";
+import WidgetSkeleton from "./WidgetSkeleton.jsx";
 import { buildWidgetQueryKey } from "./widgetQueryKey.js";
 
 const widgetRequestQueue = createRequestQueue({ concurrency: 5 });
@@ -105,19 +109,41 @@ function buildPieFromTotals(totals, metrics) {
 function formatValue(value, meta) {
   if (value === undefined || value === null || value === "") return "-";
   if (typeof value === "number") {
-    if (meta?.currency) {
-      try {
-        return new Intl.NumberFormat("pt-BR", {
-          style: "currency",
-          currency: meta.currency,
-        }).format(value);
-      } catch (err) {
-        return value.toLocaleString("pt-BR");
-      }
-    }
-    return value.toLocaleString("pt-BR");
+    return formatNumber(value, { currency: meta?.currency });
   }
   return String(value);
+}
+
+function getCompareLabel(compareMode) {
+  if (!compareMode || compareMode === "NONE") return "";
+  if (compareMode === "PREVIOUS_PERIOD") return "Comparando com periodo anterior";
+  if (compareMode === "PREVIOUS_YEAR") return "Comparando com ano anterior";
+  if (compareMode === "CUSTOM") return "Comparacao personalizada";
+  return "Comparacao ativa";
+}
+
+function buildErrorMessage(err) {
+  if (!err) return "Erro inesperado.";
+  const apiDetails = err?.data?.details || null;
+  const violationText =
+    Array.isArray(apiDetails?.violations) && apiDetails.violations.length
+      ? apiDetails.violations
+          .map((item) => [item.field, item.description].filter(Boolean).join(": "))
+          .filter(Boolean)
+          .join(" | ")
+      : "";
+  const descriptionParts = [
+    err?.data?.error || err?.message || "Erro inesperado.",
+    violationText,
+  ].filter(Boolean);
+  return descriptionParts.join(" ");
+}
+
+function isAuthError(err) {
+  const status = err?.status || err?.data?.status || null;
+  if (status === 401 || status === 403) return true;
+  const message = String(err?.data?.error || err?.message || "").toLowerCase();
+  return message.includes("unauthorized") || message.includes("forbidden");
 }
 
 const WidgetRenderer = React.memo(function WidgetRenderer({
@@ -207,6 +233,8 @@ const WidgetRenderer = React.memo(function WidgetRenderer({
   });
 
   const isMini = variant === "mini";
+  const [lastSuccessAt, setLastSuccessAt] = React.useState(null);
+  const [now, setNow] = React.useState(Date.now());
   const resolvedData = hasOverride ? dataOverride : data;
   const totals =
     resolvedData?.totals && typeof resolvedData.totals === "object"
@@ -292,6 +320,41 @@ const WidgetRenderer = React.memo(function WidgetRenderer({
     onStatusChange(status);
   }, [onStatusChange, status]);
 
+  useEffect(() => {
+    if (status !== "LIVE") return;
+    if (!resolvedData) return;
+    setLastSuccessAt(Date.now());
+  }, [resolvedData, status]);
+
+  useEffect(() => {
+    if (!lastSuccessAt) return;
+    const interval = setInterval(() => {
+      setNow(Date.now());
+    }, 60 * 1000);
+    return () => clearInterval(interval);
+  }, [lastSuccessAt]);
+
+  const updatedLabel = lastSuccessAt ? formatTimeAgo(lastSuccessAt || now) : "";
+  const compareLabel = getCompareLabel(filters?.compareMode);
+  const showUpdating = isUpdating && Boolean(resolvedData);
+
+  const renderMetaRow = () => {
+    if (isMini) return null;
+    if (!compareLabel && !updatedLabel && !showUpdating) return null;
+    return (
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-[var(--text-muted)]">
+        {compareLabel ? <span>{compareLabel}</span> : <span />}
+        {showUpdating ? (
+          <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-sky-700">
+            Atualizando...
+          </span>
+        ) : updatedLabel ? (
+          <span>{updatedLabel}</span>
+        ) : null}
+      </div>
+    );
+  };
+
   if (!needsData) {
     if (widgetType === "TEXT") {
       return (
@@ -317,11 +380,12 @@ const WidgetRenderer = React.memo(function WidgetRenderer({
 
   if (!hasSource) {
     return (
-      <WidgetEmpty
+      <WidgetEmptyState
         title="Configure este widget"
         description="Selecione fonte, nivel e metricas."
         actionLabel={onEdit ? "Configurar" : ""}
         onAction={onEdit || undefined}
+        variant="metrics"
         className={isMini ? "px-3 py-3" : ""}
       />
     );
@@ -329,11 +393,12 @@ const WidgetRenderer = React.memo(function WidgetRenderer({
 
   if (!hasMetrics) {
     return (
-      <WidgetEmpty
+      <WidgetEmptyState
         title="Selecione metricas"
         description="Adicione pelo menos uma metrica para exibir dados."
         actionLabel={onEdit ? "Configurar" : ""}
         onAction={onEdit || undefined}
+        variant="metrics"
         className={isMini ? "px-3 py-3" : ""}
       />
     );
@@ -341,10 +406,7 @@ const WidgetRenderer = React.memo(function WidgetRenderer({
 
   if (isGenerating && needsData && !hasOverride) {
     return (
-      <WidgetSkeleton
-        type={widgetType}
-        className={isMini ? "p-3" : ""}
-      />
+      <WidgetSkeleton widgetType={widgetType} variant={variant} />
     );
   }
 
@@ -353,12 +415,12 @@ const WidgetRenderer = React.memo(function WidgetRenderer({
       ? "Clique no lapis no canto direito deste widget e selecione uma conta conectada."
       : "Associe uma conta para carregar os dados deste widget.";
     return (
-      <WidgetEmpty
-        title="Conta nao conectada"
+      <WidgetEmptyState
+        title="Associe uma conta"
         description={connectionHint}
         actionLabel={onConnect ? "Associar conta" : ""}
         onAction={onConnect || undefined}
-        variant="no-connection"
+        variant="connection"
         className={isMini ? "px-3 py-3" : ""}
       />
     );
@@ -366,21 +428,20 @@ const WidgetRenderer = React.memo(function WidgetRenderer({
 
   if (isInitialLoading) {
     return (
-      <WidgetSkeleton
-        type={widgetType}
-        className={isMini ? "p-3" : ""}
-      />
+      <WidgetSkeleton widgetType={widgetType} variant={variant} />
     );
   }
 
   if (isError) {
+    const errorMessage = buildErrorMessage(error);
+    const showConnectAction = Boolean(onConnect && (hasConnectError || isAuthError(error)));
     return (
-      <WidgetEmpty
+      <WidgetErrorState
         title="Nao foi possivel carregar este widget."
-        description="Tente novamente em alguns instantes."
-        actionLabel="Tentar novamente"
-        onAction={refetch}
-        variant="error"
+        description={errorMessage}
+        onRetry={refetch}
+        onConnect={onConnect || undefined}
+        showConnect={showConnectAction}
         className={isMini ? "px-3 py-3" : ""}
       />
     );
@@ -389,7 +450,7 @@ const WidgetRenderer = React.memo(function WidgetRenderer({
   if (noData) {
     if (meta?.mocked) {
       return (
-        <WidgetEmpty
+        <WidgetEmptyState
           title="Fonte ainda nao disponivel"
           description="Os dados desta fonte ainda nao foram implementados."
           variant="no-data"
@@ -398,8 +459,8 @@ const WidgetRenderer = React.memo(function WidgetRenderer({
       );
     }
     return (
-      <WidgetEmpty
-        title="Sem dados para este periodo."
+      <WidgetEmptyState
+        title="Nenhum dado neste periodo"
         description="Tente ajustar o intervalo ou filtros."
         actionLabel={onQuickRange ? "Usar ultimos 30 dias" : ""}
         onAction={onQuickRange || undefined}
@@ -454,80 +515,90 @@ const WidgetRenderer = React.memo(function WidgetRenderer({
             Dados simulados
           </p>
         ) : null}
+        {renderMetaRow()}
       </div>
     );
   }
 
   if (widgetType === "LINE") {
     return (
-      <div className={variant === "mini" ? "h-40" : "h-52"}>
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="x" tick={{ fontSize: 10 }} />
-            <YAxis tick={{ fontSize: 10 }} />
-            <Tooltip />
-            {seriesList.map((serie, index) => (
-              <Line
-                key={serie.name}
-                type="monotone"
-                dataKey={serie.name}
-                stroke={CHART_COLORS[index % CHART_COLORS.length]}
-                strokeWidth={2}
-                dot={false}
-              />
-            ))}
-          </LineChart>
-        </ResponsiveContainer>
+      <div>
+        <div className={variant === "mini" ? "h-40" : "h-52"}>
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="x" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} />
+              <Tooltip />
+              {seriesList.map((serie, index) => (
+                <Line
+                  key={serie.name}
+                  type="monotone"
+                  dataKey={serie.name}
+                  stroke={CHART_COLORS[index % CHART_COLORS.length]}
+                  strokeWidth={2}
+                  dot={false}
+                />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+        {renderMetaRow()}
       </div>
     );
   }
 
   if (widgetType === "BAR") {
     return (
-      <div className={variant === "mini" ? "h-40" : "h-52"}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="x" tick={{ fontSize: 10 }} />
-            <YAxis tick={{ fontSize: 10 }} />
-            <Tooltip />
-            {seriesList.map((serie, index) => (
-              <Bar
-                key={serie.name}
-                dataKey={serie.name}
-                fill={CHART_COLORS[index % CHART_COLORS.length]}
-                radius={[6, 6, 0, 0]}
-              />
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
+      <div>
+        <div className={variant === "mini" ? "h-40" : "h-52"}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="x" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} />
+              <Tooltip />
+              {seriesList.map((serie, index) => (
+                <Bar
+                  key={serie.name}
+                  dataKey={serie.name}
+                  fill={CHART_COLORS[index % CHART_COLORS.length]}
+                  radius={[6, 6, 0, 0]}
+                />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        {renderMetaRow()}
       </div>
     );
   }
 
   if (widgetType === "PIE") {
     return (
-      <div className={variant === "mini" ? "h-40" : "h-52"}>
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={pieData}
-              dataKey="value"
-              nameKey="name"
-              innerRadius={variant === "mini" ? 26 : 36}
-              outerRadius={variant === "mini" ? 60 : 80}
-            >
-              {pieData.map((entry, index) => (
-                <Cell
-                  key={`${entry.name}-${index}`}
-                  fill={CHART_COLORS[index % CHART_COLORS.length]}
-                />
-              ))}
-            </Pie>
-            <Tooltip />
-          </PieChart>
-        </ResponsiveContainer>
+      <div>
+        <div className={variant === "mini" ? "h-40" : "h-52"}>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={pieData}
+                dataKey="value"
+                nameKey="name"
+                innerRadius={variant === "mini" ? 26 : 36}
+                outerRadius={variant === "mini" ? 60 : 80}
+              >
+                {pieData.map((entry, index) => (
+                  <Cell
+                    key={`${entry.name}-${index}`}
+                    fill={CHART_COLORS[index % CHART_COLORS.length]}
+                  />
+                ))}
+              </Pie>
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+        {renderMetaRow()}
       </div>
     );
   }
@@ -535,8 +606,8 @@ const WidgetRenderer = React.memo(function WidgetRenderer({
   if (widgetType === "TABLE") {
     if (!hasTable) {
       return (
-        <WidgetEmpty
-          title="Sem dados para este periodo."
+        <WidgetEmptyState
+          title="Nenhum dado neste periodo"
           description="Tente ajustar o intervalo ou filtros."
           actionLabel={onQuickRange ? "Usar ultimos 30 dias" : ""}
           onAction={onQuickRange || undefined}
@@ -546,38 +617,41 @@ const WidgetRenderer = React.memo(function WidgetRenderer({
       );
     }
     return (
-      <div className="max-h-56 overflow-auto rounded-[12px] border border-[var(--border)]">
-        <table className="w-full text-xs">
-          <thead className="bg-[var(--surface-muted)] text-[var(--text-muted)]">
-            <tr>
-              {table.columns.map((column) => (
-                <th key={column.key} className="px-3 py-2 text-left">
-                  {column.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {table.rows.map((row, index) => (
-              <tr key={index} className="border-t border-[var(--border)]">
+      <div>
+        <div className="max-h-56 overflow-auto rounded-[12px] border border-[var(--border)]">
+          <table className="w-full text-xs">
+            <thead className="bg-[var(--surface-muted)] text-[var(--text-muted)]">
+              <tr>
                 {table.columns.map((column) => (
-                  <td key={column.key} className="px-3 py-2 text-[var(--text)]">
-                    {formatValue(row[column.key], metaWithCurrency)}
-                  </td>
+                  <th key={column.key} className="px-3 py-2 text-left">
+                    {column.label}
+                  </th>
                 ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {table.rows.map((row, index) => (
+                <tr key={index} className="border-t border-[var(--border)]">
+                  {table.columns.map((column) => (
+                    <td key={column.key} className="px-3 py-2 text-[var(--text)]">
+                      {formatValue(row[column.key], metaWithCurrency)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {renderMetaRow()}
       </div>
     );
   }
 
   return (
-    <WidgetEmpty
+    <WidgetErrorState
       title="Widget sem suporte"
       description={`Tipo ${widgetType} ainda nao suportado.`}
-      variant="error"
+      onRetry={null}
       className={isMini ? "px-3 py-3" : ""}
     />
   );
