@@ -60,9 +60,11 @@ router.post('/templates/:id/duplicate', allowEditor, templatesController.duplica
 router.get('/reports', allowViewer, reportsController.list);
 router.post('/reports', allowEditor, reportsController.create);
 router.get('/reports/:id', allowViewer, reportsController.get);
+router.put('/reports/:id', allowEditor, reportsController.update);
 router.get('/reports/:id/snapshots', allowViewer, reportsController.snapshots);
 router.put('/reports/:id/layout', allowEditor, reportsController.updateLayout);
 router.post('/reports/:id/refresh', allowEditor, reportsController.refresh);
+router.delete('/reports/:id', allowEditor, reportsController.remove);
 router.get('/reports/:id/exports', allowViewer, reportExportsController.list);
 router.post('/reports/:id/exports', allowEditor, reportExportsController.create);
 router.get('/report-exports/:exportId', allowViewer, reportExportsController.get);

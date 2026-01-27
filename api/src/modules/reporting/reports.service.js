@@ -298,11 +298,70 @@ async function refreshReport(tenantId, reportId) {
   return getReport(tenantId, existing.id);
 }
 
+async function updateReport(tenantId, reportId, payload = {}) {
+  const existing = await getReport(tenantId, reportId);
+  if (!existing) return null;
+
+  const nextName = payload.name ? String(payload.name) : existing.name;
+  const nextDateFrom = payload.dateFrom || existing.dateFrom;
+  const nextDateTo = payload.dateTo || existing.dateTo;
+  const nextCompareMode = payload.compareMode || existing.compareMode || 'NONE';
+  const compareDateFrom =
+    payload.compareDateFrom || (nextCompareMode === 'CUSTOM' ? existing.compareDateFrom : null);
+  const compareDateTo =
+    payload.compareDateTo || (nextCompareMode === 'CUSTOM' ? existing.compareDateTo : null);
+
+  const resolvedCompare = resolveCompareDates({
+    dateFrom: nextDateFrom,
+    dateTo: nextDateTo,
+    compareMode: nextCompareMode,
+    compareDateFrom,
+    compareDateTo,
+  });
+
+  const shouldReset =
+    Boolean(payload.dateFrom) ||
+    Boolean(payload.dateTo) ||
+    Boolean(payload.compareMode) ||
+    Boolean(payload.compareDateFrom) ||
+    Boolean(payload.compareDateTo);
+
+  const data = {
+    name: nextName,
+    dateFrom: nextDateFrom,
+    dateTo: nextDateTo,
+    compareMode: nextCompareMode,
+    compareDateFrom: resolvedCompare.compareDateFrom,
+    compareDateTo: resolvedCompare.compareDateTo,
+  };
+
+  if (shouldReset) {
+    data.status = 'DRAFT';
+    data.generatedAt = null;
+  }
+
+  await prisma.report.update({
+    where: { id: existing.id },
+    data,
+  });
+
+  return getReport(tenantId, existing.id);
+}
+
+async function removeReport(tenantId, reportId) {
+  const existing = await getReport(tenantId, reportId);
+  if (!existing) return null;
+  await prisma.report.delete({ where: { id: existing.id } });
+  return existing;
+}
+
 module.exports = {
   listReports,
   getReport,
   createReport,
+  updateReport,
   updateReportLayout,
   refreshReport,
+  removeReport,
   toDate,
 };

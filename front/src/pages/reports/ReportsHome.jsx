@@ -10,8 +10,10 @@ import {
   MapPin,
   Megaphone,
   Music,
+  Pencil,
   RefreshCw,
   Search,
+  Trash2,
 } from "lucide-react";
 import { base44 } from "@/apiClient/base44Client";
 import PageShell from "@/components/ui/page-shell.jsx";
@@ -20,6 +22,16 @@ import { Button } from "@/components/ui/button.jsx";
 import { Input } from "@/components/ui/input.jsx";
 import { SelectNative } from "@/components/ui/select-native.jsx";
 import { Badge } from "@/components/ui/badge.jsx";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog.jsx";
+import { Label } from "@/components/ui/label.jsx";
+import { DateField } from "@/components/ui/date-field.jsx";
 import { useActiveClient } from "@/hooks/useActiveClient.js";
 import ReportsIntro from "@/components/reports/ReportsIntro.jsx";
 import ConnectDataSourceDialog from "@/components/reports/ConnectDataSourceDialog.jsx";
@@ -70,6 +82,20 @@ const DATA_SOURCES = [
   },
 ];
 
+const COMPARE_OPTIONS = [
+  { value: "NONE", label: "Sem comparacao" },
+  { value: "PREVIOUS_PERIOD", label: "Periodo anterior" },
+  { value: "PREVIOUS_YEAR", label: "Ano anterior" },
+  { value: "CUSTOM", label: "Personalizado" },
+];
+
+const toDateKey = (value) => {
+  if (!value) return "";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+};
+
 export default function ReportsHome() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -78,6 +104,16 @@ export default function ReportsHome() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [defaultSource, setDefaultSource] = useState("META_ADS");
   const [search, setSearch] = useState("");
+  const [editReport, setEditReport] = useState(null);
+  const [deleteReport, setDeleteReport] = useState(null);
+  const [editValues, setEditValues] = useState({
+    name: "",
+    dateFrom: "",
+    dateTo: "",
+    compareMode: "NONE",
+    compareDateFrom: "",
+    compareDateTo: "",
+  });
 
   useEffect(() => {
     if (!selectedBrandId && activeClientId) {
@@ -148,6 +184,26 @@ export default function ReportsHome() {
     },
   });
 
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, payload }) =>
+      base44.reporting.updateReport(id, payload),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["reporting-reports"] });
+      if (data?.id) {
+        queryClient.invalidateQueries({ queryKey: ["reporting-report", data.id] });
+      }
+      setEditReport(null);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (reportId) => base44.reporting.deleteReport(reportId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["reporting-reports"] });
+      setDeleteReport(null);
+    },
+  });
+
   const formatDateRange = (report) => {
     if (!report?.dateFrom || !report?.dateTo) return "-";
     return `${new Date(report.dateFrom).toLocaleDateString("pt-BR")} - ${new Date(report.dateTo).toLocaleDateString("pt-BR")}`;
@@ -161,6 +217,37 @@ export default function ReportsHome() {
   const openDialog = (sourceKey) => {
     setDefaultSource(sourceKey);
     setDialogOpen(true);
+  };
+
+  useEffect(() => {
+    if (!editReport) return;
+    setEditValues({
+      name: editReport?.name || "",
+      dateFrom: toDateKey(editReport?.dateFrom),
+      dateTo: toDateKey(editReport?.dateTo),
+      compareMode: editReport?.compareMode || "NONE",
+      compareDateFrom: toDateKey(editReport?.compareDateFrom),
+      compareDateTo: toDateKey(editReport?.compareDateTo),
+    });
+  }, [editReport]);
+
+  const handleSaveEdit = () => {
+    if (!editReport) return;
+    const payload = {
+      name: editValues.name?.trim() || undefined,
+      dateFrom: editValues.dateFrom || undefined,
+      dateTo: editValues.dateTo || undefined,
+      compareMode: editValues.compareMode || "NONE",
+      compareDateFrom:
+        editValues.compareMode === "CUSTOM"
+          ? editValues.compareDateFrom || undefined
+          : undefined,
+      compareDateTo:
+        editValues.compareMode === "CUSTOM"
+          ? editValues.compareDateTo || undefined
+          : undefined,
+    };
+    updateMutation.mutate({ id: editReport.id, payload });
   };
 
   const totalReports = reports.length;
@@ -327,10 +414,24 @@ export default function ReportsHome() {
                           <Button
                             size="sm"
                             variant="ghost"
+                            onClick={() => setEditReport(report)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
                             onClick={() => refreshMutation.mutate(report.id)}
                             disabled={refreshMutation.isLoading}
                           >
                             <RefreshCw className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setDeleteReport(report)}
+                          >
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </td>
@@ -525,6 +626,137 @@ export default function ReportsHome() {
         brandId={selectedBrandId}
         defaultSource={defaultSource}
       />
+
+      <Dialog open={Boolean(editReport)} onOpenChange={(open) => !open && setEditReport(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Editar relatorio</DialogTitle>
+            <DialogDescription>
+              Atualize o nome e o periodo do relatorio selecionado.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Nome</Label>
+              <Input
+                value={editValues.name}
+                onChange={(event) =>
+                  setEditValues((prev) => ({ ...prev, name: event.target.value }))
+                }
+                placeholder="Nome do relatorio"
+              />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <Label>Periodo inicial</Label>
+                <DateField
+                  value={editValues.dateFrom}
+                  onChange={(event) =>
+                    setEditValues((prev) => ({ ...prev, dateFrom: event.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <Label>Periodo final</Label>
+                <DateField
+                  value={editValues.dateTo}
+                  onChange={(event) =>
+                    setEditValues((prev) => ({ ...prev, dateTo: event.target.value }))
+                  }
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Comparacao</Label>
+              <SelectNative
+                value={editValues.compareMode}
+                onChange={(event) =>
+                  setEditValues((prev) => ({
+                    ...prev,
+                    compareMode: event.target.value,
+                  }))
+                }
+              >
+                {COMPARE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </SelectNative>
+            </div>
+            {editValues.compareMode === "CUSTOM" ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <Label>Comparacao de</Label>
+                  <DateField
+                    value={editValues.compareDateFrom}
+                    onChange={(event) =>
+                      setEditValues((prev) => ({
+                        ...prev,
+                        compareDateFrom: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Comparacao ate</Label>
+                  <DateField
+                    value={editValues.compareDateTo}
+                    onChange={(event) =>
+                      setEditValues((prev) => ({
+                        ...prev,
+                        compareDateTo: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+            ) : null}
+          </div>
+          <DialogFooter className="mt-6">
+            <Button
+              variant="ghost"
+              onClick={() => setEditReport(null)}
+              disabled={updateMutation.isLoading}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveEdit} disabled={updateMutation.isLoading}>
+              {updateMutation.isLoading ? "Salvando..." : "Salvar alteracoes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(deleteReport)} onOpenChange={(open) => !open && setDeleteReport(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Excluir relatorio</DialogTitle>
+            <DialogDescription>
+              Esta acao remove o relatorio e seus widgets. Essa mudanca nao pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="text-sm text-[var(--text-muted)]">
+            {deleteReport?.name}
+          </div>
+          <DialogFooter className="mt-6">
+            <Button
+              variant="ghost"
+              onClick={() => setDeleteReport(null)}
+              disabled={deleteMutation.isLoading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => deleteMutation.mutate(deleteReport.id)}
+              disabled={deleteMutation.isLoading}
+            >
+              {deleteMutation.isLoading ? "Excluindo..." : "Excluir"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageShell>
   );
 }

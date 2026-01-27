@@ -32,9 +32,19 @@ const updateLayoutSchema = z.object({
   ).min(1),
 });
 
+const updateReportSchema = z.object({
+  name: z.string().trim().min(1).optional(),
+  dateFrom: z.string().trim().optional(),
+  dateTo: z.string().trim().optional(),
+  compareMode: z.enum(COMPARE_MODES).optional(),
+  compareDateFrom: z.string().trim().optional(),
+  compareDateTo: z.string().trim().optional(),
+});
+
 module.exports = {
   REPORT_SCOPES,
   COMPARE_MODES,
   createReportSchema,
   updateLayoutSchema,
+  updateReportSchema,
 };

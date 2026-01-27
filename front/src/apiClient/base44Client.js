@@ -708,6 +708,21 @@ const Reporting = {
     });
   },
 
+  async updateReport(id, payload = {}) {
+    if (!id) throw new Error("reportId obrigatorio");
+    return jsonFetch(`/reporting/reports/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload || {}),
+    });
+  },
+
+  async deleteReport(id) {
+    if (!id) throw new Error("reportId obrigatorio");
+    return jsonFetch(`/reporting/reports/${id}`, {
+      method: "DELETE",
+    });
+  },
+
   async updateReportLayout(id, payload = {}) {
     if (!id) throw new Error("reportId obrigatorio");
     return jsonFetch(`/reporting/reports/${id}/layout`, {

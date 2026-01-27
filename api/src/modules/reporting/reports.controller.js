@@ -1,6 +1,7 @@
 const {
   createReportSchema,
   updateLayoutSchema,
+  updateReportSchema,
   REPORT_SCOPES,
   COMPARE_MODES,
 } = require('./reports.validators');
@@ -97,6 +98,82 @@ function parseLayoutPayload(body = {}) {
   return parsed.data;
 }
 
+function parseUpdatePayload(body = {}) {
+  const payload = {
+    ...body,
+    compareMode: body.compareMode ? String(body.compareMode).toUpperCase() : body.compareMode,
+  };
+  const parsed = updateReportSchema.safeParse(payload);
+  if (!parsed.success) {
+    const message = parsed.error?.errors?.[0]?.message || 'Dados invalidos';
+    const err = new Error(message);
+    err.status = 400;
+    throw err;
+  }
+
+  const data = parsed.data || {};
+  const hasDateRange = Boolean(data.dateFrom || data.dateTo);
+  if (hasDateRange) {
+    if (!data.dateFrom || !data.dateTo) {
+      const err = new Error('Periodo obrigatorio');
+      err.status = 400;
+      throw err;
+    }
+  }
+
+  const compareMode = data.compareMode ? String(data.compareMode).toUpperCase() : null;
+  if (compareMode && !COMPARE_MODES.includes(compareMode)) {
+    const err = new Error('compareMode invalido');
+    err.status = 400;
+    throw err;
+  }
+
+  if ((data.compareDateFrom || data.compareDateTo) && compareMode !== 'CUSTOM') {
+    const err = new Error('compareMode CUSTOM obrigatorio');
+    err.status = 400;
+    throw err;
+  }
+
+  if (compareMode === 'CUSTOM' && (!data.compareDateFrom || !data.compareDateTo)) {
+    const err = new Error('Periodo de comparacao obrigatorio');
+    err.status = 400;
+    throw err;
+  }
+
+  let dateFrom = null;
+  let dateTo = null;
+  if (hasDateRange) {
+    dateFrom = reportsService.toDate(data.dateFrom);
+    dateTo = reportsService.toDate(data.dateTo);
+    if (!dateFrom || !dateTo) {
+      const err = new Error('Periodo invalido');
+      err.status = 400;
+      throw err;
+    }
+  }
+
+  let compareDateFrom = null;
+  let compareDateTo = null;
+  if (compareMode === 'CUSTOM') {
+    compareDateFrom = reportsService.toDate(data.compareDateFrom);
+    compareDateTo = reportsService.toDate(data.compareDateTo);
+    if (!compareDateFrom || !compareDateTo) {
+      const err = new Error('Periodo de comparacao invalido');
+      err.status = 400;
+      throw err;
+    }
+  }
+
+  return {
+    name: data.name,
+    dateFrom,
+    dateTo,
+    compareMode: compareMode || undefined,
+    compareDateFrom: compareDateFrom || undefined,
+    compareDateTo: compareDateTo || undefined,
+  };
+}
+
 module.exports = {
   async list(req, res) {
     try {
@@ -149,6 +226,28 @@ module.exports = {
     } catch (err) {
       const status = err.status || 500;
       return res.status(status).json({ error: err.message || 'Erro ao criar relatorio' });
+    }
+  },
+
+  async update(req, res) {
+    try {
+      const payload = parseUpdatePayload(req.body || {});
+      const report = await reportsService.updateReport(req.tenantId, req.params.id, payload);
+      if (!report) {
+        return res.status(404).json({ error: 'Relatorio nao encontrado' });
+      }
+      logReportingAction({
+        tenantId: req.tenantId,
+        userId: req.user?.id,
+        action: 'update',
+        resource: 'report',
+        resourceId: report.id,
+        ip: req.ip,
+      });
+      return res.json(report);
+    } catch (err) {
+      const status = err.status || 500;
+      return res.status(status).json({ error: err.message || 'Erro ao atualizar relatorio' });
     }
   },
 
@@ -215,6 +314,27 @@ module.exports = {
     } catch (err) {
       const status = err.status || 500;
       return res.status(status).json({ error: err.message || 'Erro ao buscar snapshots' });
+    }
+  },
+
+  async remove(req, res) {
+    try {
+      const report = await reportsService.removeReport(req.tenantId, req.params.id);
+      if (!report) {
+        return res.status(404).json({ error: 'Relatorio nao encontrado' });
+      }
+      logReportingAction({
+        tenantId: req.tenantId,
+        userId: req.user?.id,
+        action: 'delete',
+        resource: 'report',
+        resourceId: report.id,
+        ip: req.ip,
+      });
+      return res.json({ ok: true, id: report.id });
+    } catch (err) {
+      const status = err.status || 500;
+      return res.status(status).json({ error: err.message || 'Erro ao remover relatorio' });
     }
   },
 };
