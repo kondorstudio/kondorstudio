@@ -41,6 +41,7 @@ export default function Ga4IntegrationPage() {
   const status = data?.status || "DISCONNECTED";
   const properties = data?.properties || [];
   const selectedProperty = data?.selectedProperty || null;
+  const needsReconnect = Boolean(data?.lastError);
 
   useEffect(() => {
     if (!properties.length) return;
@@ -196,7 +197,7 @@ export default function Ga4IntegrationPage() {
                     ) : null}
                   </div>
                   <div className="flex items-center gap-2">
-                    {status === "CONNECTED" ? (
+                    {status === "CONNECTED" && !needsReconnect ? (
                       <Button
                         variant="outline"
                         onClick={() => disconnectMutation.mutate()}
@@ -212,7 +213,7 @@ export default function Ga4IntegrationPage() {
                         }}
                         disabled={connectMutation.isPending}
                       >
-                        Conectar GA4
+                        {needsReconnect ? "Reconectar GA4" : "Conectar GA4"}
                       </Button>
                     )}
                   </div>

@@ -155,7 +155,8 @@ export default function ConnectDataSourceDialog({
     return accountData?.items || [];
   }, [accountData, ga4Accounts, isGa4]);
 
-  const isGa4Connected = ga4Status?.status === "CONNECTED";
+  const ga4NeedsReconnect = Boolean(ga4Status?.lastError);
+  const isGa4Connected = ga4Status?.status === "CONNECTED" && !ga4NeedsReconnect;
   const ga4HasProperties = ga4Accounts.length > 0;
 
   useEffect(() => {
@@ -295,7 +296,7 @@ export default function ConnectDataSourceDialog({
                     window.location.href = "/integrations/ga4";
                   }}
                 >
-                  Conectar GA4
+                  {ga4NeedsReconnect ? "Reconectar GA4" : "Conectar GA4"}
                 </Button>
               ) : null}
               {isGa4Connected && !ga4HasProperties ? (

@@ -103,9 +103,10 @@ async function getIntegration(tenantId, userId) {
 async function markIntegrationError(tenantId, userId, message) {
   const existing = await getIntegration(tenantId, userId);
   if (!existing) return null;
+  const nextStatus = existing.status === 'CONNECTED' ? 'CONNECTED' : 'ERROR';
   return prisma.integrationGoogleGa4.update({
     where: { id: existing.id },
-    data: { status: 'ERROR', lastError: message || 'GA4 error' },
+    data: { status: nextStatus, lastError: message || 'GA4 error' },
   });
 }
 
@@ -226,7 +227,7 @@ async function getValidAccessToken({ tenantId, userId }) {
       try {
         return decrypt(integration.accessToken);
       } catch (error) {
-        await resetIntegration(
+        await markIntegrationError(
           tenantId,
           userId,
           'Access token decrypt failed. Reconnect GA4.'
@@ -240,7 +241,7 @@ async function getValidAccessToken({ tenantId, userId }) {
   }
 
   if (!integration.refreshTokenEnc) {
-    await resetIntegration(tenantId, userId, 'Missing refresh token');
+    await markIntegrationError(tenantId, userId, 'Missing refresh token');
     const err = new Error('Refresh token missing. Reconnect GA4.');
     err.status = 400;
     err.code = 'GA4_REAUTH_REQUIRED';
@@ -251,7 +252,7 @@ async function getValidAccessToken({ tenantId, userId }) {
   try {
     refreshToken = decrypt(integration.refreshTokenEnc);
   } catch (error) {
-    await resetIntegration(
+    await markIntegrationError(
       tenantId,
       userId,
       'Refresh token decrypt failed. Reconnect GA4.'
@@ -264,7 +265,7 @@ async function getValidAccessToken({ tenantId, userId }) {
 
   const tokenResponse = await googleClient.refreshAccessToken(refreshToken);
   if (!tokenResponse.access_token) {
-    await resetIntegration(tenantId, userId, 'OAuth refresh failed. Reconnect GA4.');
+    await markIntegrationError(tenantId, userId, 'OAuth refresh failed. Reconnect GA4.');
     const err = new Error('OAuth refresh failed. Reconnect GA4.');
     err.status = 400;
     err.code = 'GA4_REAUTH_REQUIRED';

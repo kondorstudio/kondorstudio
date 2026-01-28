@@ -141,7 +141,7 @@ async function syncProperties({ tenantId, userId }) {
       properties = await fetchProperties(accessToken);
     } catch (error) {
       if (error?.status === 401) {
-        await ga4OAuthService.resetIntegration(
+        await ga4OAuthService.markIntegrationError(
           tenantId,
           userId,
           'Token GA4 expirado ou invalido. Reconecte.'
