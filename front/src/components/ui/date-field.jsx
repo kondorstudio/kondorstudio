@@ -245,7 +245,6 @@ export function TimeField({
           inputClassName
         )}
         disabled={disabled}
-      >
       />
       <datalist id={datalistId}>
         {times.map((time) => (
