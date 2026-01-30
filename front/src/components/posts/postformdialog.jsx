@@ -19,12 +19,15 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Facebook,
+  Instagram,
+  Linkedin,
+  Music,
   Image as ImageIcon,
-  LayoutGrid,
-  Layers,
   Play,
   Repeat,
   Sparkles,
+  Twitter,
   Upload,
 } from "lucide-react";
 import { resolveMediaUrl } from "@/lib/media.js";
@@ -44,11 +47,6 @@ function formatDateTimeInput(value) {
 const DEFAULT_SCHEDULE_TIME = "09:00";
 const DEFAULT_POST_KIND = "feed";
 const DEFAULT_POST_KINDS = [DEFAULT_POST_KIND];
-const POST_KIND_OPTIONS = [
-  { value: "feed", label: "Feed", icon: LayoutGrid },
-  { value: "story", label: "Stories", icon: Layers },
-  { value: "reel", label: "Reels", icon: Play },
-];
 const WEEKDAY_OPTIONS = [
   { value: 1, label: "Seg" },
   { value: 2, label: "Ter" },
@@ -79,6 +77,52 @@ const FLOW_STEPS = [
   { id: "post-step-3", step: "3", title: "Legenda", description: "Texto e hashtags" },
   { id: "post-step-4", step: "4", title: "Midia", description: "Upload e preview" },
   { id: "post-step-5", step: "5", title: "Agenda", description: "Data e recorrencia" },
+];
+
+const NETWORK_DEFINITIONS = [
+  {
+    key: "instagram",
+    label: "Instagram",
+    icon: Instagram,
+    formats: [
+      { value: "feed", label: "Feed" },
+      { value: "story", label: "Stories" },
+      { value: "reel", label: "Reels" },
+    ],
+  },
+  {
+    key: "facebook",
+    label: "Facebook",
+    icon: Facebook,
+    formats: [
+      { value: "feed", label: "Feed" },
+      { value: "story", label: "Stories" },
+      { value: "reel", label: "Reels" },
+    ],
+  },
+  {
+    key: "tiktok",
+    label: "TikTok",
+    icon: Music,
+    formats: [{ value: "reel", label: "Video" }],
+  },
+  {
+    key: "linkedin",
+    label: "LinkedIn",
+    icon: Linkedin,
+    formats: [
+      { value: "feed", label: "Feed" },
+      { value: "reel", label: "Video" },
+    ],
+    disabled: true,
+  },
+  {
+    key: "x",
+    label: "X (Twitter)",
+    icon: Twitter,
+    formats: [{ value: "feed", label: "Post" }],
+    disabled: true,
+  },
 ];
 const STATUS_PREVIEW = {
   DRAFT: { label: "Rascunho", className: "bg-slate-100 text-slate-700" },
@@ -296,6 +340,10 @@ export function PostForm({
   const [scheduleSlots, setScheduleSlots] = useState([{ date: "", time: "" }]);
   const [recurrence, setRecurrence] = useState(normalizeRecurrence(null));
   const [showGeneratedSlots, setShowGeneratedSlots] = useState(false);
+  const [selectedNetworks, setSelectedNetworks] = useState([]);
+  const [selectedAccountsByNetwork, setSelectedAccountsByNetwork] = useState({});
+  const [selectedFormatsByNetwork, setSelectedFormatsByNetwork] = useState({});
+  const [networkError, setNetworkError] = useState("");
   const fileInputRef = useRef(null);
   const isActive = open !== false;
   const scrollToStep = (stepId) => {
@@ -402,6 +450,30 @@ export function PostForm({
     setScheduleSlots(sortScheduleSlots(nextSlots));
     setRecurrence(normalizedRecurrence);
     setShowGeneratedSlots(false);
+    const initialPlatforms = normalizePlatforms(payload.platforms);
+    const initialNetworks = initialPlatforms.filter((platform) =>
+      networkDefinitionsByKey.has(platform)
+    );
+    setSelectedNetworks(initialNetworks);
+    const nextFormatsByNetwork = {};
+    initialNetworks.forEach((network) => {
+      const def = networkDefinitionsByKey.get(network);
+      const allowed = def ? def.formats.map((item) => item.value) : [];
+      const selected = nextPostKinds.filter((kind) => allowed.includes(kind));
+      nextFormatsByNetwork[network] = selected.length ? selected : allowed;
+    });
+    setSelectedFormatsByNetwork(nextFormatsByNetwork);
+    const nextAccounts = {};
+    if (payload.integrationId) {
+      initialNetworks.forEach((network) => {
+        nextAccounts[network] = {
+          integrationId: payload.integrationId,
+          accountId: null,
+        };
+      });
+    }
+    setSelectedAccountsByNetwork(nextAccounts);
+    setNetworkError("");
     setFile(null);
     const initialMedia = payload.media_url
       ? resolveMediaUrl(payload.media_url)
@@ -449,6 +521,61 @@ export function PostForm({
     });
   }, [clientIntegrations]);
 
+  const networkAccounts = React.useMemo(() => {
+    const base = {
+      instagram: [],
+      facebook: [],
+      tiktok: [],
+      linkedin: [],
+      x: [],
+    };
+
+    postingIntegrations.forEach((integration) => {
+      const kind = integration.settings?.kind || "";
+      if (kind === "meta_business") {
+        const settings = integration.settings || {};
+        const configAccounts = Array.isArray(integration.config?.accounts)
+          ? integration.config.accounts
+          : [];
+        const pageId = settings.pageId || settings.page_id || null;
+        const igBusinessId = settings.igBusinessId || settings.ig_business_id || null;
+        const pageMeta = configAccounts.find((acc) => acc?.pageId === pageId) || null;
+        const igMeta =
+          configAccounts.find((acc) => acc?.igBusinessAccountId === igBusinessId) || null;
+
+        if (igBusinessId) {
+          base.instagram.push({
+            integrationId: integration.id,
+            accountId: igBusinessId,
+            label: igMeta?.igUsername ? `@${igMeta.igUsername}` : `Instagram ${igBusinessId.slice(-4)}`,
+            status: integration.status,
+          });
+        }
+
+        if (pageId) {
+          base.facebook.push({
+            integrationId: integration.id,
+            accountId: pageId,
+            label: pageMeta?.pageName || `Pagina ${pageId.slice(-4)}`,
+            status: integration.status,
+          });
+        }
+      }
+
+      if (kind === "tiktok" || integration.provider === "TIKTOK") {
+        const settings = integration.settings || {};
+        base.tiktok.push({
+          integrationId: integration.id,
+          accountId: integration.id,
+          label: settings.username || settings.handle || integration.providerName || "Conta TikTok",
+          status: integration.status,
+        });
+      }
+    });
+
+    return base;
+  }, [postingIntegrations]);
+
   const selectedIntegration = React.useMemo(() => {
     if (!formData.integrationId) return null;
     return postingIntegrations.find((integration) => integration.id === formData.integrationId) || null;
@@ -466,6 +593,13 @@ export function PostForm({
     () => normalizePlatforms(formData.platforms),
     [formData.platforms]
   );
+  const networkDefinitionsByKey = React.useMemo(() => {
+    const map = new Map();
+    NETWORK_DEFINITIONS.forEach((network) => {
+      map.set(network.key, network);
+    });
+    return map;
+  }, []);
   const generatedRecurringSlots = React.useMemo(() => {
     if (!recurrence.enabled) return [];
     return sortScheduleSlots(buildRecurringScheduleSlots(recurrence));
@@ -487,57 +621,6 @@ export function PostForm({
     return integration.provider || null;
   };
 
-  const platformOptions = React.useMemo(() => {
-    if (!selectedIntegration) return [];
-    const kind = selectedIntegration.settings?.kind;
-    if (kind === "meta_business") {
-      const options = [];
-      const settings = selectedIntegration.settings || {};
-      if (settings.igBusinessId || settings.ig_business_id) {
-        options.push({ value: "instagram", label: "Instagram" });
-      }
-      if (settings.pageId || settings.page_id) {
-        options.push({ value: "facebook", label: "Facebook" });
-      }
-      return options.length ? options : [
-        { value: "instagram", label: "Instagram" },
-        { value: "facebook", label: "Facebook" },
-      ];
-    }
-    if (kind === "tiktok") return [{ value: "tiktok", label: "TikTok" }];
-    return [];
-  }, [selectedIntegration]);
-
-  useEffect(() => {
-    const available = platformOptions.map((opt) => opt.value);
-    if (!selectedIntegration) {
-      setFormData((prev) => {
-        if (!prev.platforms || prev.platforms.length === 0) return prev;
-        return { ...prev, platforms: [] };
-      });
-      return;
-    }
-
-    setFormData((prev) => {
-      const current = normalizePlatforms(prev.platforms);
-      const filtered = current.filter((value) => available.includes(value));
-      const next =
-        available.length === 1 && filtered.length === 0
-          ? available
-          : filtered;
-      if (areArraysEqual(current, next)) return prev;
-      return { ...prev, platforms: next };
-    });
-  }, [platformOptions, selectedIntegration]);
-
-  useEffect(() => {
-    if (!formData.clientId) return;
-    if (formData.integrationId) return;
-    if (postingIntegrations.length === 1) {
-      setFormData((prev) => ({ ...prev, integrationId: postingIntegrations[0].id }));
-    }
-  }, [formData.clientId, formData.integrationId, postingIntegrations]);
-
   useEffect(() => {
     if (!formData.integrationId) return;
     if (!integrations.length) return;
@@ -548,6 +631,130 @@ export function PostForm({
       setFormData((prev) => ({ ...prev, integrationId: "" }));
     }
   }, [formData.integrationId, postingIntegrations]);
+
+  useEffect(() => {
+    if (!formData.clientId) {
+      setSelectedNetworks([]);
+      setSelectedAccountsByNetwork({});
+      setSelectedFormatsByNetwork({});
+      setNetworkError("");
+    }
+  }, [formData.clientId]);
+
+  const activeIntegrationId = React.useMemo(() => {
+    const ids = Object.values(selectedAccountsByNetwork || {})
+      .map((item) => item?.integrationId)
+      .filter(Boolean);
+    const unique = Array.from(new Set(ids));
+    return unique.length === 1 ? unique[0] : "";
+  }, [selectedAccountsByNetwork]);
+
+  const hasIntegrationConflict = React.useMemo(() => {
+    const ids = Object.values(selectedAccountsByNetwork || {})
+      .map((item) => item?.integrationId)
+      .filter(Boolean);
+    return new Set(ids).size > 1;
+  }, [selectedAccountsByNetwork]);
+
+  useEffect(() => {
+    setFormData((prev) => {
+      const nextPlatforms = selectedNetworks
+        .filter((network) => selectedAccountsByNetwork[network]?.integrationId)
+        .map((network) => network);
+      if (areArraysEqual(normalizePlatforms(prev.platforms), nextPlatforms)) return prev;
+      return { ...prev, platforms: nextPlatforms };
+    });
+  }, [selectedNetworks, selectedAccountsByNetwork]);
+
+  useEffect(() => {
+    setFormData((prev) => {
+      const selectedFormats = Object.values(selectedFormatsByNetwork || {}).flat();
+      const unique = Array.from(new Set(selectedFormats)).filter(Boolean);
+      if (areArraysEqual(normalizePostKinds(prev.postKinds), unique)) return prev;
+      return { ...prev, postKinds: unique };
+    });
+  }, [selectedFormatsByNetwork]);
+
+  useEffect(() => {
+    if (hasIntegrationConflict) return;
+    setFormData((prev) => {
+      if (prev.integrationId === activeIntegrationId) return prev;
+      return { ...prev, integrationId: activeIntegrationId || "" };
+    });
+  }, [activeIntegrationId, hasIntegrationConflict]);
+
+  const handleToggleNetwork = (networkKey) => {
+    setNetworkError("");
+    if (!formData.clientId) {
+      setNetworkError("Selecione um cliente antes de escolher as redes.");
+      return;
+    }
+    const isSelectedNow = selectedNetworks.includes(networkKey);
+    setSelectedNetworks((prev) => {
+      const isSelected = prev.includes(networkKey);
+      if (!isSelected) {
+        const accounts = networkAccounts[networkKey] || [];
+        const candidateIntegrationId = accounts[0]?.integrationId || "";
+        if (
+          activeIntegrationId &&
+          candidateIntegrationId &&
+          candidateIntegrationId !== activeIntegrationId
+        ) {
+          setNetworkError(
+            "Por enquanto, combine apenas redes da mesma conta conectada."
+          );
+          return prev;
+        }
+      }
+      return isSelected
+        ? prev.filter((item) => item !== networkKey)
+        : [...prev, networkKey];
+    });
+
+    if (!isSelectedNow) {
+      const accounts = networkAccounts[networkKey] || [];
+      if (accounts.length && !selectedAccountsByNetwork[networkKey]?.integrationId) {
+        handleSelectAccount(networkKey, accounts[0]);
+      }
+      const def = networkDefinitionsByKey.get(networkKey);
+      const allowed = def ? def.formats.map((item) => item.value) : [];
+      if (allowed.length && !selectedFormatsByNetwork[networkKey]?.length) {
+        setSelectedFormatsByNetwork((prev) => ({
+          ...prev,
+          [networkKey]: allowed,
+        }));
+      }
+    } else {
+      setSelectedAccountsByNetwork((prev) => {
+        const next = { ...prev };
+        delete next[networkKey];
+        return next;
+      });
+      setSelectedFormatsByNetwork((prev) => {
+        const next = { ...prev };
+        delete next[networkKey];
+        return next;
+      });
+    }
+  };
+
+  const handleSelectAccount = (networkKey, account) => {
+    setNetworkError("");
+    setSelectedAccountsByNetwork((prev) => ({
+      ...prev,
+      [networkKey]: account,
+    }));
+  };
+
+  const handleToggleFormat = (networkKey, formatValue) => {
+    setSelectedFormatsByNetwork((prev) => {
+      const current = Array.isArray(prev[networkKey]) ? prev[networkKey] : [];
+      const next = current.includes(formatValue)
+        ? current.filter((item) => item !== formatValue)
+        : [...current, formatValue];
+      return { ...prev, [networkKey]: next };
+    });
+  };
 
 
   const handleFileChange = (e) => {
@@ -642,26 +849,6 @@ export function PostForm({
     updateScheduleSlot(0, "time", value);
   };
 
-  const togglePlatform = (value) => {
-    setFormData((prev) => {
-      const current = normalizePlatforms(prev.platforms);
-      const next = current.includes(value)
-        ? current.filter((item) => item !== value)
-        : [...current, value];
-      return { ...prev, platforms: next };
-    });
-  };
-
-  const togglePostKind = (value) => {
-    setFormData((prev) => {
-      const current = normalizePostKinds(prev.postKinds);
-      const next = current.includes(value)
-        ? current.filter((item) => item !== value)
-        : [...current, value];
-      return { ...prev, postKinds: next };
-    });
-  };
-
   const buildCaption = () => {
     const base = formData.body || "";
     const tags = parseTags(tagsInput).join(" ");
@@ -680,13 +867,13 @@ export function PostForm({
       alert("Envie um arquivo de mídia antes de salvar.");
       return;
     }
-    if (postingIntegrations.length > 0 && !formData.integrationId) {
-      alert("Selecione a rede social do cliente antes de salvar.");
+    if (selectedNetworks.length === 0) {
+      alert("Selecione ao menos uma rede social para publicar.");
       return;
     }
     const selectedPlatformsValue = normalizePlatforms(formData.platforms);
-    if (platformOptions.length > 0 && selectedPlatformsValue.length === 0) {
-      alert("Selecione ao menos um canal de publicação.");
+    if (selectedNetworks.length > 0 && selectedPlatformsValue.length === 0) {
+      alert("Selecione uma conta conectada para cada rede.");
       return;
     }
 
@@ -912,147 +1099,173 @@ export function PostForm({
                 subtitle="Escolha redes e tipos de post."
               >
                 <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Plataforma</Label>
-                    <SelectNative
-                      value={formData.integrationId}
-                      onChange={handleChange("integrationId")}
-                      disabled={!formData.clientId || postingIntegrations.length === 0}
-                    >
-                      <option value="">
-                        {formData.clientId
-                          ? postingIntegrations.length
-                            ? "Selecione Meta Business ou TikTok"
-                            : "Nenhuma integracao encontrada"
-                          : "Selecione um cliente primeiro"}
-                      </option>
-                      {postingIntegrations.map((integration) => (
-                        <option key={integration.id} value={integration.id}>
-                          {resolveIntegrationLabel(integration)}
-                        </option>
-                      ))}
-                    </SelectNative>
-                    {formData.clientId && postingIntegrations.length === 0 ? (
-                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-amber-600">
-                        <span>Cadastre uma integracao deste cliente antes de publicar.</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (typeof window !== "undefined") {
-                              window.location.href = "/integrations";
-                            }
-                          }}
-                          className="font-semibold underline-offset-2 hover:underline"
-                        >
-                          Ir para Integracoes
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label>Canal</Label>
-                      <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-                        Multi-selecao
-                      </span>
+                  {networkError ? (
+                    <div className="rounded-[12px] border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                      {networkError}
                     </div>
-                    <div className="rounded-[12px] border border-[var(--border)] bg-[var(--surface-muted)] p-3">
-                      {platformOptions.length > 0 ? (
-                        <div className="flex flex-wrap gap-2">
-                          {platformOptions.map((opt) => {
-                            const active = selectedPlatforms.includes(opt.value);
-                            return (
-                              <button
-                                key={opt.value}
-                                type="button"
-                                onClick={() => togglePlatform(opt.value)}
-                                className={`flex items-center gap-2 rounded-[10px] border px-3 py-2 text-xs font-semibold transition ${
-                                  active
-                                    ? "border-[var(--primary)] bg-white text-[var(--primary)] shadow-[var(--shadow-sm)]"
-                                    : "border-[var(--border)] text-[var(--text-muted)] hover:bg-white"
-                                }`}
-                              >
-                                <span
-                                  className="h-2.5 w-2.5 rounded-full"
-                                  style={{
-                                    backgroundColor:
-                                      PLATFORM_COLOR_MAP[opt.value] || "var(--primary)",
-                                  }}
-                                />
-                                <span>{opt.label}</span>
-                                {active ? <Check className="h-3 w-3" /> : null}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <div className="text-xs text-[var(--text-muted)]">
-                          Selecione uma plataforma para liberar os canais.
-                        </div>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-[var(--text-muted)]">
-                      Para Meta Business, voce pode selecionar mais de um canal.
-                    </p>
-                  </div>
-                </div>
+                  ) : null}
 
-                <div className="mt-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label>Tipo de post</Label>
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-                      Multi-selecao
-                    </span>
-                  </div>
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    {POST_KIND_OPTIONS.map((option) => {
-                      const Icon = option.icon;
-                      const active = selectedPostKinds.includes(option.value);
-                      const helperText =
-                        option.value === "story"
-                          ? "Publicacao rapida"
-                          : option.value === "reel"
-                          ? "Video curto"
-                          : "Feed principal";
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {NETWORK_DEFINITIONS.map((network) => {
+                      const accounts = networkAccounts[network.key] || [];
+                      const isSelected = selectedNetworks.includes(network.key);
+                      const hasAccounts = accounts.length > 0;
+                      const hasError = accounts.some(
+                        (acc) =>
+                          String(acc?.status || "").toUpperCase() !== "CONNECTED"
+                      );
+                      const Icon = network.icon;
+                      const selectedAccountId =
+                        selectedAccountsByNetwork[network.key]?.accountId || "";
+                      const selectedFormats = selectedFormatsByNetwork[network.key] || [];
+                      const formatsLocked =
+                        !selectedAccountsByNetwork[network.key]?.integrationId ||
+                        hasError ||
+                        network.disabled;
+
                       return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          onClick={() => togglePostKind(option.value)}
-                          className={`flex items-center justify-between rounded-[12px] border px-3 py-2 text-left text-xs font-semibold transition ${
-                            active
-                              ? "border-[var(--primary)] bg-white shadow-[var(--shadow-sm)]"
-                              : "border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--surface-muted)]"
+                        <div
+                          key={network.key}
+                          className={`rounded-[14px] border bg-white p-4 shadow-[var(--shadow-sm)] transition ${
+                            network.disabled
+                              ? "border-dashed border-[var(--border)] opacity-50"
+                              : isSelected
+                              ? "border-[var(--primary)] bg-[var(--primary-light)]/30"
+                              : "border-[var(--border)] hover:border-slate-300"
                           }`}
                         >
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={`flex h-8 w-8 items-center justify-center rounded-[10px] ${
-                                active
-                                  ? "bg-[var(--primary-light)] text-[var(--primary)]"
-                                  : "bg-white text-[var(--text-muted)] border border-[var(--border)]"
-                              }`}
-                            >
-                              {Icon ? <Icon className="h-4 w-4" /> : null}
-                            </span>
-                            <div>
-                              <p className="text-xs font-semibold text-[var(--text)]">
-                                {option.label}
-                              </p>
-                              <p className="text-[10px] text-[var(--text-muted)]">
-                                {helperText}
-                              </p>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              network.disabled ? null : handleToggleNetwork(network.key)
+                            }
+                            className="flex w-full items-center justify-between gap-3 text-left"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-[var(--surface-muted)] text-[var(--text)]">
+                                {Icon ? <Icon className="h-5 w-5" /> : null}
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold text-[var(--text)]">
+                                  {network.label}
+                                </p>
+                                <p className="text-[11px] text-[var(--text-muted)]">
+                                  {hasAccounts
+                                    ? `${accounts.length} conta${accounts.length > 1 ? "s" : ""} conectada${accounts.length > 1 ? "s" : ""}`
+                                    : "Nenhuma conta conectada"}
+                                </p>
+                              </div>
                             </div>
-                          </div>
-                          {active ? <Check className="h-4 w-4 text-[var(--primary)]" /> : null}
-                        </button>
+                            <div className="flex items-center gap-2">
+                              {hasError ? (
+                                <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-1 text-[10px] font-semibold text-rose-700">
+                                  Reconectar
+                                </span>
+                              ) : null}
+                              {isSelected ? (
+                                <span className="rounded-full bg-[var(--primary)] px-2 py-1 text-[10px] font-semibold text-white">
+                                  Selecionado
+                                </span>
+                              ) : null}
+                            </div>
+                          </button>
+
+                          {isSelected ? (
+                            <div className="mt-4 space-y-3 animate-fade-in-up">
+                              <div className="space-y-2">
+                                <p className="text-xs font-semibold text-[var(--text)]">
+                                  Conta
+                                </p>
+                                {hasAccounts ? (
+                                  <div className="space-y-2">
+                                    {accounts.map((account) => (
+                                      <label
+                                        key={`${network.key}-${account.accountId}`}
+                                        className={`flex items-center gap-2 rounded-[10px] border px-3 py-2 text-xs font-semibold ${
+                                          selectedAccountId === account.accountId
+                                            ? "border-[var(--primary)] bg-white"
+                                            : "border-[var(--border)] text-[var(--text-muted)]"
+                                        }`}
+                                      >
+                                        <input
+                                          type="radio"
+                                          name={`account-${network.key}`}
+                                          checked={selectedAccountId === account.accountId}
+                                          onChange={() =>
+                                            handleSelectAccount(network.key, account)
+                                          }
+                                          className="h-3.5 w-3.5"
+                                        />
+                                        <span>{account.label}</span>
+                                      </label>
+                                    ))}
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (typeof window !== "undefined") {
+                                          window.location.href = "/integrations";
+                                        }
+                                      }}
+                                      className="text-xs font-semibold text-[var(--primary)]"
+                                    >
+                                      + Conectar nova conta
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-xs text-[var(--text-muted)]">
+                                    Nenhuma conta conectada.
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (typeof window !== "undefined") {
+                                          window.location.href = "/integrations";
+                                        }
+                                      }}
+                                      className="ml-2 font-semibold text-[var(--primary)]"
+                                    >
+                                      Conectar conta
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="space-y-2">
+                                <p className="text-xs font-semibold text-[var(--text)]">
+                                  Formatos
+                                </p>
+                                <div className="flex flex-wrap gap-2">
+                                  {network.formats.map((format) => {
+                                    const active = selectedFormats.includes(format.value);
+                                    return (
+                                      <label
+                                        key={`${network.key}-${format.value}`}
+                                        className={`flex items-center gap-2 rounded-[10px] border px-3 py-2 text-xs font-semibold ${
+                                          active
+                                            ? "border-[var(--primary)] bg-white text-[var(--primary)]"
+                                            : "border-[var(--border)] text-[var(--text-muted)]"
+                                        } ${formatsLocked ? "opacity-50" : ""}`}
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          disabled={formatsLocked}
+                                          checked={active}
+                                          onChange={() =>
+                                            handleToggleFormat(network.key, format.value)
+                                          }
+                                          className="h-3.5 w-3.5"
+                                        />
+                                        <span>{format.label}</span>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
                       );
                     })}
                   </div>
-                  <p className="text-[11px] text-[var(--text-muted)]">
-                    Combine tipos para distribuir o mesmo conteudo em varios formatos.
-                  </p>
                 </div>
               </StepCard>
 
