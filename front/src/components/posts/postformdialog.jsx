@@ -1734,6 +1734,9 @@ export function PostForm({
               <p className="text-[10px] text-[var(--text-muted)]">
                 Aprovacao envia para o cliente. Agendar publica automaticamente.
               </p>
+              <p className="text-[10px] text-[var(--text-muted)]">
+                Obs: o agendamento pode levar ate 1 minuto apos o horario para publicar.
+              </p>
             </div>
           </div>
         </div>
