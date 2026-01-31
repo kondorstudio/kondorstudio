@@ -47,8 +47,13 @@ function resolveMediaType(post) {
 
 async function publishWithMeta({ post, integration, platform }) {
   const settings = isPlainObject(integration.settings) ? integration.settings : {};
+  const metaAccounts =
+    isPlainObject(post?.metadata?.platformAccounts) ? post.metadata.platformAccounts : {};
   const baseToken = resolveAccessToken(integration);
-  const pageId = settings.pageId || settings.page_id;
+  const pageId =
+    (platform === 'facebook' && (metaAccounts.facebook || metaAccounts.pageId)) ||
+    settings.pageId ||
+    settings.page_id;
   const accessToken = pageId
     ? await metaSocialService.resolvePageAccessToken(pageId, baseToken)
     : baseToken;
@@ -70,7 +75,11 @@ async function publishWithMeta({ post, integration, platform }) {
     });
   }
 
-  const igBusinessId = settings.igBusinessId || settings.ig_business_id || settings.instagramBusinessId;
+  const igBusinessId =
+    (platform === 'instagram' && (metaAccounts.instagram || metaAccounts.igBusinessId)) ||
+    settings.igBusinessId ||
+    settings.ig_business_id ||
+    settings.instagramBusinessId;
   return metaSocialService.publishInstagramPost({
     igBusinessId,
     accessToken,

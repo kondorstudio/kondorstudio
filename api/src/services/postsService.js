@@ -4,6 +4,7 @@
 const { Prisma } = require('@prisma/client');
 const { prisma } = require('../prisma');
 const approvalsService = require('./approvalsService');
+const { publishPost } = require('./postPublisher');
 const { whatsappQueue } = require('../queues');
 const whatsappCloud = require('./whatsappCloud');
 const APPROVAL_LINK_TTL_DAYS =
@@ -673,6 +674,9 @@ module.exports = {
     const mediaUrl = sanitizeString(data.mediaUrl || data.media_url);
     const platform = sanitizeString(data.platform);
     const metadata = buildMetadataForCreate(data);
+    const integrationId =
+      sanitizeString(data.integrationId || data.integration_id) ||
+      sanitizeString(metadata?.integrationId || metadata?.integration_id);
 
     if (!title) throw new PostValidationError('Título é obrigatório');
     if (!clientId) throw new PostValidationError('Selecione um cliente antes de salvar o post');
@@ -712,8 +716,55 @@ module.exports = {
         console.error('syncApprovalWithPostStatus(create) failed:', syncErr);
       }
 
+      const shouldPublishNow = created.status === 'PUBLISHED' && !created.scheduledDate;
+      if (shouldPublishNow) {
+        if (!integrationId) {
+          throw new PostValidationError('Selecione uma conta conectada antes de publicar.');
+        }
+        try {
+          const result = await publishPost(created);
+          const metadataSafe = isPlainObject(created.metadata) ? { ...created.metadata } : {};
+          metadataSafe.publish = {
+            provider: result.provider,
+            platform: result.platform,
+            externalId: result.externalId || null,
+            publishedAt: new Date().toISOString(),
+          };
+          const updated = await prisma.post.update({
+            where: { id: created.id },
+            data: {
+              status: 'PUBLISHED',
+              publishedDate: new Date(),
+              externalId: result.externalId || created.externalId || null,
+              metadata: metadataSafe,
+            },
+          });
+          return updated;
+        } catch (err) {
+          const metadataSafe = isPlainObject(created.metadata) ? { ...created.metadata } : {};
+          metadataSafe.publishError = {
+            message: err?.message || 'Publish failed',
+            at: new Date().toISOString(),
+          };
+          await prisma.post.update({
+            where: { id: created.id },
+            data: {
+              status: 'FAILED',
+              metadata: metadataSafe,
+            },
+          });
+          throw new PostValidationError(
+            err?.message || 'Erro ao publicar o post',
+            'PUBLISH_FAILED',
+          );
+        }
+      }
+
       return created;
     } catch (err) {
+      if (err instanceof PostValidationError) {
+        throw err;
+      }
       if (err instanceof Prisma.PrismaClientKnownRequestError) {
         if (err.code === 'P2003') {
           throw new PostValidationError('Cliente selecionado não existe mais', 'INVALID_CLIENT');
@@ -840,6 +891,51 @@ module.exports = {
         );
       } catch (syncErr) {
         console.error('syncApprovalWithPostStatus(update) failed:', syncErr);
+      }
+    }
+
+    if (statusChanged && updated.status === 'PUBLISHED' && !updated.scheduledDate) {
+      const integrationId =
+        sanitizeString(data.integrationId || data.integration_id) ||
+        sanitizeString(updated.metadata?.integrationId || updated.metadata?.integration_id);
+      if (!integrationId) {
+        throw new PostValidationError('Selecione uma conta conectada antes de publicar.');
+      }
+      try {
+        const result = await publishPost(updated);
+        const metadataSafe = isPlainObject(updated.metadata) ? { ...updated.metadata } : {};
+        metadataSafe.publish = {
+          provider: result.provider,
+          platform: result.platform,
+          externalId: result.externalId || null,
+          publishedAt: new Date().toISOString(),
+        };
+        return await prisma.post.update({
+          where: { id },
+          data: {
+            status: 'PUBLISHED',
+            publishedDate: new Date(),
+            externalId: result.externalId || updated.externalId || null,
+            metadata: metadataSafe,
+          },
+        });
+      } catch (err) {
+        const metadataSafe = isPlainObject(updated.metadata) ? { ...updated.metadata } : {};
+        metadataSafe.publishError = {
+          message: err?.message || 'Publish failed',
+          at: new Date().toISOString(),
+        };
+        await prisma.post.update({
+          where: { id },
+          data: {
+            status: 'FAILED',
+            metadata: metadataSafe,
+          },
+        });
+        throw new PostValidationError(
+          err?.message || 'Erro ao publicar o post',
+          'PUBLISH_FAILED',
+        );
       }
     }
 

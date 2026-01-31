@@ -932,6 +932,12 @@ export function PostForm({
 
       const primaryPlatform =
         selectedPlatformsValue[0] || resolvePlatformValue(selectedIntegration);
+      const platformAccounts = {};
+      Object.entries(selectedAccountsByNetwork || {}).forEach(([network, account]) => {
+        if (account?.accountId) {
+          platformAccounts[network] = account.accountId;
+        }
+      });
 
       const trimmedTitle = formData.title ? formData.title.trim() : "";
       const fallbackTitle = trimmedTitle
@@ -961,6 +967,9 @@ export function PostForm({
           postKind: primaryPostKind,
           postKinds: normalizedPostKinds,
           platforms: selectedPlatformsValue,
+          ...(Object.keys(platformAccounts).length
+            ? { platformAccounts }
+            : {}),
           ...(recurrencePayload ? { recurrence: recurrencePayload } : {}),
           ...(recurrencePayload && normalizedPostKinds.includes("story")
             ? { storySchedule: recurrencePayload }

@@ -117,6 +117,9 @@ router.put("/:id", async (req, res) => {
     if (!updated) return res.status(404).json({ error: "Post não encontrado" });
     return res.json(updated);
   } catch (err) {
+    if (err instanceof PostValidationError) {
+      return res.status(400).json({ error: err.message, code: err.code });
+    }
     console.error("PUT /posts/:id error:", err);
     return res.status(500).json({ error: "Erro ao atualizar post" });
   }
