@@ -69,6 +69,129 @@ const DIMENSION_FILTER_OPERATORS = [
   { value: "NOT_IN", label: "Exclui" },
 ];
 
+const DIMENSION_FILTER_PRESETS = [
+  {
+    id: "meta_campaign",
+    title: "Meta Ads · Campanha",
+    label: "Campanha",
+    source: "META_ADS",
+    level: "CAMPAIGN",
+    key: "campaign.id",
+    operator: "IN",
+    valuesHint: "IDs de campanha",
+  },
+  {
+    id: "meta_adset",
+    title: "Meta Ads · Adset",
+    label: "Adset",
+    source: "META_ADS",
+    level: "ADSET",
+    key: "adset.id",
+    operator: "IN",
+    valuesHint: "IDs de adset",
+  },
+  {
+    id: "meta_ad",
+    title: "Meta Ads · Anuncio",
+    label: "Anuncio",
+    source: "META_ADS",
+    level: "AD",
+    key: "ad.id",
+    operator: "IN",
+    valuesHint: "IDs de anuncio",
+  },
+  {
+    id: "gads_campaign",
+    title: "Google Ads · Campanha",
+    label: "Campanha",
+    source: "GOOGLE_ADS",
+    level: "CAMPAIGN",
+    key: "campaign.id",
+    operator: "IN",
+    valuesHint: "IDs de campanha",
+  },
+  {
+    id: "gads_adgroup",
+    title: "Google Ads · Grupo",
+    label: "Grupo",
+    source: "GOOGLE_ADS",
+    level: "AD_GROUP",
+    key: "ad_group.id",
+    operator: "IN",
+    valuesHint: "IDs de grupo",
+  },
+  {
+    id: "gads_device",
+    title: "Google Ads · Dispositivo",
+    label: "Dispositivo",
+    source: "GOOGLE_ADS",
+    level: "CAMPAIGN",
+    key: "segments.device",
+    operator: "IN",
+    valuesHint: "MOBILE, DESKTOP",
+  },
+  {
+    id: "ga4_campaign",
+    title: "GA4 · Campanha",
+    label: "Campanha",
+    source: "GA4",
+    level: "PROPERTY",
+    key: "campaignName",
+    operator: "IN",
+    valuesHint: "Nome da campanha",
+  },
+  {
+    id: "ga4_source",
+    title: "GA4 · Source",
+    label: "Source",
+    source: "GA4",
+    level: "PROPERTY",
+    key: "source",
+    operator: "IN",
+    valuesHint: "google, facebook",
+  },
+  {
+    id: "tiktok_campaign",
+    title: "TikTok Ads · Campanha",
+    label: "Campanha",
+    source: "TIKTOK_ADS",
+    level: "CAMPAIGN",
+    key: "campaign_id",
+    operator: "IN",
+    valuesHint: "IDs de campanha",
+  },
+  {
+    id: "tiktok_adgroup",
+    title: "TikTok Ads · Ad group",
+    label: "Ad group",
+    source: "TIKTOK_ADS",
+    level: "AD_GROUP",
+    key: "adgroup_id",
+    operator: "IN",
+    valuesHint: "IDs de ad group",
+  },
+  {
+    id: "linkedin_campaign",
+    title: "LinkedIn Ads · Campanha",
+    label: "Campanha",
+    source: "LINKEDIN_ADS",
+    level: "CAMPAIGN",
+    key: "campaign_id",
+    operator: "IN",
+    valuesHint: "IDs de campanha",
+  },
+  {
+    id: "linkedin_account",
+    title: "LinkedIn Ads · Conta",
+    label: "Conta",
+    source: "LINKEDIN_ADS",
+    level: "ACCOUNT",
+    key: "account_id",
+    operator: "IN",
+    valuesHint: "IDs de conta",
+  },
+];
+
 const LEVEL_LABELS = {
   ACCOUNT: "Conta",
   CUSTOMER: "Conta",
@@ -209,6 +332,20 @@ function createDimensionFilter() {
     key: "",
     operator: "IN",
     values: [],
+  };
+}
+
+function createFilterFromPreset(preset) {
+  if (!preset) return createDimensionFilter();
+  return {
+    id: createFilterId(),
+    label: preset.label || "",
+    source: preset.source || "",
+    level: preset.level || "",
+    key: preset.key || "",
+    operator: preset.operator || "IN",
+    values: [],
+    valuesHint: preset.valuesHint || "",
   };
 }
 
@@ -1077,6 +1214,7 @@ export default function DashboardBuilder() {
   const [compareDateFrom, setCompareDateFrom] = useState("");
   const [compareDateTo, setCompareDateTo] = useState("");
   const [dimensionFilters, setDimensionFilters] = useState([]);
+  const [dimensionPresetId, setDimensionPresetId] = useState("");
   const [layout, setLayout] = useState([]);
   const [widgets, setWidgets] = useState([]);
   const [widgetStatusMap, setWidgetStatusMap] = useState({});
@@ -1275,6 +1413,14 @@ export default function DashboardBuilder() {
       dimensionFilters,
     ]
   );
+
+  const handleAddPreset = useCallback(() => {
+    if (!dimensionPresetId) return;
+    const preset = DIMENSION_FILTER_PRESETS.find((item) => item.id === dimensionPresetId);
+    if (!preset) return;
+    setDimensionFilters((prev) => [...prev, createFilterFromPreset(preset)]);
+    setDimensionPresetId("");
+  }, [dimensionPresetId]);
 
   const activeWidget = useMemo(
     () => widgets.find((widget) => widget.id === activeWidgetId) || null,
@@ -2033,6 +2179,29 @@ export default function DashboardBuilder() {
                     </Button>
                   </div>
 
+                  <div className="mt-3 grid gap-2 md:grid-cols-[1fr_auto]">
+                    <SelectNative
+                      value={dimensionPresetId}
+                      onChange={(event) => setDimensionPresetId(event.target.value)}
+                    >
+                      <option value="">Adicionar preset...</option>
+                      {DIMENSION_FILTER_PRESETS.map((preset) => (
+                        <option key={preset.id} value={preset.id}>
+                          {preset.title}
+                        </option>
+                      ))}
+                    </SelectNative>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      type="button"
+                      onClick={handleAddPreset}
+                      disabled={!dimensionPresetId}
+                    >
+                      Adicionar preset
+                    </Button>
+                  </div>
+
                   {dimensionFilters.length ? (
                     <div className="mt-3 space-y-3">
                       {dimensionFilters.map((filter) => (
@@ -2161,7 +2330,7 @@ export default function DashboardBuilder() {
                                     )
                                   )
                                 }
-                                placeholder="Brand, Produto"
+                                placeholder={filter.valuesHint || "Brand, Produto"}
                               />
                             </div>
                           </div>

@@ -19,7 +19,8 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "deploy:migrate": "npm run prisma:migrate:deploy",
     "prisma:studio": "prisma studio",
-    "seed": "node prisma/seed.js"
+    "seed": "node prisma/seed.js",
+    "validate:filters": "node scripts/validate-report-filters.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.676.0",
