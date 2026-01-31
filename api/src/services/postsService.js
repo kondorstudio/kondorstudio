@@ -1012,9 +1012,16 @@ module.exports = {
           ? await metaSocialService.resolvePageAccessToken(pageId, accessToken)
           : accessToken;
 
-        await metaSocialService.graphDelete(String(externalId), {
-          access_token: effectiveToken,
-        });
+        try {
+          await metaSocialService.graphDelete(String(externalId), {
+            access_token: effectiveToken,
+          });
+        } catch (err) {
+          throw new PostValidationError(
+            err?.message || 'Erro ao remover post na rede social',
+            'NETWORK_DELETE_FAILED',
+          );
+        }
       }
     }
 
