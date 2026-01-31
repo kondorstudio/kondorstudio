@@ -144,8 +144,9 @@ async function graphPost(path, params = {}) {
 async function waitForInstagramContainer(containerId, accessToken) {
   if (!containerId) return;
   const base = getGraphBaseUrl();
-  const maxAttempts = Number(process.env.META_IG_CONTAINER_POLL_ATTEMPTS) || 6;
-  const delayMs = Number(process.env.META_IG_CONTAINER_POLL_DELAY_MS) || 4000;
+  const maxAttempts = Number(process.env.META_IG_CONTAINER_POLL_ATTEMPTS) || 30;
+  const delayMs = Number(process.env.META_IG_CONTAINER_POLL_DELAY_MS) || 5000;
+  let currentDelay = delayMs;
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const url = new URL(`${base}/${containerId}`);
@@ -160,7 +161,9 @@ async function waitForInstagramContainer(containerId, accessToken) {
       throw new Error('Instagram container error');
     }
 
-    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    await new Promise((resolve) => setTimeout(resolve, currentDelay));
+    // backoff leve para vídeos maiores (sem estourar demais)
+    currentDelay = Math.min(currentDelay + 1000, 10000);
   }
 
   throw new Error('Instagram container not ready');
