@@ -259,11 +259,12 @@ function WidgetConfigDialog({ open, onOpenChange, widget, onSave }) {
       if (status === 403) {
         return "Acesso restrito: voce nao tem permissao para ver essas metricas.";
       }
-      return (
-        metricsErrorDetails?.data?.error ||
-        metricsErrorDetails?.message ||
-        "Nao foi possivel carregar o catalogo de metricas."
-      );
+      const rawError = metricsErrorDetails?.data?.error || metricsErrorDetails?.message;
+      if (typeof rawError === "string" && rawError.trim()) return rawError;
+      if (rawError && typeof rawError === "object" && typeof rawError.message === "string") {
+        return rawError.message;
+      }
+      return "Nao foi possivel carregar o catalogo de metricas.";
     }
     if (isGa4Source) {
       if (!ga4PropertyId) {

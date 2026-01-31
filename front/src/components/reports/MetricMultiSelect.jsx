@@ -62,6 +62,19 @@ export default function MetricMultiSelect({
     onChange(value.filter((item) => item !== key));
   };
 
+  const resolvedEmptyText = useMemo(() => {
+    if (typeof emptyText === "string") return emptyText;
+    if (emptyText && typeof emptyText === "object") {
+      if (typeof emptyText.message === "string") return emptyText.message;
+      try {
+        return JSON.stringify(emptyText);
+      } catch (err) {
+        return "Nenhuma metrica encontrada";
+      }
+    }
+    return emptyText ? String(emptyText) : "Nenhuma metrica encontrada";
+  }, [emptyText]);
+
   return (
     <div ref={containerRef} className={cn("relative", className)}>
       <button
@@ -133,7 +146,7 @@ export default function MetricMultiSelect({
               })
             ) : (
               <div className="px-3 py-3 text-sm text-[var(--text-muted)]">
-                {emptyText}
+                {resolvedEmptyText}
               </div>
             )}
           </div>
