@@ -5,6 +5,8 @@ const { Prisma } = require('@prisma/client');
 const { prisma } = require('../prisma');
 const approvalsService = require('./approvalsService');
 const { publishPost } = require('./postPublisher');
+const metaSocialService = require('./metaSocialService');
+const { decrypt } = require('../utils/crypto');
 const { whatsappQueue } = require('../queues');
 const whatsappCloud = require('./whatsappCloud');
 const APPROVAL_LINK_TTL_DAYS =
@@ -37,6 +39,16 @@ function sanitizeString(value) {
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function resolveIntegrationIdFromPost(post) {
+  if (!post) return null;
+  const meta = isPlainObject(post.metadata) ? post.metadata : {};
+  return (
+    sanitizeString(meta.integrationId || meta.integration_id) ||
+    sanitizeString(post.integrationId || post.integration_id) ||
+    null
+  );
 }
 
 function normalizeMetadataInput(data = {}) {
@@ -959,6 +971,52 @@ module.exports = {
   async remove(tenantId, id) {
     const existing = await this.getById(tenantId, id);
     if (!existing) return false;
+
+    const integrationId = resolveIntegrationIdFromPost(existing);
+    const externalId = sanitizeString(existing.externalId);
+    const platform = sanitizeString(existing.platform);
+    if (integrationId && externalId) {
+      const integration = await prisma.integration.findFirst({
+        where: { id: integrationId, tenantId },
+      });
+      if (!integration) {
+        throw new PostValidationError('Integracao nao encontrada para remover o post', 'INTEGRATION_NOT_FOUND');
+      }
+      if (String(integration.provider || '').toUpperCase() === 'META') {
+        let accessToken = null;
+        if (integration.accessTokenEncrypted) {
+          try {
+            accessToken = decrypt(integration.accessTokenEncrypted);
+          } catch (_) {
+            accessToken = null;
+          }
+        }
+        if (!accessToken && integration.accessToken) {
+          accessToken = integration.accessToken;
+        }
+        if (!accessToken) {
+          throw new PostValidationError('Token da Meta nao encontrado para excluir o post', 'META_TOKEN_MISSING');
+        }
+
+        // Para Facebook, usar page token quando houver pageId
+        const settings = isPlainObject(integration.settings) ? integration.settings : {};
+        const metaAccounts = isPlainObject(existing.metadata?.platformAccounts)
+          ? existing.metadata.platformAccounts
+          : {};
+        const pageId =
+          (platform === 'facebook' && (metaAccounts.facebook || metaAccounts.pageId)) ||
+          settings.pageId ||
+          settings.page_id ||
+          null;
+        const effectiveToken = pageId
+          ? await metaSocialService.resolvePageAccessToken(pageId, accessToken)
+          : accessToken;
+
+        await metaSocialService.graphDelete(String(externalId), {
+          access_token: effectiveToken,
+        });
+      }
+    }
 
     await prisma.post.delete({
       where: { id },

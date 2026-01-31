@@ -174,6 +174,9 @@ router.delete("/:id", async (req, res) => {
     if (!removed) return res.status(404).json({ error: "Post não encontrado" });
     return res.json({ ok: true });
   } catch (err) {
+    if (err instanceof PostValidationError) {
+      return res.status(400).json({ error: err.message, code: err.code });
+    }
     console.error("DELETE /posts/:id error:", err);
     return res.status(500).json({ error: "Erro ao remover post" });
   }

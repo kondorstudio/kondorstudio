@@ -141,6 +141,26 @@ async function graphPost(path, params = {}) {
   return json;
 }
 
+async function graphDelete(path, params = {}) {
+  const base = getGraphBaseUrl();
+  const url = new URL(`${base}/${path}`);
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null) return;
+    url.searchParams.set(key, String(value));
+  });
+
+  const res = await fetch(url.toString(), {
+    method: 'DELETE',
+    headers: { Accept: 'application/json' },
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = json?.error?.message || 'Graph API error';
+    const code = json?.error?.code || 'unknown';
+    throw new Error(`Graph DELETE ${path} failed (${code}): ${msg}`);
+  }
+  return json;
+}
 async function waitForInstagramContainer(containerId, accessToken) {
   if (!containerId) return;
   const base = getGraphBaseUrl();
@@ -350,6 +370,7 @@ module.exports = {
   normalizeKind,
   resolvePageAccessToken,
   fetchInstagramBusinessDiscovery,
+  graphDelete,
 
   /**
    * Gera a URL de conexão OAuth do Meta
