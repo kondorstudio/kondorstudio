@@ -45,6 +45,17 @@ function resolveMediaType(post) {
   return String(mediaType).toLowerCase();
 }
 
+function resolvePostKind(post) {
+  const metadata = isPlainObject(post?.metadata) ? post.metadata : {};
+  return (
+    metadata.postKind ||
+    metadata.post_kind ||
+    post.postKind ||
+    post.post_kind ||
+    null
+  );
+}
+
 async function publishWithMeta({ post, integration, platform }) {
   const settings = isPlainObject(integration.settings) ? integration.settings : {};
   const metaAccounts =
@@ -64,6 +75,7 @@ async function publishWithMeta({ post, integration, platform }) {
   const mediaUrl = post.mediaUrl;
   const caption = post.caption || post.content || '';
   const mediaType = resolveMediaType(post);
+  const postKind = resolvePostKind(post);
 
   if (platform === 'facebook') {
     return metaSocialService.publishFacebookPost({
@@ -86,6 +98,7 @@ async function publishWithMeta({ post, integration, platform }) {
     mediaUrl,
     caption,
     mediaType,
+    postKind,
   });
 }
 

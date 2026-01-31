@@ -166,21 +166,57 @@ async function waitForInstagramContainer(containerId, accessToken) {
   throw new Error('Instagram container not ready');
 }
 
-async function publishInstagramPost({ igBusinessId, accessToken, mediaUrl, caption, mediaType }) {
+function resolveInstagramMediaSpec(postKind, mediaType) {
+  const kind = String(postKind || '').toLowerCase();
+  const isVideo = String(mediaType || '').toLowerCase() === 'video';
+
+  if (kind === 'reel') {
+    if (!isVideo) {
+      throw new Error('Reels exige video');
+    }
+    return { media_type: 'REELS', isVideo: true };
+  }
+
+  if (kind === 'story') {
+    return { media_type: 'STORIES', isVideo };
+  }
+
+  if (isVideo) {
+    return { media_type: 'VIDEO', isVideo: true };
+  }
+
+  return { media_type: null, isVideo: false };
+}
+
+async function publishInstagramPost({
+  igBusinessId,
+  accessToken,
+  mediaUrl,
+  caption,
+  mediaType,
+  postKind,
+}) {
   if (!igBusinessId) throw new Error('Missing igBusinessId');
   if (!accessToken) throw new Error('Missing accessToken');
   if (!mediaUrl) throw new Error('Missing mediaUrl');
 
-  const payload = {
-    access_token: accessToken,
-    caption: caption || undefined,
-  };
+  const spec = resolveInstagramMediaSpec(postKind, mediaType);
+  const payload = { access_token: accessToken };
+  const shouldIncludeCaption = spec.media_type !== 'STORIES';
+  if (shouldIncludeCaption && caption) payload.caption = caption;
 
-  if (mediaType === 'video') {
-    payload.media_type = 'VIDEO';
+  if (spec.isVideo) {
     payload.video_url = mediaUrl;
   } else {
     payload.image_url = mediaUrl;
+  }
+
+  if (spec.media_type) {
+    payload.media_type = spec.media_type;
+  }
+
+  if (spec.media_type === 'REELS') {
+    payload.share_to_feed = true;
   }
 
   const createResult = await graphPost(`${igBusinessId}/media`, payload);
