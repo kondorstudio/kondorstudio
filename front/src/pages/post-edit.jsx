@@ -62,6 +62,28 @@ export default function PostEdit() {
         error?.data?.error ||
         error?.message ||
         "Erro ao excluir o post. Tente novamente.";
+      if (error?.data?.code === "NETWORK_DELETE_FAILED") {
+        showToast(
+          "Sem permissao da Meta para excluir na rede. Exclua apenas no Kondor.",
+          "error"
+        );
+        return;
+      }
+      showToast(message, "error");
+    },
+  });
+
+  const deleteLocalMutation = useMutation({
+    mutationFn: () => base44.entities.Post.deleteLocal(postId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["posts"] });
+      navigate("/posts");
+    },
+    onError: (error) => {
+      const message =
+        error?.data?.error ||
+        error?.message ||
+        "Erro ao excluir o post. Tente novamente.";
       showToast(message, "error");
     },
   });
@@ -174,7 +196,8 @@ export default function PostEdit() {
           onSubmit={handleSubmit}
           isSaving={updateMutation.isPending}
           onDelete={() => deleteMutation.mutate()}
-          isDeleting={deleteMutation.isPending}
+          onDeleteLocal={() => deleteLocalMutation.mutate()}
+          isDeleting={deleteMutation.isPending || deleteLocalMutation.isPending}
         />
       </div>
 

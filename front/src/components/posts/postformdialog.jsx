@@ -321,6 +321,7 @@ export function PostForm({
   onSubmit,
   isSaving,
   onDelete,
+  onDeleteLocal,
   isDeleting,
 }) {
   const [formData, setFormData] = useState({
@@ -1713,21 +1714,51 @@ export function PostForm({
 
         <div className="flex flex-wrap items-start justify-between gap-4 border-t border-[var(--border)] bg-white px-6 py-4">
           {post && onDelete ? (
-            <Button
-              type="button"
-              variant="danger"
-              onClick={() => {
-                if (
-                  !isDeleting &&
-                  window.confirm("Tem certeza que deseja excluir este post?")
-                ) {
-                  onDelete();
-                }
-              }}
-              disabled={isSaving || isUploading || isDeleting}
-            >
-              {isDeleting ? "Excluindo..." : "Excluir post"}
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="danger"
+                onClick={() => {
+                  if (
+                    !isDeleting &&
+                    window.confirm("Excluir tambem na rede social?")
+                  ) {
+                    onDelete();
+                  }
+                }}
+                disabled={isSaving || isUploading || isDeleting}
+              >
+                {isDeleting ? "Excluindo..." : "Excluir post (rede)"}
+              </Button>
+              {onDeleteLocal ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    if (
+                      !isDeleting &&
+                      window.confirm("Excluir apenas no Kondor?")
+                    ) {
+                      onDeleteLocal();
+                    }
+                  }}
+                  disabled={isSaving || isUploading || isDeleting}
+                >
+                  Excluir so no Kondor
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  if (typeof window !== "undefined") {
+                    window.location.href = "/integrations";
+                  }
+                }}
+              >
+                Reconectar Meta
+              </Button>
+            </div>
           ) : (
             <div />
           )}

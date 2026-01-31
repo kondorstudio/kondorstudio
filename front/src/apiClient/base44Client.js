@@ -521,6 +521,10 @@ function createEntityClient(basePath) {
     async delete(id) {
       return jsonFetch(`${basePath}/${id}`, { method: "DELETE" });
     },
+
+    async deleteLocal(id) {
+      return jsonFetch(`${basePath}/${id}?localOnly=1`, { method: "DELETE" });
+    },
   };
 
   client.remove = client.delete;

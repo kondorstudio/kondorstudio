@@ -968,9 +968,14 @@ module.exports = {
    * @param {String} tenantId
    * @param {String} id
    */
-  async remove(tenantId, id) {
+  async remove(tenantId, id, options = {}) {
     const existing = await this.getById(tenantId, id);
     if (!existing) return false;
+
+    if (options.localOnly) {
+      await prisma.post.delete({ where: { id } });
+      return true;
+    }
 
     const integrationId = resolveIntegrationIdFromPost(existing);
     const externalId = sanitizeString(existing.externalId);

@@ -170,9 +170,13 @@ router.post("/:id/request-approval", async (req, res) => {
  */
 router.delete("/:id", async (req, res) => {
   try {
-    const removed = await postsService.remove(req.tenantId, req.params.id);
+    const localOnly =
+      String(req.query?.localOnly || req.query?.local_only || "") === "1";
+    const removed = await postsService.remove(req.tenantId, req.params.id, {
+      localOnly,
+    });
     if (!removed) return res.status(404).json({ error: "Post não encontrado" });
-    return res.json({ ok: true });
+    return res.json({ ok: true, localOnly });
   } catch (err) {
     if (err instanceof PostValidationError) {
       return res.status(400).json({ error: err.message, code: err.code });
