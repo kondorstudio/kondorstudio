@@ -29,6 +29,20 @@ function toDateKey(value) {
   return date.toISOString().slice(0, 10);
 }
 
+function formatRangeLabel(dateFrom, dateTo) {
+  if (dateFrom && dateTo) return `${dateFrom} → ${dateTo}`;
+  if (dateFrom) return `Desde ${dateFrom}`;
+  if (dateTo) return `Ate ${dateTo}`;
+  return "Sem periodo";
+}
+
+function formatFilterValues(values) {
+  const list = Array.isArray(values) ? values : [];
+  if (!list.length) return "";
+  if (list.length <= 2) return list.join(", ");
+  return `${list.slice(0, 2).join(", ")} +${list.length - 2}`;
+}
+
 function buildLayout(widgets, layoutSchema) {
   if (Array.isArray(layoutSchema) && layoutSchema.length) return layoutSchema;
   if (!Array.isArray(widgets)) return [];
@@ -77,6 +91,75 @@ function normalizeDimensionFilters(list) {
       };
     })
     .filter(Boolean);
+}
+
+function buildFilterChips({
+  dashboard,
+  dateFrom,
+  dateTo,
+  compareMode,
+  globalBrandId,
+  globalGroupId,
+  groups,
+  clients,
+  dimensionFilters,
+}) {
+  const chips = [];
+
+  if (dashboard?.scope === "BRAND") {
+    const brandName = clients.find((client) => client.id === dashboard.brandId)?.name;
+    chips.push({ label: "Marca", value: brandName || "Definida" });
+  }
+
+  if (dashboard?.scope === "GROUP") {
+    const groupName = groups.find((group) => group.id === dashboard.groupId)?.name;
+    if (groupName) chips.push({ label: "Grupo", value: groupName });
+    if (globalBrandId) {
+      const brandName = clients.find((client) => client.id === globalBrandId)?.name;
+      chips.push({ label: "Marca global", value: brandName || "Selecionada" });
+    }
+  }
+
+  if (dashboard?.scope === "TENANT") {
+    if (globalBrandId) {
+      const brandName = clients.find((client) => client.id === globalBrandId)?.name;
+      chips.push({ label: "Marca global", value: brandName || "Selecionada" });
+    }
+    if (globalGroupId) {
+      const groupName = groups.find((group) => group.id === globalGroupId)?.name;
+      chips.push({ label: "Grupo global", value: groupName || "Selecionado" });
+    }
+  }
+
+  chips.push({
+    label: "Periodo",
+    value: formatRangeLabel(dateFrom, dateTo),
+  });
+
+  if (compareMode && compareMode !== "NONE") {
+    chips.push({
+      label: "Comparacao",
+      value:
+        compareMode === "PREVIOUS_PERIOD"
+          ? "Periodo anterior"
+          : compareMode === "PREVIOUS_YEAR"
+            ? "Ano anterior"
+            : "Personalizado",
+    });
+  }
+
+  dimensionFilters.forEach((filter) => {
+    const value = formatFilterValues(filter.values);
+    if (!filter.key && !filter.label) return;
+    chips.push({
+      label: filter.label || filter.key || "Filtro",
+      value: value || (filter.operator === "NOT_IN" ? "Excluido" : "Incluido"),
+      muted: filter.operator === "NOT_IN",
+      meta: [filter.source, filter.level].filter(Boolean).join(" / "),
+    });
+  });
+
+  return chips;
 }
 
 export default function DashboardViewer() {
@@ -163,6 +246,33 @@ export default function DashboardViewer() {
     if (isClientScoped) return scopedClients;
     return groupBrands;
   }, [isClientScoped, scopedClients, groupBrands]);
+
+  const filterChips = useMemo(
+    () =>
+      buildFilterChips({
+        dashboard,
+        dateFrom,
+        dateTo,
+        compareMode,
+        globalBrandId,
+        globalGroupId,
+        groups,
+        clients: scopedClients.length ? scopedClients : clients,
+        dimensionFilters,
+      }),
+    [
+      dashboard,
+      dateFrom,
+      dateTo,
+      compareMode,
+      globalBrandId,
+      globalGroupId,
+      groups,
+      scopedClients,
+      clients,
+      dimensionFilters,
+    ]
+  );
 
   useEffect(() => {
     if (!dashboard) return;
@@ -485,6 +595,28 @@ export default function DashboardViewer() {
             {needsGlobalBrand ? (
               <div className="mb-4 rounded-[12px] border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-700">
                 Selecione uma marca global para carregar os dados deste dashboard.
+              </div>
+            ) : null}
+            {filterChips.length ? (
+              <div className="mb-4 flex flex-wrap gap-2">
+                {filterChips.map((chip, index) => (
+                  <div
+                    key={`${chip.label}-${index}`}
+                    className="flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-xs text-[var(--text)]"
+                  >
+                    <span className="text-[10px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+                      {chip.label}
+                    </span>
+                    <span className={chip.muted ? "text-[var(--text-muted)]" : ""}>
+                      {chip.value}
+                    </span>
+                    {chip.meta ? (
+                      <span className="text-[10px] text-[var(--text-muted)]">
+                        {chip.meta}
+                      </span>
+                    ) : null}
+                  </div>
+                ))}
               </div>
             ) : null}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

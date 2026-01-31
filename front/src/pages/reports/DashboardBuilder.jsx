@@ -124,6 +124,82 @@ function normalizeDimensionFilters(list) {
     .filter(Boolean);
 }
 
+function formatRangeLabel(dateFrom, dateTo) {
+  if (dateFrom && dateTo) return `${dateFrom} → ${dateTo}`;
+  if (dateFrom) return `Desde ${dateFrom}`;
+  if (dateTo) return `Ate ${dateTo}`;
+  return "Sem periodo";
+}
+
+function formatFilterValues(values) {
+  const list = Array.isArray(values) ? values : [];
+  if (!list.length) return "";
+  if (list.length <= 2) return list.join(", ");
+  return `${list.slice(0, 2).join(", ")} +${list.length - 2}`;
+}
+
+function buildFilterChips({
+  scope,
+  brandId,
+  groupId,
+  globalBrandId,
+  globalGroupId,
+  clients,
+  groups,
+  dateFrom,
+  dateTo,
+  compareMode,
+  dimensionFilters,
+}) {
+  const chips = [];
+  const brandName = clients.find((client) => client.id === brandId)?.name || "";
+  const globalBrandName =
+    clients.find((client) => client.id === globalBrandId)?.name || "";
+  const groupName = groups.find((group) => group.id === groupId)?.name || "";
+  const globalGroupName =
+    groups.find((group) => group.id === globalGroupId)?.name || "";
+
+  if (scope === "BRAND") {
+    chips.push({ label: "Marca", value: brandName || "Definida" });
+  } else if (scope === "GROUP") {
+    if (groupName) chips.push({ label: "Grupo", value: groupName });
+    if (globalBrandId) chips.push({ label: "Marca global", value: globalBrandName || "Selecionada" });
+  } else {
+    if (globalBrandId) chips.push({ label: "Marca global", value: globalBrandName || "Selecionada" });
+    if (globalGroupId) chips.push({ label: "Grupo global", value: globalGroupName || "Selecionado" });
+  }
+
+  chips.push({
+    label: "Periodo",
+    value: formatRangeLabel(dateFrom, dateTo),
+  });
+
+  if (compareMode && compareMode !== "NONE") {
+    chips.push({
+      label: "Comparacao",
+      value:
+        compareMode === "PREVIOUS_PERIOD"
+          ? "Periodo anterior"
+          : compareMode === "PREVIOUS_YEAR"
+            ? "Ano anterior"
+            : "Personalizado",
+    });
+  }
+
+  dimensionFilters.forEach((filter) => {
+    const value = formatFilterValues(filter.values);
+    if (!filter.key && !filter.label) return;
+    chips.push({
+      label: filter.label || filter.key || "Filtro",
+      value: value || (filter.operator === "NOT_IN" ? "Excluido" : "Incluido"),
+      muted: filter.operator === "NOT_IN",
+      meta: [filter.source, filter.level].filter(Boolean).join(" / "),
+    });
+  });
+
+  return chips;
+}
+
 function createDimensionFilter() {
   return {
     id: createFilterId(),
@@ -1168,6 +1244,37 @@ export default function DashboardBuilder() {
     return scopedClients;
   }, [scope, groupBrands, scopedClients]);
 
+  const filterChips = useMemo(
+    () =>
+      buildFilterChips({
+        scope,
+        brandId,
+        groupId,
+        globalBrandId,
+        globalGroupId,
+        clients: scopedClients.length ? scopedClients : clients,
+        groups,
+        dateFrom,
+        dateTo,
+        compareMode,
+        dimensionFilters,
+      }),
+    [
+      scope,
+      brandId,
+      groupId,
+      globalBrandId,
+      globalGroupId,
+      scopedClients,
+      clients,
+      groups,
+      dateFrom,
+      dateTo,
+      compareMode,
+      dimensionFilters,
+    ]
+  );
+
   const activeWidget = useMemo(
     () => widgets.find((widget) => widget.id === activeWidgetId) || null,
     [widgets, activeWidgetId]
@@ -1747,6 +1854,28 @@ export default function DashboardBuilder() {
           <div className="rounded-[12px] border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-700">
             Selecione uma marca global para carregar os dados (ou defina a marca
             em cada widget).
+          </div>
+        ) : null}
+        {!tvMode && filterChips.length ? (
+          <div className="flex flex-wrap gap-2">
+            {filterChips.map((chip, index) => (
+              <div
+                key={`${chip.label}-${index}`}
+                className="flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-xs text-[var(--text)]"
+              >
+                <span className="text-[10px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+                  {chip.label}
+                </span>
+                <span className={chip.muted ? "text-[var(--text-muted)]" : ""}>
+                  {chip.value}
+                </span>
+                {chip.meta ? (
+                  <span className="text-[10px] text-[var(--text-muted)]">
+                    {chip.meta}
+                  </span>
+                ) : null}
+              </div>
+            ))}
           </div>
         ) : null}
 
