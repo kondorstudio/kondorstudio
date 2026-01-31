@@ -44,6 +44,7 @@ async function pollOnce() {
         externalId: result.externalId || null,
         publishedAt: now.toISOString(),
       };
+      metadata.workflowStatus = 'DONE';
 
       await prisma.post.update({
         where: { id: post.id },
@@ -64,6 +65,7 @@ async function pollOnce() {
         message: err?.message || 'Publish failed',
         at: now.toISOString(),
       };
+      metadata.workflowStatus = 'FAILED';
 
       await prisma.post.update({
         where: { id: post.id },

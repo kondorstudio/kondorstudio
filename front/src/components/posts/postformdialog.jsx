@@ -131,6 +131,7 @@ const STATUS_PREVIEW = {
     className: "bg-amber-100 text-amber-700",
   },
   DONE: { label: "Publicado", className: "bg-emerald-100 text-emerald-700" },
+  PUBLISHING: { label: "Publicando", className: "bg-violet-100 text-violet-700" },
   SCHEDULED: { label: "Agendado", className: "bg-indigo-100 text-indigo-700" },
 };
 
@@ -907,7 +908,7 @@ export function PostForm({
       normalizeScheduleSlots(recurringSlots.length ? recurringSlots : scheduleSlots)
     );
     const primarySlot = cleanedSlots.find((slot) => slot.date) || null;
-    const scheduledDate = primarySlot
+    let scheduledDate = primarySlot
       ? buildScheduleDate(primarySlot.date, primarySlot.time)
       : null;
 
@@ -916,7 +917,10 @@ export function PostForm({
       return;
     }
 
-      const chosenStatus = statusOverride || formData.status || "DRAFT";
+    const chosenStatus = statusOverride || formData.status || "DRAFT";
+    if (chosenStatus === "PUBLISHING" && !scheduledDate) {
+      scheduledDate = new Date().toISOString();
+    }
     if (chosenStatus === "SCHEDULED" && !scheduledDate) {
       alert("Informe a data e horário para agendar.");
       return;
@@ -1763,7 +1767,7 @@ export function PostForm({
                   type="button"
                   variant="outline"
                   leftIcon={Play}
-                  onClick={() => submitPost("DONE")}
+                  onClick={() => submitPost("PUBLISHING")}
                   disabled={isSaving || isUploading || isDeleting}
                 >
                   Publicar agora

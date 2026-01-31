@@ -15,9 +15,11 @@ export const WORKFLOW_STATUS_ORDER = [
   "INTERNAL_APPROVAL",
   "CLIENT_APPROVAL",
   "CHANGES",
+  "PUBLISHING",
   "SCHEDULING",
   "SCHEDULED",
   "DONE",
+  "FAILED",
 ];
 
 export const WORKFLOW_STATUS_CONFIG = {
@@ -76,6 +78,17 @@ export const WORKFLOW_STATUS_CONFIG = {
     accentText: "text-rose-700",
     description: "Pendencias ou correcoes solicitadas.",
   },
+  PUBLISHING: {
+    label: "Publicando",
+    icon: Clock,
+    tone: "text-violet-600",
+    badge: "bg-violet-50 text-violet-700",
+    accent: "bg-violet-400",
+    accentSoft: "bg-violet-50",
+    accentBorder: "border-violet-200/70",
+    accentText: "text-violet-700",
+    description: "Post sendo enviado para a rede.",
+  },
   SCHEDULING: {
     label: "Aguardando agendamento",
     icon: Clock,
@@ -109,6 +122,17 @@ export const WORKFLOW_STATUS_CONFIG = {
     accentText: "text-emerald-800",
     description: "Publicados ou finalizados.",
   },
+  FAILED: {
+    label: "Falhou",
+    icon: AlertTriangle,
+    tone: "text-rose-600",
+    badge: "bg-rose-50 text-rose-700",
+    accent: "bg-rose-400",
+    accentSoft: "bg-rose-50",
+    accentBorder: "border-rose-200/70",
+    accentText: "text-rose-700",
+    description: "Falha ao publicar o post.",
+  },
 };
 
 const WORKFLOW_TO_POST_STATUS = {
@@ -117,9 +141,11 @@ const WORKFLOW_TO_POST_STATUS = {
   INTERNAL_APPROVAL: "IDEA",
   CLIENT_APPROVAL: "PENDING_APPROVAL",
   CHANGES: "DRAFT",
+  PUBLISHING: "APPROVED",
   SCHEDULING: "APPROVED",
   SCHEDULED: "SCHEDULED",
   DONE: "PUBLISHED",
+  FAILED: "FAILED",
 };
 
 const LEGACY_STATUS_ALIASES = {

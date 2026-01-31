@@ -231,6 +231,7 @@ const WORKFLOW_STATUS_ALIASES = {
   INTERNAL_APPROVAL: 'IDEA',
   CLIENT_APPROVAL: 'PENDING_APPROVAL',
   CHANGES: 'DRAFT',
+  PUBLISHING: 'APPROVED',
   SCHEDULING: 'APPROVED',
   DONE: 'PUBLISHED',
   PRODUCTION: 'IDEA',
@@ -243,9 +244,11 @@ const WORKFLOW_STATUS_KEYS = new Set([
   'INTERNAL_APPROVAL',
   'CLIENT_APPROVAL',
   'CHANGES',
+  'PUBLISHING',
   'SCHEDULING',
   'SCHEDULED',
   'DONE',
+  'FAILED',
 ]);
 
 const WORKFLOW_STATUS_ORDER = [
@@ -254,9 +257,11 @@ const WORKFLOW_STATUS_ORDER = [
   'INTERNAL_APPROVAL',
   'CLIENT_APPROVAL',
   'CHANGES',
+  'PUBLISHING',
   'SCHEDULING',
   'SCHEDULED',
   'DONE',
+  'FAILED',
 ];
 
 const LEGACY_STATUS_ALIASES = {
@@ -730,6 +735,7 @@ module.exports = {
             externalId: result.externalId || null,
             publishedAt: new Date().toISOString(),
           };
+          metadataSafe.workflowStatus = 'DONE';
           const updated = await prisma.post.update({
             where: { id: created.id },
             data: {
@@ -746,6 +752,7 @@ module.exports = {
             message: err?.message || 'Publish failed',
             at: new Date().toISOString(),
           };
+          metadataSafe.workflowStatus = 'FAILED';
           await prisma.post.update({
             where: { id: created.id },
             data: {
@@ -910,6 +917,7 @@ module.exports = {
           externalId: result.externalId || null,
           publishedAt: new Date().toISOString(),
         };
+        metadataSafe.workflowStatus = 'DONE';
         return await prisma.post.update({
           where: { id },
           data: {
@@ -925,6 +933,7 @@ module.exports = {
           message: err?.message || 'Publish failed',
           at: new Date().toISOString(),
         };
+        metadataSafe.workflowStatus = 'FAILED';
         await prisma.post.update({
           where: { id },
           data: {
