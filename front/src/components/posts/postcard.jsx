@@ -160,6 +160,11 @@ export default function Postcard({
   });
   const clientFeedback = (post.clientFeedback || "").trim();
   const hasClientFeedback = Boolean(clientFeedback);
+  const publishErrorMessage =
+    typeof post?.metadata?.publishError?.message === "string"
+      ? post.metadata.publishError.message
+      : "";
+  const hasPublishError = Boolean(publishErrorMessage);
   const statusConfig = getWorkflowStatusConfig(localStatus);
 
   const updateMenuPosition = React.useCallback(() => {
@@ -306,8 +311,18 @@ export default function Postcard({
           </span>
         </div>
 
-        {(description || hasClientFeedback) && (
+        {(description || hasClientFeedback || hasPublishError) && (
           <div className="space-y-3">
+            {hasPublishError && (
+              <div className="rounded-[12px] border border-rose-200 bg-rose-50 px-3 py-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-700">
+                  Erro ao publicar
+                </p>
+                <p className="text-xs text-rose-800 line-clamp-2 whitespace-pre-line">
+                  {publishErrorMessage}
+                </p>
+              </div>
+            )}
             {description && (
               <p className="text-xs text-[var(--text-muted)] line-clamp-2 whitespace-pre-line">
                 {description}

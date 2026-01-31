@@ -465,10 +465,11 @@ export function PostForm({
     setSelectedFormatsByNetwork(nextFormatsByNetwork);
     const nextAccounts = {};
     if (payload.integrationId) {
+      const platformAccounts = metadata.platformAccounts || {};
       initialNetworks.forEach((network) => {
         nextAccounts[network] = {
           integrationId: payload.integrationId,
-          accountId: null,
+          accountId: platformAccounts[network] || null,
         };
       });
     }
@@ -520,6 +521,14 @@ export function PostForm({
       return false;
     });
   }, [clientIntegrations]);
+
+  const integrationsById = React.useMemo(() => {
+    const map = new Map();
+    postingIntegrations.forEach((integration) => {
+      map.set(integration.id, integration);
+    });
+    return map;
+  }, [postingIntegrations]);
 
   const networkAccounts = React.useMemo(() => {
     const base = {
@@ -692,20 +701,6 @@ export function PostForm({
     const isSelectedNow = selectedNetworks.includes(networkKey);
     setSelectedNetworks((prev) => {
       const isSelected = prev.includes(networkKey);
-      if (!isSelected) {
-        const accounts = networkAccounts[networkKey] || [];
-        const candidateIntegrationId = accounts[0]?.integrationId || "";
-        if (
-          activeIntegrationId &&
-          candidateIntegrationId &&
-          candidateIntegrationId !== activeIntegrationId
-        ) {
-          setNetworkError(
-            "Por enquanto, combine apenas redes da mesma conta conectada."
-          );
-          return prev;
-        }
-      }
       return isSelected
         ? prev.filter((item) => item !== networkKey)
         : [...prev, networkKey];
@@ -876,14 +871,35 @@ export function PostForm({
       alert("Selecione uma conta conectada para cada rede.");
       return;
     }
-
-    const normalizedPostKinds = normalizePostKinds(formData.postKinds);
-    if (normalizedPostKinds.length === 0) {
-      alert("Selecione ao menos um tipo de post.");
+    const missingAccounts = selectedNetworks.filter(
+      (network) => !selectedAccountsByNetwork[network]?.integrationId
+    );
+    if (missingAccounts.length > 0) {
+      alert("Selecione uma conta conectada para cada rede.");
       return;
     }
+    const networkFormatsMap = {};
+    for (const network of selectedNetworks) {
+      const def = networkDefinitionsByKey.get(network);
+      const allowedFormats = def ? def.formats.map((item) => item.value) : [];
+      const selectedFormats = Array.isArray(selectedFormatsByNetwork[network])
+        ? selectedFormatsByNetwork[network].filter((item) =>
+            allowedFormats.includes(item)
+          )
+        : [];
+      networkFormatsMap[network] = selectedFormats.length
+        ? selectedFormats
+        : allowedFormats;
+      if (networkFormatsMap[network].length === 0) {
+        alert("Selecione ao menos um formato para cada rede.");
+        return;
+      }
+    }
 
-    const primaryPostKind = normalizedPostKinds[0] || DEFAULT_POST_KIND;
+    const allSelectedFormats = Array.from(
+      new Set(Object.values(networkFormatsMap).flat())
+    );
+    const primaryPostKind = allSelectedFormats[0] || DEFAULT_POST_KIND;
     const recurringSlots = recurrence.enabled
       ? buildRecurringScheduleSlots(recurrence)
       : [];
@@ -900,7 +916,7 @@ export function PostForm({
       return;
     }
 
-    const chosenStatus = statusOverride || formData.status || "DRAFT";
+      const chosenStatus = statusOverride || formData.status || "DRAFT";
     if (chosenStatus === "SCHEDULED" && !scheduledDate) {
       alert("Informe a data e horário para agendar.");
       return;
@@ -930,8 +946,6 @@ export function PostForm({
           }
         : null;
 
-      const primaryPlatform =
-        selectedPlatformsValue[0] || resolvePlatformValue(selectedIntegration);
       const platformAccounts = {};
       Object.entries(selectedAccountsByNetwork || {}).forEach(([network, account]) => {
         if (account?.accountId) {
@@ -946,39 +960,56 @@ export function PostForm({
         ? caption.split("\n")[0].slice(0, 60)
         : "Post sem titulo";
 
-      const payload = {
-        ...formData,
-        title: fallbackTitle,
-        postKind: primaryPostKind,
-        body: caption,
-        caption,
-        media_url: mediaUrlToSave,
-        status: statusPayload.status,
-        tags: parseTags(tagsInput),
-        integrationId: formData.integrationId || null,
-        integrationKind: selectedIntegration?.settings?.kind || null,
-        integrationProvider: selectedIntegration?.provider || null,
-        platform: primaryPlatform,
-        scheduledDate,
-        publishedDate: chosenStatus === "DONE" ? new Date().toISOString() : null,
-        metadata: {
+      const payloads = selectedNetworks.map((network) => {
+        const account = selectedAccountsByNetwork[network];
+        if (!account?.integrationId) return null;
+        const formats = networkFormatsMap[network] || [];
+        const integration = integrationsById.get(account.integrationId) || null;
+        const perNetworkAccounts =
+          platformAccounts && platformAccounts[network]
+            ? { [network]: platformAccounts[network] }
+            : {};
+        const perNetworkMetadata = {
           ...(statusPayload.metadata || {}),
           scheduleSlots: cleanedSlots,
-          postKind: primaryPostKind,
-          postKinds: normalizedPostKinds,
-          platforms: selectedPlatformsValue,
-          ...(Object.keys(platformAccounts).length
-            ? { platformAccounts }
+          postKind: formats[0] || primaryPostKind,
+          postKinds: formats,
+          platforms: [network],
+          ...(Object.keys(perNetworkAccounts).length
+            ? { platformAccounts: perNetworkAccounts }
             : {}),
           ...(recurrencePayload ? { recurrence: recurrencePayload } : {}),
-          ...(recurrencePayload && normalizedPostKinds.includes("story")
+          ...(recurrencePayload && formats.includes("story")
             ? { storySchedule: recurrencePayload }
             : {}),
-        },
-      };
+        };
+
+        return {
+          ...formData,
+          title: fallbackTitle,
+          postKind: formats[0] || primaryPostKind,
+          body: caption,
+          caption,
+          media_url: mediaUrlToSave,
+          status: statusPayload.status,
+          tags: parseTags(tagsInput),
+          integrationId: account.integrationId,
+          integrationKind: integration?.settings?.kind || null,
+          integrationProvider: integration?.provider || null,
+          platform: network,
+          scheduledDate,
+          publishedDate: chosenStatus === "DONE" ? new Date().toISOString() : null,
+          metadata: perNetworkMetadata,
+        };
+      });
 
       if (onSubmit) {
-        await onSubmit(payload);
+        for (const payload of payloads.filter(Boolean)) {
+          await onSubmit(payload);
+        }
+      }
+      if (onCancel) {
+        onCancel();
       }
     } catch (error) {
       console.error("Erro ao salvar post:", error);

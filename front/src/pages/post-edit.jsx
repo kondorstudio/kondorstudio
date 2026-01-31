@@ -41,7 +41,6 @@ export default function PostEdit() {
     mutationFn: (data) => base44.entities.Post.update(postId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["posts"] });
-      navigate("/posts");
     },
     onError: (error) => {
       const message =

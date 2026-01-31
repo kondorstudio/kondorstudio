@@ -55,7 +55,6 @@ export default function PostCreate() {
     mutationFn: (data) => base44.entities.Post.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["posts"] });
-      navigate("/posts");
     },
     onError: (error) => {
       const message =
@@ -67,9 +66,7 @@ export default function PostCreate() {
   });
 
   const handleSubmit = React.useCallback(
-    (data) => {
-      createMutation.mutate(data);
-    },
+    (data) => createMutation.mutateAsync(data),
     [createMutation]
   );
 
