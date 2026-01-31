@@ -136,6 +136,16 @@ function createDimensionFilter() {
   };
 }
 
+function normalizeDimensionOption(item) {
+  if (!item || typeof item !== "object") return null;
+  const value =
+    item.dimensionKey || item.metricKey || item.apiName || item.id || "";
+  if (!value) return null;
+  const label =
+    item.label || item.uiName || item.metricKey || item.dimensionKey || value;
+  return { value: String(value), label: String(label) };
+}
+
 function toDateKey(value) {
   if (!value) return "";
   const date = value instanceof Date ? value : new Date(value);
@@ -1034,6 +1044,48 @@ export default function DashboardBuilder() {
   const debouncedCompareDateFrom = useDebouncedValue(compareDateFrom);
   const debouncedCompareDateTo = useDebouncedValue(compareDateTo);
   const debouncedDimensionFilters = useDebouncedValue(dimensionFilters);
+
+  const dimensionFilterPairs = useMemo(() => {
+    const map = new Map();
+    dimensionFilters.forEach((filter) => {
+      const source = filter?.source ? String(filter.source) : "";
+      if (!source) return;
+      const level = filter?.level ? String(filter.level) : "";
+      const key = `${source}::${level}`;
+      if (!map.has(key)) map.set(key, { source, level });
+    });
+    return Array.from(map.values());
+  }, [dimensionFilters]);
+
+  const dimensionFilterQueries = useQueries({
+    queries: dimensionFilterPairs.map(({ source, level }) => ({
+      queryKey: ["reporting-dimension-options", source, level || "all"],
+      queryFn: async () => {
+        if (source === "GA4") {
+          const meta = await base44.ga4.metadata();
+          const dims = Array.isArray(meta?.dimensions) ? meta.dimensions : [];
+          return dims.map((dim) => normalizeDimensionOption(dim)).filter(Boolean);
+        }
+        const response = await base44.reporting.listDimensions({
+          source,
+          level: level || undefined,
+        });
+        const items = Array.isArray(response?.items) ? response.items : [];
+        return items.map((item) => normalizeDimensionOption(item)).filter(Boolean);
+      },
+      enabled: Boolean(source),
+      staleTime: 10 * 60 * 1000,
+    })),
+  });
+
+  const dimensionOptionsByKey = useMemo(() => {
+    const map = new Map();
+    dimensionFilterPairs.forEach((pair, index) => {
+      const data = dimensionFilterQueries[index]?.data || [];
+      map.set(`${pair.source}::${pair.level}`, data);
+    });
+    return map;
+  }, [dimensionFilterPairs, dimensionFilterQueries]);
 
   const debouncedFilters = useMemo(
     () => ({
@@ -2073,7 +2125,18 @@ export default function DashboardBuilder() {
                           <div className="mt-3 grid gap-3 md:grid-cols-3">
                             <div>
                               <Label>Dimensao (key)</Label>
+                              <datalist id={`dimension-options-${filter.id}`}>
+                                {(dimensionOptionsByKey.get(
+                                  `${filter.source || ""}::${filter.level || ""}`
+                                ) || []
+                                ).map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </datalist>
                               <Input
+                                list={`dimension-options-${filter.id}`}
                                 value={filter.key}
                                 onChange={(event) =>
                                   setDimensionFilters((prev) =>

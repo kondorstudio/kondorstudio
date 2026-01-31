@@ -616,6 +616,11 @@ export default function DashboardViewer() {
                     <p className="text-xs text-[var(--text-muted)]">
                       {filter.label || filter.key || "Filtro"}
                       {filter.operator === "NOT_IN" ? " (excluir)" : ""}
+                      {filter.source || filter.level ? (
+                        <span className="ml-1 text-[10px] text-[var(--text-muted)]">
+                          • {[filter.source, filter.level].filter(Boolean).join(" / ")}
+                        </span>
+                      ) : null}
                     </p>
                     <Input
                       value={filter.values.join(", ")}
