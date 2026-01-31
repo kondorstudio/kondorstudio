@@ -162,6 +162,8 @@ async function waitForInstagramContainer(containerId, accessToken) {
 
     await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
+
+  throw new Error('Instagram container not ready');
 }
 
 async function publishInstagramPost({ igBusinessId, accessToken, mediaUrl, caption, mediaType }) {
@@ -187,9 +189,7 @@ async function publishInstagramPost({ igBusinessId, accessToken, mediaUrl, capti
     throw new Error('Instagram media container not created');
   }
 
-  if (mediaType === 'video') {
-    await waitForInstagramContainer(creationId, accessToken);
-  }
+  await waitForInstagramContainer(creationId, accessToken);
 
   const publishResult = await graphPost(`${igBusinessId}/media_publish`, {
     access_token: accessToken,
