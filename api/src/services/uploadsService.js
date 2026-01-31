@@ -123,6 +123,22 @@ async function localUpload(body, originalName = "file", contentType, opts = {}) 
   return { key, url: buildLocalUrl(key) };
 }
 
+async function localUploadFromPath(filePath, originalName = "file", opts = {}) {
+  const key = sanitizeKey(opts.key || randomFileName(originalName));
+  const fullPath = await ensureLocalPath(key);
+  try {
+    await fsp.rename(filePath, fullPath);
+  } catch (err) {
+    if (err.code === "EXDEV") {
+      await fsp.copyFile(filePath, fullPath);
+      await fsp.unlink(filePath);
+    } else {
+      throw err;
+    }
+  }
+  return { key, url: buildLocalUrl(key) };
+}
+
 async function localDelete(key) {
   const fullPath = path.join(LOCAL_UPLOADS_DIR, sanitizeKey(key));
   try {
@@ -226,6 +242,57 @@ module.exports = {
     }
 
     return localUpload(body, originalName, contentType, opts);
+  },
+
+  async uploadFilePath(
+    filePath,
+    originalName = "file",
+    contentType = "application/octet-stream",
+    opts = {}
+  ) {
+    if (!filePath) {
+      throw new Error("filePath obrigatório");
+    }
+
+    if (provider === "s3") {
+      const key = opts.key || randomFileName(originalName);
+      const acl = opts.acl || (UPLOADS_PUBLIC ? "public-read" : "private");
+
+      const stream = fs.createReadStream(filePath);
+      const params = {
+        Bucket: S3_BUCKET,
+        Key: key,
+        Body: stream,
+        ContentType: contentType,
+        ACL: acl === "public-read" ? "public-read" : undefined,
+        Metadata: opts.metadata || undefined,
+      };
+
+      await s3Client.send(new PutObjectCommand(params));
+      try {
+        await fsp.unlink(filePath);
+      } catch (_) {}
+
+      if (UPLOADS_PUBLIC && S3_ENDPOINT) {
+        const publicUrl = `${S3_ENDPOINT.replace(/\/$/, "")}/${S3_BUCKET}/${encodeURIComponent(
+          key
+        )}`;
+        return { key, url: publicUrl };
+      }
+
+      const signedUrl = await getSignedUrl(
+        s3Client,
+        new GetObjectCommand({
+          Bucket: S3_BUCKET,
+          Key: key,
+        }),
+        { expiresIn: 60 * 60 * 24 * 30 }
+      );
+
+      return { key, url: signedUrl };
+    }
+
+    return localUploadFromPath(filePath, originalName, opts);
   },
 
   async createPresignedUpload(opts = {}) {

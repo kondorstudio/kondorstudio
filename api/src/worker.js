@@ -82,108 +82,136 @@ async function runPublishPoll() {
 // ------------------------------------------------------
 // Workers das filas
 // ------------------------------------------------------
-const metricsWorker = new Worker(
-  metricsSyncQueue.name,
-  async (job) => {
-    console.log('[metricsSync] processing job', job.id, job.name);
-    await runPollOnce(updateMetricsJob, 'updateMetricsJob');
-    await runPollOnce(refreshMetaTokensJob, 'refreshMetaTokensJob');
-  },
-  { connection },
-);
+const metricsWorker = metricsSyncQueue
+  ? new Worker(
+      metricsSyncQueue.name,
+      async (job) => {
+        console.log('[metricsSync] processing job', job.id, job.name);
+        await runPollOnce(updateMetricsJob, 'updateMetricsJob');
+        await runPollOnce(refreshMetaTokensJob, 'refreshMetaTokensJob');
+      },
+      { connection },
+    )
+  : null;
 
-const reportsWorker = new Worker(
-  reportsQueue.name,
-  async (job) => {
-    console.log('[reports] processing job', job.id, job.name);
-    await runPollOnce(reportGenerationJob, 'reportGenerationJob');
-  },
-  { connection },
-);
+const reportsWorker = reportsQueue
+  ? new Worker(
+      reportsQueue.name,
+      async (job) => {
+        console.log('[reports] processing job', job.id, job.name);
+        await runPollOnce(reportGenerationJob, 'reportGenerationJob');
+      },
+      { connection },
+    )
+  : null;
 
-const reportGenerateWorker = new Worker(
-  reportGenerateQueue.name,
-  async (job) => {
-    console.log('[reporting] processing job', job.id, job.name);
-    await reportingGenerateJob.processJob(job.data || {});
-  },
-  { connection },
-);
+const reportGenerateWorker = reportGenerateQueue
+  ? new Worker(
+      reportGenerateQueue.name,
+      async (job) => {
+        console.log('[reporting] processing job', job.id, job.name);
+        await reportingGenerateJob.processJob(job.data || {});
+      },
+      { connection },
+    )
+  : null;
 
-const dashboardRefreshWorker = new Worker(
-  dashboardRefreshQueue.name,
-  async (job) => {
-    console.log('[dashboardRefresh] processing job', job.id, job.name);
-    await dashboardRefreshJob.processJob(job.data || {});
-  },
-  { connection },
-);
+const dashboardRefreshWorker = dashboardRefreshQueue
+  ? new Worker(
+      dashboardRefreshQueue.name,
+      async (job) => {
+        console.log('[dashboardRefresh] processing job', job.id, job.name);
+        await dashboardRefreshJob.processJob(job.data || {});
+      },
+      { connection },
+    )
+  : null;
 
-const reportScheduleWorker = new Worker(
-  reportScheduleQueue.name,
-  async (job) => {
-    console.log('[reportSchedule] processing job', job.id, job.name);
-    await reportScheduleJob.processJob(job.data || {});
-  },
-  { connection },
-);
+const reportScheduleWorker = reportScheduleQueue
+  ? new Worker(
+      reportScheduleQueue.name,
+      async (job) => {
+        console.log('[reportSchedule] processing job', job.id, job.name);
+        await reportScheduleJob.processJob(job.data || {});
+      },
+      { connection },
+    )
+  : null;
 
-const whatsappWorker = new Worker(
-  whatsappQueue.name,
-  async (job) => {
-    if (job.name === 'whatsapp_send_approval_request') {
-      console.log('[whatsapp] sending approval request job', job.id);
-      await whatsappApprovalJob.processApprovalRequestJob(job.data || {}, {
-        jobId: job.id,
-        attemptsMade: job.attemptsMade,
-      });
-      return;
-    }
-    console.log('[whatsapp] processing job', job.id, job.name);
-    await runPollOnce(automationWhatsAppJob, 'automationWhatsAppJob');
-  },
-  { connection },
-);
+const whatsappWorker = whatsappQueue
+  ? new Worker(
+      whatsappQueue.name,
+      async (job) => {
+        if (job.name === 'whatsapp_send_approval_request') {
+          console.log('[whatsapp] sending approval request job', job.id);
+          await whatsappApprovalJob.processApprovalRequestJob(job.data || {}, {
+            jobId: job.id,
+            attemptsMade: job.attemptsMade,
+          });
+          return;
+        }
+        console.log('[whatsapp] processing job', job.id, job.name);
+        await runPollOnce(automationWhatsAppJob, 'automationWhatsAppJob');
+      },
+      { connection },
+    )
+  : null;
 
-const publishingWorker = new Worker(
-  publishingQueue.name,
-  async (job) => {
-    console.log('[publish] processing job', job.id, job.name);
-    await runPublishPoll();
-  },
-  { connection },
-);
+const publishingWorker = publishingQueue
+  ? new Worker(
+      publishingQueue.name,
+      async (job) => {
+        console.log('[publish] processing job', job.id, job.name);
+        await runPublishPoll();
+      },
+      { connection },
+    )
+  : null;
 
 // ------------------------------------------------------
 // Logs de sucesso
 // ------------------------------------------------------
-metricsWorker.on('completed', (job) => {
-  console.log('[metricsSync] job completed', job.id);
-});
+if (metricsWorker) {
+  metricsWorker.on('completed', (job) => {
+    console.log('[metricsSync] job completed', job.id);
+  });
+}
 
-reportsWorker.on('completed', (job) => {
-  console.log('[reports] job completed', job.id);
-});
+if (reportsWorker) {
+  reportsWorker.on('completed', (job) => {
+    console.log('[reports] job completed', job.id);
+  });
+}
 
-reportGenerateWorker.on('completed', (job) => {
-  console.log('[reporting] job completed', job.id);
-});
+if (reportGenerateWorker) {
+  reportGenerateWorker.on('completed', (job) => {
+    console.log('[reporting] job completed', job.id);
+  });
+}
 
-dashboardRefreshWorker.on('completed', (job) => {
-  console.log('[dashboardRefresh] job completed', job.id);
-});
+if (dashboardRefreshWorker) {
+  dashboardRefreshWorker.on('completed', (job) => {
+    console.log('[dashboardRefresh] job completed', job.id);
+  });
+}
 
-reportScheduleWorker.on('completed', (job) => {
-  console.log('[reportSchedule] job completed', job.id);
-});
+if (reportScheduleWorker) {
+  reportScheduleWorker.on('completed', (job) => {
+    console.log('[reportSchedule] job completed', job.id);
+  });
+}
 
-whatsappWorker.on('completed', (job) => {
-  console.log('[whatsapp] job completed', job.id);
-});
+if (whatsappWorker) {
+  whatsappWorker.on('completed', (job) => {
+    console.log('[whatsapp] job completed', job.id);
+  });
+}
 
-publishingWorker.on('completed', (job) => {
-  console.log('[publish] job completed', job.id);
-});
+if (publishingWorker) {
+  publishingWorker.on('completed', (job) => {
+    console.log('[publish] job completed', job.id);
+  });
+}
 
 async function logJobFailure(queueName, job, err) {
   try {
@@ -202,40 +230,54 @@ async function logJobFailure(queueName, job, err) {
   }
 }
 
-metricsWorker.on('failed', async (job, err) => {
-  console.error('[metricsSync] job failed', job?.id, err);
-  await logJobFailure(metricsSyncQueue.name, job, err);
-});
+if (metricsWorker) {
+  metricsWorker.on('failed', async (job, err) => {
+    console.error('[metricsSync] job failed', job?.id, err);
+    await logJobFailure(metricsSyncQueue?.name || 'metrics-sync', job, err);
+  });
+}
 
-reportsWorker.on('failed', async (job, err) => {
-  console.error('[reports] job failed', job?.id, err);
-  await logJobFailure(reportsQueue.name, job, err);
-});
+if (reportsWorker) {
+  reportsWorker.on('failed', async (job, err) => {
+    console.error('[reports] job failed', job?.id, err);
+    await logJobFailure(reportsQueue?.name || 'reports-generation', job, err);
+  });
+}
 
-reportGenerateWorker.on('failed', async (job, err) => {
-  console.error('[reporting] job failed', job?.id, err);
-  await logJobFailure(reportGenerateQueue.name, job, err);
-});
+if (reportGenerateWorker) {
+  reportGenerateWorker.on('failed', async (job, err) => {
+    console.error('[reporting] job failed', job?.id, err);
+    await logJobFailure(reportGenerateQueue?.name || 'report-generate', job, err);
+  });
+}
 
-dashboardRefreshWorker.on('failed', async (job, err) => {
-  console.error('[dashboardRefresh] job failed', job?.id, err);
-  await logJobFailure(dashboardRefreshQueue.name, job, err);
-});
+if (dashboardRefreshWorker) {
+  dashboardRefreshWorker.on('failed', async (job, err) => {
+    console.error('[dashboardRefresh] job failed', job?.id, err);
+    await logJobFailure(dashboardRefreshQueue?.name || 'dashboard-refresh', job, err);
+  });
+}
 
-reportScheduleWorker.on('failed', async (job, err) => {
-  console.error('[reportSchedule] job failed', job?.id, err);
-  await logJobFailure(reportScheduleQueue.name, job, err);
-});
+if (reportScheduleWorker) {
+  reportScheduleWorker.on('failed', async (job, err) => {
+    console.error('[reportSchedule] job failed', job?.id, err);
+    await logJobFailure(reportScheduleQueue?.name || 'report-schedule', job, err);
+  });
+}
 
-whatsappWorker.on('failed', async (job, err) => {
-  console.error('[whatsapp] job failed', job?.id, err);
-  await logJobFailure(whatsappQueue.name, job, err);
-});
+if (whatsappWorker) {
+  whatsappWorker.on('failed', async (job, err) => {
+    console.error('[whatsapp] job failed', job?.id, err);
+    await logJobFailure(whatsappQueue?.name || 'whatsapp-automation', job, err);
+  });
+}
 
-publishingWorker.on('failed', async (job, err) => {
-  console.error('[publish] job failed', job?.id, err);
-  await logJobFailure(publishingQueue.name, job, err);
-});
+if (publishingWorker) {
+  publishingWorker.on('failed', async (job, err) => {
+    console.error('[publish] job failed', job?.id, err);
+    await logJobFailure(publishingQueue?.name || 'posts-publish', job, err);
+  });
+}
 
 // ------------------------------------------------------
 // Agendamento de jobs recorrentes (repeatable jobs)
@@ -249,11 +291,19 @@ async function ensureRepeatableJobs() {
     DASHBOARD_REFRESH_PERIOD_MS,
   });
 
-  await metricsSyncQueue.upsertJobScheduler('metrics-poll', { every: METRICS_AGG_PERIOD_MS });
-  await reportsQueue.upsertJobScheduler('reports-poll', { every: REPORTS_GENERATION_PERIOD_MS });
-  await whatsappQueue.upsertJobScheduler('whatsapp-poll', { every: WHATSAPP_AUTOMATION_PERIOD_MS });
-  await publishingQueue.upsertJobScheduler('posts-publish', { every: POSTS_PUBLISH_PERIOD_MS });
-  if (DASHBOARD_REFRESH_PERIOD_MS > 0) {
+  if (metricsSyncQueue) {
+    await metricsSyncQueue.upsertJobScheduler('metrics-poll', { every: METRICS_AGG_PERIOD_MS });
+  }
+  if (reportsQueue) {
+    await reportsQueue.upsertJobScheduler('reports-poll', { every: REPORTS_GENERATION_PERIOD_MS });
+  }
+  if (whatsappQueue) {
+    await whatsappQueue.upsertJobScheduler('whatsapp-poll', { every: WHATSAPP_AUTOMATION_PERIOD_MS });
+  }
+  if (publishingQueue) {
+    await publishingQueue.upsertJobScheduler('posts-publish', { every: POSTS_PUBLISH_PERIOD_MS });
+  }
+  if (DASHBOARD_REFRESH_PERIOD_MS > 0 && dashboardRefreshQueue) {
     await dashboardRefreshQueue.upsertJobScheduler('dashboard-refresh', {
       every: DASHBOARD_REFRESH_PERIOD_MS,
     });

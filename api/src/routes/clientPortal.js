@@ -3,9 +3,13 @@ const jwt = require('jsonwebtoken');
 const { prisma } = require('../prisma');
 const approvalsService = require('../services/approvalsService');
 const postsService = require('../services/postsService');
+const { JWT_SECRET } = require('../utils/jwt');
+const {
+  CLIENT_ACCESS_COOKIE,
+  parseCookies,
+} = require('../utils/authCookies');
 
 const router = express.Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'changeme_local_secret';
 
 // === Auth para CLIENTE (JWT do tipo 'client') ===
 function extractToken(req) {
@@ -14,7 +18,8 @@ function extractToken(req) {
     const parts = authHeader.split(' ');
     if (parts.length === 2 && /^Bearer$/i.test(parts[0])) return parts[1];
   }
-  if (req.query && req.query.token) return req.query.token;
+  const cookies = parseCookies(req);
+  if (cookies[CLIENT_ACCESS_COOKIE]) return cookies[CLIENT_ACCESS_COOKIE];
   return null;
 }
 
@@ -48,6 +53,9 @@ async function clientAuth(req, res, next) {
     });
 
     if (!client) return res.status(401).json({ error: 'Cliente não encontrado' });
+    if (payload.tenantId && client.tenantId !== payload.tenantId) {
+      return res.status(401).json({ error: 'Token inválido para este tenant' });
+    }
 
     req.client = client;
     req.tenantId = payload.tenantId;
@@ -149,13 +157,41 @@ router.get('/approvals', clientAuth, async (req, res) => {
 router.get('/reports', clientAuth, async (req, res) => {
   try {
     const reports = await prisma.report.findMany({
-      where: { tenantId: req.tenantId },
+      where: {
+        tenantId: req.tenantId,
+        brandId: req.client.id,
+      },
       orderBy: { createdAt: 'desc' },
     });
     return res.json({ items: reports });
   } catch (err) {
     console.error('GET /client-portal/reports error:', err);
     return res.status(500).json({ error: 'Erro ao buscar relatórios do cliente' });
+  }
+});
+
+// NOVO: Solicitação de ajustes pelo cliente
+router.post('/posts/:id/request-changes', clientAuth, async (req, res) => {
+  try {
+    const noteInput =
+      typeof req.body?.note === 'string'
+        ? req.body.note
+        : typeof req.body?.message === 'string'
+          ? req.body.message
+          : '';
+
+    const updated = await postsService.requestChanges(
+      req.tenantId,
+      req.params.id,
+      noteInput,
+      req.client.id,
+    );
+
+    if (!updated) return res.status(404).json({ error: 'Post não encontrado' });
+    return res.json(updated);
+  } catch (err) {
+    console.error('POST /client-portal/posts/:id/request-changes error:', err);
+    return res.status(500).json({ error: 'Erro ao solicitar ajustes' });
   }
 });
 

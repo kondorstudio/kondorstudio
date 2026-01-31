@@ -49,24 +49,24 @@ function useClientPortal() {
   return ctx;
 }
 
-async function fetchClient(path, token, options = {}) {
-  if (!token) {
-    throw new Error("Sessão expirada. Faça login novamente.");
-  }
-
+async function fetchClient(path, options = {}) {
   const fetchOptions = {
     method: options.method || "GET",
     headers: {
       ...(options.headers || {}),
-      Authorization: `Bearer ${token}`,
     },
+    credentials: "include",
   };
 
   if (options.body !== undefined) {
     fetchOptions.body =
       typeof options.body === "string" ? options.body : JSON.stringify(options.body);
-    fetchOptions.headers["Content-Type"] =
-      options.headers?.["Content-Type"] || "application/json";
+    const isFormData =
+      typeof FormData !== "undefined" && options.body instanceof FormData;
+    if (!isFormData) {
+      fetchOptions.headers["Content-Type"] =
+        options.headers?.["Content-Type"] || "application/json";
+    }
   }
 
   const res = await base44.rawFetch(path, fetchOptions);
@@ -82,7 +82,10 @@ async function fetchClient(path, token, options = {}) {
       (res.status === 401
         ? "Sessão expirada. Faça login novamente."
         : "Erro ao carregar dados do portal.");
-    throw new Error(msg);
+    const error = new Error(msg);
+    error.status = res.status;
+    error.data = data;
+    throw error;
   }
 
   return data;
@@ -91,42 +94,8 @@ async function fetchClient(path, token, options = {}) {
 export default function ClientPortalLayout() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [clientToken, setClientToken] = useState(null);
   const [authError, setAuthError] = useState("");
   const [toast, setToast] = useState(null);
-
-  useEffect(() => {
-    const raw =
-      (typeof window !== "undefined" &&
-        (window.localStorage.getItem("kondor_client_auth") ||
-          window.localStorage.getItem("kondor_client_token"))) ||
-      null;
-
-    if (!raw) return navigate("/clientlogin");
-
-    let token = null;
-    try {
-      if (raw.trim().startsWith("{")) {
-        const parsed = JSON.parse(raw);
-        token =
-          parsed.accessToken ||
-          parsed.token ||
-          parsed.clientToken ||
-          parsed.jwt ||
-          null;
-      } else {
-        token = raw;
-      }
-    } catch (err) {
-      console.error("Erro ao ler token do cliente:", err);
-      return navigate("/clientlogin");
-    }
-
-    if (!token) return navigate("/clientlogin");
-    setClientToken(token);
-  }, [navigate]);
-
-  const queriesEnabled = !!clientToken;
 
   const {
     data: meData,
@@ -134,17 +103,25 @@ export default function ClientPortalLayout() {
     error: meError,
   } = useQuery({
     queryKey: ["client-portal", "me"],
-    enabled: queriesEnabled,
-    queryFn: () => fetchClient("/client-portal/me", clientToken),
+    queryFn: () => fetchClient("/client-portal/me"),
+    retry: false,
   });
 
   useEffect(() => {
-    if (meError) {
-      setAuthError(meError.message || "Erro ao carregar dados do cliente");
+    if (!meError) return;
+    if (meError.status === 401) {
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem("kondor_client_auth");
+        window.localStorage.removeItem("kondor_client_token");
+      }
+      navigate("/clientlogin");
+      return;
     }
-  }, [meError]);
+    setAuthError(meError.message || "Erro ao carregar dados do cliente");
+  }, [meError, navigate]);
 
   const client = meData?.client || null;
+  const queriesEnabled = !!client;
 
   const {
     data: postsData,
@@ -152,7 +129,7 @@ export default function ClientPortalLayout() {
   } = useQuery({
     queryKey: ["client-portal", "posts"],
     enabled: queriesEnabled,
-    queryFn: () => fetchClient("/client-portal/posts", clientToken),
+    queryFn: () => fetchClient("/client-portal/posts"),
   });
   const posts = postsData?.items || [];
 
@@ -162,7 +139,7 @@ export default function ClientPortalLayout() {
   } = useQuery({
     queryKey: ["client-portal", "metrics"],
     enabled: queriesEnabled,
-    queryFn: () => fetchClient("/client-portal/metrics", clientToken),
+    queryFn: () => fetchClient("/client-portal/metrics"),
   });
   const metrics = metricsData?.items || [];
 
@@ -172,17 +149,17 @@ export default function ClientPortalLayout() {
   } = useQuery({
     queryKey: ["client-portal", "approvals", "PENDING"],
     enabled: queriesEnabled,
-    queryFn: () => fetchClient("/client-portal/approvals?status=PENDING", clientToken),
+    queryFn: () => fetchClient("/client-portal/approvals?status=PENDING"),
   });
   const approvals = approvalsData?.items || [];
 
   const requestPostChanges = useCallback(
     (postId, note) =>
-      fetchClient(`/posts/${postId}/request-changes`, clientToken, {
+      fetchClient(`/client-portal/posts/${postId}/request-changes`, {
         method: "POST",
         body: { note },
       }),
-    [clientToken],
+    [],
   );
 
   const approvalsByPostId = useMemo(() => {
@@ -245,25 +222,25 @@ export default function ClientPortalLayout() {
   const approveClientApproval = useCallback(
     async (approvalId) => {
       if (!approvalId) return;
-      await fetchClient(`/client-portal/approvals/${approvalId}/approve`, clientToken, {
+      await fetchClient(`/client-portal/approvals/${approvalId}/approve`, {
         method: "POST",
-        body: JSON.stringify({}),
+        body: {},
       });
       queryClientInvalidate();
     },
-    [clientToken, queryClientInvalidate],
+    [queryClientInvalidate],
   );
 
   const rejectClientApproval = useCallback(
     async (approvalId, payload = {}) => {
       if (!approvalId) return;
-      await fetchClient(`/client-portal/approvals/${approvalId}/reject`, clientToken, {
+      await fetchClient(`/client-portal/approvals/${approvalId}/reject`, {
         method: "POST",
-        body: JSON.stringify(payload),
+        body: payload,
       });
       queryClientInvalidate();
     },
-    [clientToken, queryClientInvalidate],
+    [queryClientInvalidate],
   );
 
   const handleApproveAction = useCallback(
@@ -331,7 +308,10 @@ export default function ClientPortalLayout() {
     [queryClient, queryClientInvalidate, requestPostChanges, showToast],
   );
 
-  const handleLogout = useCallback(() => {
+  const handleLogout = useCallback(async () => {
+    try {
+      await base44.rawFetch("/auth/client-logout", { method: "POST" });
+    } catch (err) {}
     if (typeof window !== "undefined") {
       window.localStorage.removeItem("kondor_client_auth");
       window.localStorage.removeItem("kondor_client_token");

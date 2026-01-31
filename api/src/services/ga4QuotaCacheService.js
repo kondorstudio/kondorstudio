@@ -13,6 +13,8 @@ const RATE_WINDOW_MS = Number(process.env.GA4_RATE_LIMIT_WINDOW_MS || 60000);
 const RATE_MAX = Number(process.env.GA4_RATE_LIMIT_MAX || 60);
 const CONCURRENCY_TTL_MS = Number(process.env.GA4_CONCURRENCY_TTL_MS || 30000);
 const CONCURRENCY_WAIT_MS = Number(process.env.GA4_CONCURRENCY_WAIT_MS || 200);
+const CLEANUP_INTERVAL_MS = Number(process.env.GA4_CACHE_CLEANUP_MS || 300000);
+const QUEUE_IDLE_TTL_MS = Number(process.env.GA4_QUEUE_IDLE_TTL_MS || 600000);
 
 const memoryCache = new Map();
 const propertyQueues = new Map();
@@ -102,9 +104,11 @@ async function setMetadataCache(key, value) {
 function getQueueState(propertyId) {
   const key = propertyId || 'global';
   if (!propertyQueues.has(key)) {
-    propertyQueues.set(key, { active: 0, queue: [] });
+    propertyQueues.set(key, { active: 0, queue: [], lastUsedAt: Date.now() });
   }
-  return propertyQueues.get(key);
+  const state = propertyQueues.get(key);
+  state.lastUsedAt = Date.now();
+  return state;
 }
 
 async function withPropertyLimit(propertyId, task) {
@@ -190,6 +194,33 @@ async function assertWithinRateLimit(key) {
     throw err;
   }
   entry.count += 1;
+}
+
+function cleanupMemoryCaches() {
+  const now = Date.now();
+  for (const [key, entry] of memoryCache.entries()) {
+    if (entry.expiresAt && entry.expiresAt <= now) {
+      memoryCache.delete(key);
+    }
+  }
+
+  for (const [key, entry] of rateCounters.entries()) {
+    if (entry.resetAt && entry.resetAt <= now) {
+      rateCounters.delete(key);
+    }
+  }
+
+  for (const [key, state] of propertyQueues.entries()) {
+    const idleFor = now - (state.lastUsedAt || 0);
+    if (state.active === 0 && (!state.queue || state.queue.length === 0) && idleFor > QUEUE_IDLE_TTL_MS) {
+      propertyQueues.delete(key);
+    }
+  }
+}
+
+if (process.env.NODE_ENV !== 'test' && CLEANUP_INTERVAL_MS > 0) {
+  const timer = setInterval(cleanupMemoryCaches, CLEANUP_INTERVAL_MS);
+  if (typeof timer.unref === 'function') timer.unref();
 }
 
 module.exports = {

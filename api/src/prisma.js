@@ -12,10 +12,14 @@
 
 const { PrismaClient } = require('@prisma/client');
 
+const defaultLog =
+  process.env.NODE_ENV === 'production'
+    ? 'warn,error'
+    : 'query,info,warn,error';
 const prisma = new PrismaClient({
-  log: (process.env.PRISMA_LOG || 'query,info,warn,error')
+  log: (process.env.PRISMA_LOG || defaultLog)
     .split(',')
-    .map(l => l.trim())
+    .map((l) => l.trim())
     .filter(Boolean),
 });
 
@@ -83,30 +87,62 @@ function useTenant(tenantId) {
     if (!model) return undefined;
 
     const wrapper = {};
+    const notFoundError = () => {
+      const err = new Error(`${modelName} not found`);
+      err.code = 'P2025';
+      return err;
+    };
 
     // findMany / findFirst / findUnique
     wrapper.findMany = (args = {}) => model.findMany(addWhereTenant(args, tenantId));
     wrapper.findFirst = (args = {}) => model.findFirst(addWhereTenant(args, tenantId));
-    // findUnique often requires explicit id, don't alter where deeply (but inject tenant if possible)
-    wrapper.findUnique = (args = {}) => model.findUnique(addWhereTenant(args, tenantId));
+    // findUnique exige where único; usamos findFirst para permitir tenantId
+    wrapper.findUnique = (args = {}) => model.findFirst(addWhereTenant(args, tenantId));
 
     // create/createMany
     wrapper.create = (args = {}) => model.create(addDataTenant(args, tenantId));
     wrapper.createMany = (args = {}) => model.createMany(addDataTenant(args, tenantId));
 
-    // upsert (inject tenantId into create payload; caller must set unique where)
-    wrapper.upsert = (args = {}) => {
-      const clone = Object.assign({}, args);
-      if (clone.create && tenantId) {
-        clone.create = Object.assign({}, clone.create, { tenantId });
+    // upsert (garante tenantId)
+    wrapper.upsert = async (args = {}) => {
+      if (!tenantId) return model.upsert(args);
+      const where = args.where || {};
+      const scoped = addWhereTenant({ where }, tenantId).where;
+      const existing = await model.findFirst({ where: scoped });
+      if (existing) {
+        return model.update({
+          where: args.where,
+          data: args.update,
+          select: args.select,
+          include: args.include,
+        });
       }
-      return model.upsert(clone);
+      const createData = Object.assign({}, args.create || {}, { tenantId });
+      return model.create({
+        data: createData,
+        select: args.select,
+        include: args.include,
+      });
     };
 
-    // update/updateMany/delete/deleteMany - keep caller control but try to protect updateMany/deleteMany by adding tenant
-    wrapper.update = (args = {}) => model.update(addWhereTenant(args, tenantId));
+    // update/updateMany/delete/deleteMany
+    wrapper.update = async (args = {}) => {
+      if (!tenantId) return model.update(args);
+      const where = args.where || {};
+      const scoped = addWhereTenant({ where }, tenantId).where;
+      const existing = await model.findFirst({ where: scoped });
+      if (!existing) throw notFoundError();
+      return model.update(args);
+    };
     wrapper.updateMany = (args = {}) => model.updateMany(addWhereTenant(args, tenantId));
-    wrapper.delete = (args = {}) => model.delete(addWhereTenant(args, tenantId));
+    wrapper.delete = async (args = {}) => {
+      if (!tenantId) return model.delete(args);
+      const where = args.where || {};
+      const scoped = addWhereTenant({ where }, tenantId).where;
+      const existing = await model.findFirst({ where: scoped });
+      if (!existing) throw notFoundError();
+      return model.delete(args);
+    };
     wrapper.deleteMany = (args = {}) => model.deleteMany(addWhereTenant(args, tenantId));
 
     // count, aggregate

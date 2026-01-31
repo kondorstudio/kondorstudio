@@ -6,11 +6,10 @@ import { ADMIN_ROLES } from "@/utils/adminPermissions";
 
 const AdminRoute = () => {
   const location = useLocation();
-  const token = base44.storage.getAccessToken();
   const auth = base44.storage.loadAuthFromStorage?.();
   const role = auth?.user?.role;
 
-  if (!token) {
+  if (!auth?.user) {
     return <Navigate to="/admin/login" replace state={{ from: location }} />;
   }
 

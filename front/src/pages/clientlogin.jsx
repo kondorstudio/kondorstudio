@@ -33,13 +33,7 @@ export default function ClientLogin() {
         throw new Error(data?.error || "Falha ao fazer login");
       }
 
-      // Armazenar token de cliente (separado do token da agência)
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(
-          "kondor_client_auth",
-          JSON.stringify(data)
-        );
-      }
+      // Sessão do cliente é mantida via cookie HttpOnly.
 
       // Redireciona para o portal do cliente
       navigate("/clientportal", { replace: true });

@@ -7,6 +7,12 @@ const {
   createRefreshToken,
   REFRESH_TOKEN_EXPIRES_IN,
 } = require('../utils/jwt');
+const {
+  ACCESS_COOKIE,
+  REFRESH_COOKIE,
+  REFRESH_ID_COOKIE,
+  getCookieOptions,
+} = require('../utils/authCookies');
 
 function computeExpiryDateFromString(expiresIn) {
   try {
@@ -138,6 +144,11 @@ router.post('/register', async (req, res) => {
         expiresAt,
       },
     });
+
+    const accessExpiresAt = computeExpiryDateFromString(process.env.JWT_EXPIRES_IN || '7d');
+    res.cookie(ACCESS_COOKIE, accessToken, getCookieOptions({ expires: accessExpiresAt }));
+    res.cookie(REFRESH_COOKIE, refreshToken, getCookieOptions({ expires: expiresAt }));
+    res.cookie(REFRESH_ID_COOKIE, refreshRecord.id, getCookieOptions({ expires: expiresAt }));
 
     return res.json({
       accessToken,

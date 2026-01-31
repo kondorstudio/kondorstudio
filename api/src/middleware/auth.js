@@ -3,14 +3,17 @@
 
 const jwt = require('jsonwebtoken');
 const { prisma } = require('../prisma');
-
-const JWT_SECRET = process.env.JWT_SECRET || 'changeme_local_secret';
+const { JWT_SECRET } = require('../utils/jwt');
+const {
+  ACCESS_COOKIE,
+  CLIENT_ACCESS_COOKIE,
+  parseCookies,
+} = require('../utils/authCookies');
 
 // Rotas que NÃO exigem autenticação mesmo que o middleware seja aplicado
 const PUBLIC_PATHS = [
   '/api/auth/login',
   '/api/auth/refresh',
-  '/api/auth/logout',
   '/api/health',
   '/api/healthz',
   '/api/tenants/register', // <- registro de tenant + admin deve ser público
@@ -30,8 +33,9 @@ function extractToken(req) {
       return parts[1];
     }
   }
-  // fallback: query param
-  if (req.query && req.query.token) return req.query.token;
+  const cookies = parseCookies(req);
+  if (cookies[ACCESS_COOKIE]) return cookies[ACCESS_COOKIE];
+  if (cookies[CLIENT_ACCESS_COOKIE]) return cookies[CLIENT_ACCESS_COOKIE];
   return null;
 }
 
@@ -49,6 +53,10 @@ async function authMiddleware(req, res, next) {
     // Se a rota estiver na lista de públicas, não exige token
     if (PUBLIC_PATHS.some((p) => path.startsWith(p))) {
       req.isClientPortal = false;
+      return next();
+    }
+
+    if (req.user && req.tenantId) {
       return next();
     }
 

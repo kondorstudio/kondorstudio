@@ -5,7 +5,14 @@
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'changeme_local_secret';
+const rawSecret = process.env.JWT_SECRET;
+if (!rawSecret) {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET missing in production environment');
+  }
+  console.warn('[jwt] JWT_SECRET ausente. Usando fallback inseguro apenas em dev.');
+}
+const JWT_SECRET = rawSecret || 'changeme_local_secret';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d'; // token de acesso
 const REFRESH_TOKEN_EXPIRES_IN = process.env.REFRESH_TOKEN_EXPIRES_IN || '30d'; // refresh token
 

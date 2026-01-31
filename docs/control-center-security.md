@@ -3,11 +3,12 @@
 
 ## 1. Auditoria de Segurança
 
-- **Proteção das rotas admin**: todas as rotas sob `/api/admin` passam por `authMiddleware` + `tenantMiddleware` + `checkSubscription` global e, antes de qualquer handler específico, pelo `ensureSuperAdmin` (`api/src/routes/admin.js:296`). Esse middleware valida `req.user.role === 'SUPER_ADMIN'` e bloqueia com 403 caso contrário (`api/src/middleware/ensureSuperAdmin.js`).
+- **Proteção das rotas admin**: todas as rotas sob `/api/admin` passam por `authMiddleware` + `tenantMiddleware` + `checkSubscription` global e, antes de qualquer handler específico, pelo `ensureAdminAccess` (`api/src/routes/admin.js:311`). Esse middleware valida roles administrativas (SUPER_ADMIN, SUPPORT, FINANCE, TECH) e bloqueia com 403 caso contrário (`api/src/middleware/ensureAdminAccess.js`).
 - **Fluxo de impersonação**: `POST /api/admin/impersonate` garante que o alvo não seja SUPER_ADMIN, gera sessão isolada com expiração e grava auditoria (`api/src/routes/admin.js:671-843`). O encerramento (`/impersonate/stop`) valida o `superAdminId` original e remove o token da sessão.
 - **Edição de usuários**: `PATCH /api/admin/users/:id` impede modificações em usuários SUPER_ADMIN e bloqueia atribuição dessa role por esta rota (`api/src/routes/admin.js:584-636`). Mudanças aceitam apenas roles conhecidas e status booleano.
 - **Logs e observabilidade**: `errorLogger` escreve cada erro em `SystemLog` com metadata (rota, usuário, IP). Falhas no worker são gravadas em `JobLog`. Ambos expostos nas páginas de logs/jobs.
-- **Front guard**: `AdminRoute` garante token válido + role SUPER_ADMIN antes de renderizar o sub-app admin (`front/src/components/adminRoute.jsx`). O layout mostra banner ao estar em modo impersonate e expõe ação explícita para encerrar.
+- **Front guard**: `AdminRoute` garante token válido + role administrativa antes de renderizar o sub-app admin (`front/src/components/adminRoute.jsx`). O layout mostra banner ao estar em modo impersonate e expõe ação explícita para encerrar.
+- **MFA**: `mfaService.shouldRequireMfa` exige MFA para SUPER_ADMIN/ADMIN e, com `ADMIN_MFA_ENABLED=true`, também para SUPPORT/FINANCE/TECH no login. O fluxo é validado via `/auth/mfa/verify`.
 - **Outros cuidados**: 
   - `SystemLog` aceita `metadata` JSON para contexto, e as consultas paginam e filtram.
   - Tokens de impersonate têm TTL configurável (`IMPERSONATION_TOKEN_EXPIRES_IN` e `IMPERSONATION_SESSION_TTL_MINUTES`).
@@ -15,7 +16,7 @@
 
 ## 2. Checklist de Segurança Contínua
 
-1. **Variáveis sensíveis**: Configure `JWT_SECRET`, `JWT_REFRESH_SECRET`, `IMPERSONATION_TOKEN_EXPIRES_IN`, `IMPERSONATION_SESSION_TTL_MINUTES`, `AUDIT_LOG_ENABLED`, `CORS_ORIGIN`, `VITE_API_URL` e credenciais de banco/redis. Nunca versione valores reais.
+1. **Variáveis sensíveis**: Configure `JWT_SECRET`, `IMPERSONATION_TOKEN_EXPIRES_IN`, `IMPERSONATION_SESSION_TTL_MINUTES`, `AUDIT_LOG_ENABLED`, `CORS_ORIGIN`, `VITE_API_URL` e credenciais de banco/redis. Nunca versione valores reais.
 2. **CORS**: defina `CORS_ORIGIN` com a URL pública do front admin e demais frontends. Em produção, o backend já alerta caso essa env esteja ausente.
 3. **Sessions/Storage**: mantenha `sessionToken` com hash seguro; revogue tokens impersonate imediatamente via `/impersonate/stop`.
 4. **Permissões**: limite criação de usuários SUPER_ADMIN ao seed/controlado manualmente. Em produção, execute auditorias periódicas (`SELECT * FROM users WHERE role = 'SUPER_ADMIN'`).

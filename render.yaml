@@ -45,8 +45,6 @@ services:
       # ==== JWT ====
       - key: JWT_SECRET
         sync: false
-      - key: JWT_REFRESH_SECRET
-        sync: false
 
       # ==== CORS / URLS ====
       - key: CORS_ORIGIN
@@ -160,6 +158,176 @@ services:
       - key: WHATSAPP_BACKOFF_MS
         sync: false
 
+      # ==== OUTROS / OPCIONAIS ====
+      - key: ADMIN_MFA_ENABLED
+        sync: false
+      - key: ADMIN_SQL_ENABLED
+        sync: false
+      - key: API_BASE_URL
+        sync: false
+      - key: API_PUBLIC_URL
+        sync: false
+      - key: APPROVAL_LINK_TTL_DAYS
+        sync: false
+      - key: APP_BASE_URL
+        sync: false
+      - key: APP_PUBLIC_URL
+        sync: false
+      - key: AUTH_ACCESS_COOKIE
+        sync: false
+      - key: AUTH_REFRESH_COOKIE
+        sync: false
+      - key: AUTH_REFRESH_ID_COOKIE
+        sync: false
+      - key: AUTOMATION_MAX_SIMILAR_JOBS
+        sync: false
+      - key: CLIENT_ACCESS_COOKIE
+        sync: false
+      - key: CRYPTO_KEY
+        sync: false
+      - key: DASHBOARD_REFRESH_PERIOD_MS
+        sync: false
+      - key: ENFORCE_SUBSCRIPTION_CHECK
+        sync: false
+      - key: GA4_ADMIN_PAGE_SIZE
+        sync: false
+      - key: GA4_CACHE_DISABLED
+        sync: false
+      - key: GA4_CACHE_TTL_MS
+        sync: false
+      - key: GA4_DATA_API_BASE_URL
+        sync: false
+      - key: GA4_MAX_CONCURRENT
+        sync: false
+      - key: GA4_MAX_DIMENSIONS
+        sync: false
+      - key: GA4_MAX_LIMIT
+        sync: false
+      - key: GA4_MAX_METRICS
+        sync: false
+      - key: GA4_METADATA_TTL_MS
+        sync: false
+      - key: GA4_OAUTH_DEBUG
+        sync: false
+      - key: GA4_RATE_LIMIT_MAX
+        sync: false
+      - key: GA4_RATE_LIMIT_WINDOW_MS
+        sync: false
+      - key: GA4_TOKEN_SKEW_MS
+        sync: false
+      - key: GA4_CACHE_CLEANUP_MS
+        sync: false
+      - key: GA4_QUEUE_IDLE_TTL_MS
+        sync: false
+      - key: GA_DEFAULT_METRICS
+        sync: false
+      - key: HASH_ROUNDS
+        sync: false
+      - key: IMPERSONATION_SESSION_TTL_MINUTES
+        sync: false
+      - key: IMPERSONATION_TOKEN_EXPIRES_IN
+        sync: false
+      - key: JWT_EXPIRES_IN
+        sync: false
+      - key: LOCAL_UPLOADS_DIR
+        sync: false
+      - key: META_ADS_REDIRECT_URI
+        sync: false
+      - key: META_ADS_SCOPES
+        sync: false
+      - key: META_APP_ID
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: META_IG_CONTAINER_POLL_ATTEMPTS
+        sync: false
+      - key: META_IG_CONTAINER_POLL_DELAY_MS
+        sync: false
+      - key: META_OAUTH_REDIRECT_URI
+        sync: false
+      - key: META_OAUTH_VERSION
+        sync: false
+      - key: META_SOCIAL_REDIRECT_URI
+        sync: false
+      - key: META_SOCIAL_SCOPES
+        sync: false
+      - key: META_TOKEN_REFRESH_THRESHOLD_DAYS
+        sync: false
+      - key: MFA_CODE_TTL_MINUTES
+        sync: false
+      - key: MFA_MAX_ATTEMPTS
+        sync: false
+      - key: PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+        sync: false
+      - key: POSTS_PUBLISH_PERIOD_MS
+        sync: false
+      - key: POST_APPROVAL_TTL_DAYS
+        sync: false
+      - key: POST_PUBLISH_BATCH_SIZE
+        sync: false
+      - key: POST_PUBLISH_LOCK_TTL_MINUTES
+        sync: false
+      - key: PRISMA_LOG
+        sync: false
+      - key: PRISMA_AUTOFIX_SCHEMA
+        sync: false
+      - key: PUBLIC_APPROVALS_RATE_MAX
+        sync: false
+      - key: PUBLIC_APPROVALS_RATE_MAX_KEYS
+        sync: false
+      - key: PUBLIC_APPROVALS_RATE_WINDOW_MS
+        sync: false
+      - key: PUBLIC_APP_BASE_URL
+        sync: false
+      - key: PUBLIC_PORTAL_URL_BASE
+        sync: false
+      - key: REDIS_DISABLED
+        sync: false
+      - key: REFRESH_TOKEN_EXPIRES_IN
+        sync: false
+      - key: RENDER_EXTERNAL_URL
+        sync: false
+      - key: REPORTING_CACHE_TTL_SECONDS
+        sync: false
+      - key: REPORTING_DEFAULT_RANGE_DAYS
+        sync: false
+      - key: REPORTING_JOB_ATTEMPTS
+        sync: false
+      - key: REPORTING_JOB_BACKOFF_MS
+        sync: false
+      - key: REPORTING_SNAPSHOT_TTL_SECONDS
+        sync: false
+      - key: REPORTING_TTL_GA4
+        sync: false
+      - key: REPORTING_TTL_GBP
+        sync: false
+      - key: REPORTING_TTL_GOOGLE_ADS
+        sync: false
+      - key: REPORTING_TTL_LINKEDIN_ADS
+        sync: false
+      - key: REPORTING_TTL_META_ADS
+        sync: false
+      - key: REPORTING_TTL_META_SOCIAL
+        sync: false
+      - key: REPORTING_TTL_TIKTOK_ADS
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: SES_REGION
+        sync: false
+      - key: SES_SOURCE_EMAIL
+        sync: false
+      - key: STORAGE_PROVIDER
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: UPLOADS_BASE_URL
+        sync: false
+      - key: UPLOADS_MAX_FILE_SIZE_MB
+        sync: false
+      - key: UPLOADS_PUBLIC
+        sync: false
+
     healthCheckPath: /healthz
 
   # -----------------------------
@@ -247,6 +415,228 @@ services:
       - key: GOOGLE_ADS_DEFAULT_FIELDS
         sync: false
 
+      # ==== OUTROS / OPCIONAIS ====
+      - key: ADMIN_MFA_ENABLED
+        sync: false
+      - key: ADMIN_SQL_ENABLED
+        sync: false
+      - key: API_BASE_URL
+        sync: false
+      - key: API_PUBLIC_URL
+        sync: false
+      - key: APPROVAL_LINK_TTL_DAYS
+        sync: false
+      - key: APPROVAL_PUBLIC_LINK_TTL_HOURS
+        sync: false
+      - key: APP_BASE_URL
+        sync: false
+      - key: APP_PUBLIC_URL
+        sync: false
+      - key: APP_URL_FRONT
+        sync: false
+      - key: AUDITLOG_BODY_MAX
+        sync: false
+      - key: AUDITLOG_SKIP_REGEX
+        sync: false
+      - key: AUDIT_LOG_ENABLED
+        sync: false
+      - key: AUTH_ACCESS_COOKIE
+        sync: false
+      - key: AUTH_REFRESH_COOKIE
+        sync: false
+      - key: AUTH_REFRESH_ID_COOKIE
+        sync: false
+      - key: AUTOMATION_MAX_SIMILAR_JOBS
+        sync: false
+      - key: CHECK_SUBSCRIPTION_ENABLED
+        sync: false
+      - key: CLIENT_ACCESS_COOKIE
+        sync: false
+      - key: CORS_ALLOW_ALL
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: CRYPTO_KEY
+        sync: false
+      - key: DASHBOARD_REFRESH_PERIOD_MS
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: ENFORCE_SUBSCRIPTION_CHECK
+        sync: false
+      - key: GA4_ADMIN_PAGE_SIZE
+        sync: false
+      - key: GA4_CACHE_DISABLED
+        sync: false
+      - key: GA4_CACHE_TTL_MS
+        sync: false
+      - key: GA4_CONCURRENCY_TTL_MS
+        sync: false
+      - key: GA4_CONCURRENCY_WAIT_MS
+        sync: false
+      - key: GA4_DATA_API_BASE_URL
+        sync: false
+      - key: GA4_MAX_CONCURRENT
+        sync: false
+      - key: GA4_MAX_DIMENSIONS
+        sync: false
+      - key: GA4_MAX_LIMIT
+        sync: false
+      - key: GA4_MAX_METRICS
+        sync: false
+      - key: GA4_METADATA_TTL_MS
+        sync: false
+      - key: GA4_MOCK_MODE
+        sync: false
+      - key: GA4_OAUTH_DEBUG
+        sync: false
+      - key: GA4_RATE_LIMIT_MAX
+        sync: false
+      - key: GA4_RATE_LIMIT_WINDOW_MS
+        sync: false
+      - key: GA4_REDIS_DISABLED
+        sync: false
+      - key: GA4_REDIS_URL
+        sync: false
+      - key: GA4_TOKEN_SKEW_MS
+        sync: false
+      - key: GA4_CACHE_CLEANUP_MS
+        sync: false
+      - key: GA4_QUEUE_IDLE_TTL_MS
+        sync: false
+      - key: GA_DEFAULT_METRICS
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_OAUTH_REDIRECT_URI
+        sync: false
+      - key: GOOGLE_OAUTH_SCOPES
+        sync: false
+      - key: HASH_ROUNDS
+        sync: false
+      - key: IMPERSONATION_SESSION_TTL_MINUTES
+        sync: false
+      - key: IMPERSONATION_TOKEN_EXPIRES_IN
+        sync: false
+      - key: JWT_EXPIRES_IN
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: LOCAL_UPLOADS_DIR
+        sync: false
+      - key: META_ADS_REDIRECT_URI
+        sync: false
+      - key: META_ADS_SCOPES
+        sync: false
+      - key: META_APP_ID
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: META_IG_CONTAINER_POLL_ATTEMPTS
+        sync: false
+      - key: META_IG_CONTAINER_POLL_DELAY_MS
+        sync: false
+      - key: META_OAUTH_REDIRECT_URI
+        sync: false
+      - key: META_OAUTH_VERSION
+        sync: false
+      - key: META_SOCIAL_REDIRECT_URI
+        sync: false
+      - key: META_SOCIAL_SCOPES
+        sync: false
+      - key: META_TOKEN_REFRESH_THRESHOLD_DAYS
+        sync: false
+      - key: MFA_CODE_TTL_MINUTES
+        sync: false
+      - key: MFA_MAX_ATTEMPTS
+        sync: false
+      - key: PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+        sync: false
+      - key: PORT
+        sync: false
+      - key: POSTS_PUBLISH_PERIOD_MS
+        sync: false
+      - key: POST_APPROVAL_TTL_DAYS
+        sync: false
+      - key: POST_PUBLISH_BATCH_SIZE
+        sync: false
+      - key: POST_PUBLISH_LOCK_TTL_MINUTES
+        sync: false
+      - key: PRISMA_LOG
+        sync: false
+      - key: PRISMA_AUTOFIX_SCHEMA
+        sync: false
+      - key: PUBLIC_APPROVALS_RATE_MAX
+        sync: false
+      - key: PUBLIC_APPROVALS_RATE_MAX_KEYS
+        sync: false
+      - key: PUBLIC_APPROVALS_RATE_WINDOW_MS
+        sync: false
+      - key: PUBLIC_APP_BASE_URL
+        sync: false
+      - key: PUBLIC_APP_URL
+        sync: false
+      - key: PUBLIC_PORTAL_URL_BASE
+        sync: false
+      - key: REDIS_DISABLED
+        sync: false
+      - key: REFRESH_TOKEN_EXPIRES_IN
+        sync: false
+      - key: RENDER_EXTERNAL_URL
+        sync: false
+      - key: REPORTING_CACHE_TTL_SECONDS
+        sync: false
+      - key: REPORTING_DEFAULT_RANGE_DAYS
+        sync: false
+      - key: REPORTING_JOB_ATTEMPTS
+        sync: false
+      - key: REPORTING_JOB_BACKOFF_MS
+        sync: false
+      - key: REPORTING_SNAPSHOT_TTL_SECONDS
+        sync: false
+      - key: REPORTING_TTL_GA4
+        sync: false
+      - key: REPORTING_TTL_GBP
+        sync: false
+      - key: REPORTING_TTL_GOOGLE_ADS
+        sync: false
+      - key: REPORTING_TTL_LINKEDIN_ADS
+        sync: false
+      - key: REPORTING_TTL_META_ADS
+        sync: false
+      - key: REPORTING_TTL_META_SOCIAL
+        sync: false
+      - key: REPORTING_TTL_TIKTOK_ADS
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: SES_REGION
+        sync: false
+      - key: SES_SOURCE_EMAIL
+        sync: false
+      - key: STORAGE_PROVIDER
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: UPLOADS_BASE_URL
+        sync: false
+      - key: UPLOADS_MAX_FILE_SIZE_MB
+        sync: false
+      - key: UPLOADS_PUBLIC
+        sync: false
+
   # -----------------------------
   # 🟩 SPA FRONTEND (VITE)
   # -----------------------------
@@ -276,6 +666,12 @@ services:
         value: "false"
       # URL da API usada pelo frontend (Vite)
       - key: VITE_API_URL
+        sync: false
+      - key: VITE_APP_API_URL
+        sync: false
+      - key: VITE_PUBLIC_APP_URL
+        sync: false
+      - key: VITE_PERSIST_TOKENS
         sync: false
 
   # -----------------------------

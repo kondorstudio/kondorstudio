@@ -21,6 +21,7 @@ const app = express();
 app.set("trust proxy", 1);
 
 const isProduction = process.env.NODE_ENV === "production";
+const AUTO_FIX_SCHEMA = process.env.PRISMA_AUTOFIX_SCHEMA === "true";
 
 async function ensureRefreshTokenColumns() {
   try {
@@ -172,12 +173,16 @@ async function ensureWhatsAppMessagesTable() {
 }
 
 // Fire-and-forget (não bloqueia o boot)
-ensureRefreshTokenColumns();
-ensureUserColumns();
-ensureClientOnboardingColumns();
-ensureFinancialRecordColumns();
-ensureTeamMemberColumns();
-ensureWhatsAppMessagesTable();
+if (AUTO_FIX_SCHEMA) {
+  ensureRefreshTokenColumns();
+  ensureUserColumns();
+  ensureClientOnboardingColumns();
+  ensureFinancialRecordColumns();
+  ensureTeamMemberColumns();
+  ensureWhatsAppMessagesTable();
+} else {
+  console.log("🧱 Auto-fix de schema desativado (PRISMA_AUTOFIX_SCHEMA=false).");
+}
 
 // Helpers
 function safeMount(mountPath, router) {

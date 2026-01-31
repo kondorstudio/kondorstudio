@@ -143,7 +143,7 @@ async function checkSubscription(req, res, next) {
     return next();
   } catch (err) {
     console.error("[CHECK_SUBSCRIPTION_ERROR]", err);
-    return next(); // fallback: libera para evitar travamentos
+    return res.status(500).json({ error: "Erro ao validar assinatura" });
   }
 }
 

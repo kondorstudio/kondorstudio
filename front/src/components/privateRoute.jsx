@@ -5,10 +5,10 @@ import { base44 } from "@/apiClient/base44Client";
 
 const PrivateRoute = () => {
   const location = useLocation();
-  const token = base44.storage.getAccessToken();
+  const auth = base44.storage.loadAuthFromStorage?.();
 
   // Se não tiver token, manda pro /login
-  if (!token) {
+  if (!auth?.user) {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 

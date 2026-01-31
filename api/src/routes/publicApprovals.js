@@ -39,6 +39,7 @@ const RATE_MAX = Number(process.env.PUBLIC_APPROVALS_RATE_MAX) || 30;
 
 // buckets: key = ip, value = { count, start }
 const rateBuckets = new Map();
+const MAX_BUCKETS = Number(process.env.PUBLIC_APPROVALS_RATE_MAX_KEYS || 10000);
 
 function publicApprovalsRateLimit(req, res, next) {
   try {
@@ -59,6 +60,15 @@ function publicApprovalsRateLimit(req, res, next) {
 
     bucket.count += 1;
     rateBuckets.set(ip, bucket);
+
+    if (rateBuckets.size > MAX_BUCKETS) {
+      for (const [key, value] of rateBuckets.entries()) {
+        if (now - value.start > RATE_WINDOW_MS) {
+          rateBuckets.delete(key);
+        }
+        if (rateBuckets.size <= MAX_BUCKETS) break;
+      }
+    }
 
     if (bucket.count > RATE_MAX) {
       return res.status(429).json({

@@ -9,6 +9,15 @@ const {
   verifyAccessToken,
   REFRESH_TOKEN_EXPIRES_IN,
 } = require('../utils/jwt');
+const {
+  ACCESS_COOKIE,
+  REFRESH_COOKIE,
+  REFRESH_ID_COOKIE,
+  CLIENT_ACCESS_COOKIE,
+  parseCookies,
+  getCookieOptions,
+  getClientCookieOptions,
+} = require('../utils/authCookies');
 const authMiddleware = require('../middleware/auth');
 const rateLimit = require('express-rate-limit');
 const { loginSchema, clientLoginSchema } = require('../validators/authValidator');
@@ -97,6 +106,43 @@ async function issueAuthTokens({ user, req }) {
   };
 }
 
+function computeAccessExpiryDate() {
+  return computeExpiryDateFromString(process.env.JWT_EXPIRES_IN || '7d');
+}
+
+function setAuthCookies(res, { accessToken, refreshToken, tokenId }) {
+  if (!res) return;
+  const accessExpiresAt = computeAccessExpiryDate();
+  const refreshExpiresAt = computeExpiryDateFromString(REFRESH_TOKEN_EXPIRES_IN);
+
+  res.cookie(ACCESS_COOKIE, accessToken, getCookieOptions({ expires: accessExpiresAt }));
+  res.cookie(REFRESH_COOKIE, refreshToken, getCookieOptions({ expires: refreshExpiresAt }));
+  res.cookie(REFRESH_ID_COOKIE, tokenId, getCookieOptions({ expires: refreshExpiresAt }));
+}
+
+function clearAuthCookies(res) {
+  if (!res) return;
+  const opts = getCookieOptions();
+  res.clearCookie(ACCESS_COOKIE, opts);
+  res.clearCookie(REFRESH_COOKIE, opts);
+  res.clearCookie(REFRESH_ID_COOKIE, opts);
+}
+
+function setClientAuthCookie(res, accessToken) {
+  if (!res) return;
+  const accessExpiresAt = computeAccessExpiryDate();
+  res.cookie(
+    CLIENT_ACCESS_COOKIE,
+    accessToken,
+    getClientCookieOptions({ expires: accessExpiresAt }),
+  );
+}
+
+function clearClientAuthCookie(res) {
+  if (!res) return;
+  res.clearCookie(CLIENT_ACCESS_COOKIE, getClientCookieOptions());
+}
+
 /**
  * POST /auth/login
  */
@@ -155,6 +201,7 @@ router.post('/login', loginRateLimiter, async (req, res) => {
     }
 
     const tokens = await issueAuthTokens({ user, req });
+    setAuthCookies(res, tokens);
 
     return res.json({
       ...tokens,
@@ -276,6 +323,7 @@ router.post('/client-login', loginRateLimiter, async (req, res) => {
     };
 
     const accessToken = createAccessToken(payload);
+    setClientAuthCookie(res, accessToken);
 
     return res.json({
       accessToken,
@@ -317,6 +365,7 @@ router.post('/mfa/verify', async (req, res) => {
     }
 
     const tokens = await issueAuthTokens({ user, req });
+    setAuthCookies(res, tokens);
 
     return res.json({
       ...tokens,
@@ -339,7 +388,9 @@ router.post('/mfa/verify', async (req, res) => {
  */
 router.post('/refresh', async (req, res) => {
   try {
-    const { tokenId, refreshToken } = req.body || {};
+    const cookies = parseCookies(req);
+    const tokenId = req.body?.tokenId || cookies[REFRESH_ID_COOKIE];
+    const refreshToken = req.body?.refreshToken || cookies[REFRESH_COOKIE];
 
     if (!tokenId || !refreshToken) {
       return res.status(400).json({ error: 'tokenId e refreshToken são obrigatórios' });
@@ -398,15 +449,32 @@ router.post('/refresh', async (req, res) => {
 
     const accessToken = createAccessToken(payload);
 
-    return res.json({
+    const responsePayload = {
       accessToken,
       refreshToken: newRawRefresh,
       tokenId: newRecord.id,
       expiresAt: newExpiresAt.toISOString(),
-    });
+    };
+
+    setAuthCookies(res, responsePayload);
+
+    return res.json(responsePayload);
   } catch (err) {
     console.error('POST /auth/refresh error', err);
     return res.status(500).json({ error: 'Erro interno no refresh' });
+  }
+});
+
+/**
+ * POST /auth/client-logout
+ */
+router.post('/client-logout', async (_req, res) => {
+  try {
+    clearClientAuthCookie(res);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('POST /auth/client-logout error', err);
+    return res.status(500).json({ error: 'Erro interno no logout do cliente' });
   }
 });
 
@@ -424,6 +492,8 @@ router.post('/logout', authMiddleware, async (req, res) => {
         where: { userId },
         data: { revoked: true },
       });
+      clearAuthCookies(res);
+      clearClientAuthCookie(res);
       return res.json({ ok: true, revokedAll: true });
     }
 
@@ -432,9 +502,13 @@ router.post('/logout', authMiddleware, async (req, res) => {
         where: { id: tokenId, userId },
         data: { revoked: true },
       });
+      clearAuthCookies(res);
+      clearClientAuthCookie(res);
       return res.json({ ok: true, tokenId });
     }
 
+    clearAuthCookies(res);
+    clearClientAuthCookie(res);
     return res.json({ ok: true });
   } catch (err) {
     console.error('POST /auth/logout error', err);

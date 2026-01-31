@@ -21,25 +21,48 @@ const TENANT_OPTIONAL_PATHS = [
   '/api/integrations/ga4/oauth/callback',
 ];
 
-// Extrai tenant de:
-// - header X-Tenant
-// - req.user.tenantId (quando autenticado)
-// - query param ?tenantId=
-// - body.tenantId
-function resolveTenant(req) {
-  // header tem prioridade
-  if (req.headers['x-tenant']) return req.headers['x-tenant'];
+function normalizeRole(role) {
+  return String(role || '').toUpperCase();
+}
 
-  // se o authMiddleware já colocou
-  if (req.tenantId) return req.tenantId;
+function canOverrideTenant(req, path) {
+  const role = normalizeRole(req?.user?.role);
+  if (role !== 'SUPER_ADMIN') return false;
+  return Boolean(path && path.startsWith('/api/admin'));
+}
 
-  // query param opcional para testes
-  if (req.query && req.query.tenantId) return req.query.tenantId;
+function resolveTenant(req, path) {
+  const userTenantId = req.tenantId || req.user?.tenantId || null;
+  if (canOverrideTenant(req, path)) {
+    const headerTenant =
+      req.headers['x-tenant'] || req.headers['x-tenant-id'] || null;
+    if (headerTenant) return String(headerTenant);
+  }
+  return userTenantId;
+}
 
-  // body
-  if (req.body && req.body.tenantId) return req.body.tenantId;
-
-  return null;
+async function logTenantOverride({ tenantId, fromTenantId, req }) {
+  try {
+    if (!tenantId || !req?.user?.id) return;
+    await prisma.auditLog.create({
+      data: {
+        tenantId: tenantId,
+        userId: req.user.id,
+        action: 'tenant.override',
+        resource: 'tenant',
+        resourceId: tenantId,
+        ip: req.ip || req.headers['x-forwarded-for'] || null,
+        meta: {
+          fromTenantId: fromTenantId || null,
+          toTenantId: tenantId,
+          path: req.originalUrl || req.path || null,
+          userAgent: req.headers['user-agent'] || null,
+        },
+      },
+    });
+  } catch (err) {
+    console.warn('Falha ao registrar auditoria de tenant override:', err?.message || err);
+  }
 }
 
 module.exports = async function tenantMiddleware(req, res, next) {
@@ -54,7 +77,11 @@ module.exports = async function tenantMiddleware(req, res, next) {
       return next();
     }
 
-    const tenantId = resolveTenant(req);
+    if (req.db && req.tenantId) {
+      return next();
+    }
+
+    const tenantId = resolveTenant(req, path);
 
     if (!tenantId) {
       return res.status(400).json({
@@ -73,6 +100,20 @@ module.exports = async function tenantMiddleware(req, res, next) {
         error: 'Tenant não encontrado',
         tenantId,
       });
+    }
+
+    // Audita override quando SUPER_ADMIN troca o tenant via header
+    const headerTenant =
+      req.headers['x-tenant'] || req.headers['x-tenant-id'] || null;
+    if (headerTenant && canOverrideTenant(req, path)) {
+      const fromTenantId = req.tenantId || req.user?.tenantId || null;
+      if (fromTenantId && String(headerTenant) !== String(fromTenantId)) {
+        await logTenantOverride({
+          tenantId: String(headerTenant),
+          fromTenantId: String(fromTenantId),
+          req,
+        });
+      }
     }
 
     // Injeta helpers multitenant

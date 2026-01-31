@@ -2,6 +2,7 @@ const { prisma } = require('../prisma');
 const { publishPost } = require('../services/postPublisher');
 
 const BATCH_SIZE = Number(process.env.POST_PUBLISH_BATCH_SIZE) || 5;
+const LOCK_TTL_MINUTES = Number(process.env.POST_PUBLISH_LOCK_TTL_MINUTES || 15);
 
 function safeLog(...args) {
   if (process.env.NODE_ENV === 'test') return;
@@ -15,14 +16,33 @@ function isPlainObject(value) {
 async function pollOnce() {
   const now = new Date();
 
-  const posts = await prisma.post.findMany({
-    where: {
-      status: { in: ['SCHEDULED', 'APPROVED'] },
-      scheduledDate: { lte: now },
-    },
-    orderBy: { scheduledDate: 'asc' },
-    take: BATCH_SIZE,
-  });
+  const lockTtlSeconds = Math.max(60, Math.floor(LOCK_TTL_MINUTES * 60));
+
+  const posts = await prisma.$queryRaw`
+    WITH candidates AS (
+      SELECT id
+      FROM "posts"
+      WHERE status IN ('SCHEDULED','APPROVED')
+        AND "scheduledDate" <= NOW()
+        AND (
+          ("metadata"->>'publishLockAt') IS NULL
+          OR ("metadata"->>'publishLockAt')::timestamptz < NOW() - (${lockTtlSeconds} || ' seconds')::interval
+        )
+      ORDER BY "scheduledDate" ASC
+      FOR UPDATE SKIP LOCKED
+      LIMIT ${BATCH_SIZE}
+    )
+    UPDATE "posts"
+    SET "metadata" = jsonb_set(
+      COALESCE("metadata", '{}'::jsonb),
+      '{publishLockAt}',
+      to_jsonb(NOW()::timestamptz),
+      true
+    )
+    FROM candidates
+    WHERE "posts"."id" = candidates.id
+    RETURNING "posts".*;
+  `;
 
   if (!posts.length) {
     return { ok: true, processed: 0 };
@@ -52,7 +72,10 @@ async function pollOnce() {
           status: 'PUBLISHED',
           publishedDate: now,
           externalId: result.externalId || post.externalId || null,
-          metadata,
+          metadata: {
+            ...metadata,
+            publishLockAt: null,
+          },
         },
       });
 
@@ -71,7 +94,10 @@ async function pollOnce() {
         where: { id: post.id },
         data: {
           status: 'FAILED',
-          metadata,
+          metadata: {
+            ...metadata,
+            publishLockAt: null,
+          },
         },
       });
 

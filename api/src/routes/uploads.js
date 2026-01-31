@@ -2,17 +2,31 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
+const os = require('os');
+const path = require('path');
+const fs = require('fs');
 
 const authMiddleware = require('../middleware/auth');
 const tenantMiddleware = require('../middleware/tenant');
 const uploadsService = require('../services/uploadsService');
 
-const MAX_FILE_SIZE_MB = Number(process.env.UPLOADS_MAX_FILE_SIZE_MB || 500);
+const MAX_FILE_SIZE_MB = Number(process.env.UPLOADS_MAX_FILE_SIZE_MB || 200);
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
-// memória storage (usamos buffer para enviar ao S3 via service)
+const tempDir = path.join(os.tmpdir(), 'kondor-uploads');
+if (!fs.existsSync(tempDir)) {
+  fs.mkdirSync(tempDir, { recursive: true });
+}
+
+// disk storage (evita carregar arquivos grandes na memória)
 const upload = multer({
-  storage: multer.memoryStorage(),
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, tempDir),
+    filename: (req, file, cb) => {
+      const safeName = `${Date.now()}-${file.originalname || 'file'}`.replace(/[/\\\\]/g, '-');
+      cb(null, safeName);
+    },
+  }),
   limits: {
     fileSize: MAX_FILE_SIZE_BYTES, // limite configurável para vídeos/imagens
   },
@@ -71,11 +85,16 @@ router.post('/', upload.single('file'), async (req, res) => {
     const key = `${req.tenantId}/${folder}${uniqueName}`;
 
     // prefer service to generate unique key
-    const result = await uploadsService.uploadBuffer(req.file.buffer, originalName, req.file.mimetype, {
-      key: key,
-      acl: req.body.public === 'true' ? 'public-read' : undefined,
-      metadata: { uploadedBy: req.user?.id || null },
-    });
+    const result = await uploadsService.uploadFilePath(
+      req.file.path,
+      originalName,
+      req.file.mimetype,
+      {
+        key: key,
+        acl: req.body.public === 'true' ? 'public-read' : undefined,
+        metadata: { uploadedBy: req.user?.id || null },
+      },
+    );
 
     const requestProtocol = detectRequestProtocol(req);
     const host = req.get("host") || "localhost";

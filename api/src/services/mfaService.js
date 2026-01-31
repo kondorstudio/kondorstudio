@@ -4,6 +4,9 @@ const emailService = require('./emailService');
 
 const CODE_TTL_MINUTES = Number(process.env.MFA_CODE_TTL_MINUTES || 10);
 const MAX_ATTEMPTS = Number(process.env.MFA_MAX_ATTEMPTS || 5);
+const ADMIN_MFA_ENABLED = process.env.ADMIN_MFA_ENABLED !== 'false';
+const ALWAYS_MFA_ROLES = new Set(['SUPER_ADMIN', 'ADMIN']);
+const ADMIN_ROLE_SET = new Set(['SUPPORT', 'FINANCE', 'TECH']);
 
 function generateCode() {
   return String(Math.floor(100000 + Math.random() * 900000));
@@ -15,7 +18,17 @@ function computeExpiry() {
   return expires;
 }
 
+function normalizeRole(role) {
+  return String(role || '').toUpperCase();
+}
+
 function shouldRequireMfa(user) {
+  if (!user) return false;
+  const role = normalizeRole(user.role);
+  if (ALWAYS_MFA_ROLES.has(role)) return true;
+  if (!ADMIN_MFA_ENABLED) return false;
+  if (ADMIN_ROLE_SET.has(role)) return true;
+  if (user.mfaEnabled) return true;
   return false;
 }
 

@@ -57,6 +57,11 @@ const API_BASE_URL = preferPageProtocol(
 // --------------------
 
 const STORAGE_KEY = "kondor_auth";
+const PERSIST_TOKENS =
+  (typeof import.meta !== "undefined" &&
+    import.meta.env &&
+    import.meta.env.VITE_PERSIST_TOKENS === "true") ||
+  (typeof window !== "undefined" && window.__KONDOR_PERSIST_TOKENS === true);
 
 function loadAuthFromStorage() {
   if (typeof window === "undefined") return null;
@@ -73,7 +78,23 @@ function loadAuthFromStorage() {
 function saveAuthToStorage(data) {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    if (!data) {
+      window.localStorage.removeItem(STORAGE_KEY);
+      return;
+    }
+    const sanitized = {
+      user: data.user || null,
+      tenant: data.tenant || null,
+      subscription: data.subscription || null,
+      ...(PERSIST_TOKENS
+        ? {
+            accessToken: data.accessToken || null,
+            refreshToken: data.refreshToken || null,
+            tokenId: data.tokenId || null,
+          }
+        : {}),
+    };
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized));
   } catch (err) {
     console.error("Error saving auth to storage", err);
   }
@@ -387,7 +408,7 @@ async function login({ email, password }) {
     throw error;
   }
 
-  if (data?.accessToken) {
+  if (data && !data.mfaRequired) {
     saveAuthToStorage(data);
   }
   return data;
@@ -408,7 +429,7 @@ async function verifyMfa(payload) {
     throw error;
   }
 
-  if (data?.accessToken) {
+  if (data) {
     saveAuthToStorage(data);
   }
 
@@ -417,9 +438,10 @@ async function verifyMfa(payload) {
 
 async function logout() {
   try {
+    const token = getAccessToken();
     await rawFetch("/auth/logout", {
       method: "POST",
-      headers: { Authorization: `Bearer ${getAccessToken()}` },
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
   } catch (err) {}
   clearAuthFromStorage();
@@ -440,14 +462,7 @@ async function registerTenant(payload) {
     throw error;
   }
 
-  saveAuthToStorage({
-    accessToken: data.accessToken,
-    refreshToken: data.refreshToken,
-    tokenId: data.tokenId || null,
-    user: data.user,
-    tenant: data.tenant,
-    subscription: data.subscription || null,
-  });
+  saveAuthToStorage(data);
 
   return data;
 }
@@ -455,12 +470,13 @@ async function registerTenant(payload) {
 async function tryRefreshToken() {
   const refreshToken = getRefreshToken();
   const tokenId = getTokenId();
-  if (!refreshToken || !tokenId) return false;
 
   try {
     const res = await rawFetch("/auth/refresh", {
       method: "POST",
-      body: JSON.stringify({ refreshToken, tokenId }),
+      body: JSON.stringify(
+        refreshToken && tokenId ? { refreshToken, tokenId } : {}
+      ),
     });
 
     const data = await res.json();
@@ -469,10 +485,12 @@ async function tryRefreshToken() {
       return false;
     }
 
-    saveAuthToStorage({
-      ...loadAuthFromStorage(),
-      ...data,
-    });
+    if (PERSIST_TOKENS) {
+      saveAuthToStorage({
+        ...loadAuthFromStorage(),
+        ...data,
+      });
+    }
 
     return true;
   } catch (err) {
