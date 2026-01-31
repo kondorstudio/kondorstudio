@@ -188,6 +188,7 @@ export default function DashboardViewer() {
   const [autoRefreshOption, setAutoRefreshOption] = useState("OFF");
   const [lastDashboardUpdatedAt, setLastDashboardUpdatedAt] = useState(null);
   const [tvMode, setTvMode] = useState(false);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [widgetStatusMap, setWidgetStatusMap] = useState({});
   const [connectDialog, setConnectDialog] = useState({
     open: false,
@@ -365,6 +366,8 @@ export default function DashboardViewer() {
     if (dashboard.scope === "GROUP") return !globalBrandId;
     return !globalBrandId;
   }, [dashboard, globalBrandId]);
+  const showAdvanced = showAdvancedFilters || needsGlobalBrand;
+  const canToggleAdvanced = !needsGlobalBrand;
 
   const handleConnect = (brandId, source) => {
     if (!brandId || !source) return;
@@ -445,7 +448,7 @@ export default function DashboardViewer() {
 
   if (isLoading) {
     return (
-      <PageShell>
+      <PageShell className="reporting-surface">
         <div className="h-48 rounded-[18px] border border-[var(--border)] bg-white/70 animate-pulse" />
       </PageShell>
     );
@@ -453,7 +456,7 @@ export default function DashboardViewer() {
 
   if (!dashboard) {
     return (
-      <PageShell>
+      <PageShell className="reporting-surface">
         <div className="rounded-[18px] border border-[var(--border)] bg-white px-6 py-6 text-center">
           Dashboard nao encontrado.
         </div>
@@ -462,7 +465,7 @@ export default function DashboardViewer() {
   }
 
   return (
-    <PageShell>
+    <PageShell className="reporting-surface">
       <div className="space-y-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -619,31 +622,44 @@ export default function DashboardViewer() {
                 ))}
               </div>
             ) : null}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <div>
-                <p className="text-xs text-[var(--text-muted)]">Periodo inicial</p>
-                <DateField value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <div>
+                  <p className="text-xs text-[var(--text-muted)]">Periodo inicial</p>
+                  <DateField value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
+                </div>
+                <div>
+                  <p className="text-xs text-[var(--text-muted)]">Periodo final</p>
+                  <DateField value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
+                </div>
+                <div>
+                  <p className="text-xs text-[var(--text-muted)]">Comparacao</p>
+                  <SelectNative
+                    value={compareMode}
+                    onChange={(event) => setCompareMode(event.target.value)}
+                  >
+                    {COMPARE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </SelectNative>
+                </div>
+                <div className="flex items-end text-xs text-[var(--text-muted)]">
+                  Dados ao vivo.
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-[var(--text-muted)]">Periodo final</p>
-                <DateField value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
-              </div>
-              <div>
-                <p className="text-xs text-[var(--text-muted)]">Comparacao</p>
-                <SelectNative
-                  value={compareMode}
-                  onChange={(event) => setCompareMode(event.target.value)}
-                >
-                  {COMPARE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </SelectNative>
-              </div>
-              <div className="flex items-end text-xs text-[var(--text-muted)]">
-                Dados ao vivo.
-              </div>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={!canToggleAdvanced}
+                onClick={() => {
+                  if (!canToggleAdvanced) return;
+                  setShowAdvancedFilters((prev) => !prev);
+                }}
+              >
+                {showAdvanced ? "Ocultar avancados" : "Filtros avancados"}
+              </Button>
             </div>
             {compareMode === "CUSTOM" ? (
               <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -663,116 +679,120 @@ export default function DashboardViewer() {
                 </div>
               </div>
             ) : null}
-            <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {dashboard.scope === "BRAND" ? (
-                <div>
-                  <p className="text-xs text-[var(--text-muted)]">Marca</p>
-                  <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text)]">
-                    {scopedClients.find((client) => client.id === dashboard.brandId)?.name ||
-                      "Marca definida"}
-                  </div>
-                </div>
-              ) : null}
-              {dashboard.scope === "GROUP" ? (
-                <>
-                  {!isClientScoped ? (
+            {showAdvanced ? (
+              <>
+                <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {dashboard.scope === "BRAND" ? (
                     <div>
-                      <p className="text-xs text-[var(--text-muted)]">Grupo</p>
+                      <p className="text-xs text-[var(--text-muted)]">Marca</p>
                       <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text)]">
-                        {groups.find((group) => group.id === dashboard.groupId)?.name ||
-                          "Grupo definido"}
+                        {scopedClients.find((client) => client.id === dashboard.brandId)?.name ||
+                          "Marca definida"}
                       </div>
                     </div>
                   ) : null}
-                  <div>
-                    <p className="text-xs text-[var(--text-muted)]">Marca global</p>
-                    <SelectNative
-                      value={globalBrandId}
-                      onChange={(event) => setGlobalBrandId(event.target.value)}
-                    >
-                      <option value="">Sem marca</option>
-                      {selectableGroupBrands.map((brand) => (
-                        <option key={brand.id} value={brand.id}>
-                          {brand.name}
-                        </option>
-                      ))}
-                    </SelectNative>
-                  </div>
-                </>
-              ) : null}
-              {dashboard.scope === "TENANT" ? (
-                <>
-                  <div>
-                    <p className="text-xs text-[var(--text-muted)]">Marca global</p>
-                    <SelectNative
-                      value={globalBrandId}
-                      onChange={(event) => {
-                        setGlobalBrandId(event.target.value);
-                        if (event.target.value) setGlobalGroupId("");
-                      }}
-                    >
-                      <option value="">Sem marca</option>
-                      {scopedClients.map((client) => (
-                        <option key={client.id} value={client.id}>
-                          {client.name}
-                        </option>
-                      ))}
-                    </SelectNative>
-                  </div>
-                  {!isClientScoped ? (
-                    <div>
-                      <p className="text-xs text-[var(--text-muted)]">Grupo global</p>
-                      <SelectNative
-                        value={globalGroupId}
-                        onChange={(event) => {
-                          setGlobalGroupId(event.target.value);
-                          if (event.target.value) setGlobalBrandId("");
-                        }}
-                      >
-                        <option value="">Sem grupo</option>
-                        {groups.map((group) => (
-                          <option key={group.id} value={group.id}>
-                            {group.name}
-                          </option>
-                        ))}
-                      </SelectNative>
-                    </div>
-                  ) : null}
-                </>
-              ) : null}
-            </div>
-            {dimensionFilters.length ? (
-              <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {dimensionFilters.map((filter) => (
-                  <div key={filter.id}>
-                    <p className="text-xs text-[var(--text-muted)]">
-                      {filter.label || filter.key || "Filtro"}
-                      {filter.operator === "NOT_IN" ? " (excluir)" : ""}
-                      {filter.source || filter.level ? (
-                        <span className="ml-1 text-[10px] text-[var(--text-muted)]">
-                          • {[filter.source, filter.level].filter(Boolean).join(" / ")}
-                        </span>
+                  {dashboard.scope === "GROUP" ? (
+                    <>
+                      {!isClientScoped ? (
+                        <div>
+                          <p className="text-xs text-[var(--text-muted)]">Grupo</p>
+                          <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text)]">
+                            {groups.find((group) => group.id === dashboard.groupId)?.name ||
+                              "Grupo definido"}
+                          </div>
+                        </div>
                       ) : null}
-                    </p>
-                    <Input
-                      value={filter.values.join(", ")}
-                      onChange={(event) =>
-                        setDimensionFilters((prev) =>
-                          prev.map((item) =>
-                            item.id === filter.id
-                              ? {
-                                  ...item,
-                                  values: normalizeFilterValues(event.target.value),
-                                }
-                              : item
-                          )
-                        )
-                      }
-                      placeholder="Digite valores separados por vírgula"
-                    />
+                      <div>
+                        <p className="text-xs text-[var(--text-muted)]">Marca global</p>
+                        <SelectNative
+                          value={globalBrandId}
+                          onChange={(event) => setGlobalBrandId(event.target.value)}
+                        >
+                          <option value="">Sem marca</option>
+                          {selectableGroupBrands.map((brand) => (
+                            <option key={brand.id} value={brand.id}>
+                              {brand.name}
+                            </option>
+                          ))}
+                        </SelectNative>
+                      </div>
+                    </>
+                  ) : null}
+                  {dashboard.scope === "TENANT" ? (
+                    <>
+                      <div>
+                        <p className="text-xs text-[var(--text-muted)]">Marca global</p>
+                        <SelectNative
+                          value={globalBrandId}
+                          onChange={(event) => {
+                            setGlobalBrandId(event.target.value);
+                            if (event.target.value) setGlobalGroupId("");
+                          }}
+                        >
+                          <option value="">Sem marca</option>
+                          {scopedClients.map((client) => (
+                            <option key={client.id} value={client.id}>
+                              {client.name}
+                            </option>
+                          ))}
+                        </SelectNative>
+                      </div>
+                      {!isClientScoped ? (
+                        <div>
+                          <p className="text-xs text-[var(--text-muted)]">Grupo global</p>
+                          <SelectNative
+                            value={globalGroupId}
+                            onChange={(event) => {
+                              setGlobalGroupId(event.target.value);
+                              if (event.target.value) setGlobalBrandId("");
+                            }}
+                          >
+                            <option value="">Sem grupo</option>
+                            {groups.map((group) => (
+                              <option key={group.id} value={group.id}>
+                                {group.name}
+                              </option>
+                            ))}
+                          </SelectNative>
+                        </div>
+                      ) : null}
+                    </>
+                  ) : null}
+                </div>
+                {dimensionFilters.length ? (
+                  <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {dimensionFilters.map((filter) => (
+                      <div key={filter.id}>
+                        <p className="text-xs text-[var(--text-muted)]">
+                          {filter.label || filter.key || "Filtro"}
+                          {filter.operator === "NOT_IN" ? " (excluir)" : ""}
+                          {filter.source || filter.level ? (
+                            <span className="ml-1 text-[10px] text-[var(--text-muted)]">
+                              • {[filter.source, filter.level].filter(Boolean).join(" / ")}
+                            </span>
+                          ) : null}
+                        </p>
+                        <Input
+                          value={filter.values.join(", ")}
+                          onChange={(event) =>
+                            setDimensionFilters((prev) =>
+                              prev.map((item) =>
+                                item.id === filter.id
+                                  ? {
+                                      ...item,
+                                      values: normalizeFilterValues(event.target.value),
+                                    }
+                                  : item
+                              )
+                            )
+                          }
+                          placeholder="Digite valores separados por vírgula"
+                        />
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                ) : null}
+              </>
             ) : null}
           </section>
         )}

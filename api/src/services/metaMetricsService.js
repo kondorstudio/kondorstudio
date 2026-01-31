@@ -45,6 +45,35 @@ function normalizeList(value) {
   return [];
 }
 
+function normalizeDimensionFilters(filters) {
+  if (!Array.isArray(filters)) return [];
+  return filters
+    .map((filter) => {
+      if (!filter || typeof filter !== 'object') return null;
+      const key = String(filter.key || filter.dimension || filter.field || '').trim();
+      if (!key) return null;
+      const rawValues = Array.isArray(filter.values)
+        ? filter.values
+        : filter.value
+          ? [filter.value]
+          : [];
+      const values = rawValues.map((value) => String(value).trim()).filter(Boolean);
+      if (!values.length) return null;
+      const operator = String(filter.operator || 'IN').toUpperCase();
+      return { key, operator, values };
+    })
+    .filter(Boolean);
+}
+
+function buildFilteringPayload(filters) {
+  if (!filters.length) return [];
+  return filters.map((filter) => ({
+    field: filter.key,
+    operator: filter.operator === 'NOT_IN' ? 'NOT_IN' : 'IN',
+    value: filter.values,
+  }));
+}
+
 /**
  * buildFieldsList(credentials, metricTypes)
  * Prioridade:
@@ -118,6 +147,11 @@ async function fetchAccountMetrics(integration, options = {}) {
 
   const range = options.range || (options.since || options.until ? options : null);
   const metricTypes = Array.isArray(options.metricTypes) ? options.metricTypes : null;
+  const dimensionFilters = normalizeDimensionFilters(
+    options?.filters && typeof options.filters === 'object'
+      ? options.filters.dimensionFilters
+      : [],
+  );
 
   let credentials = {};
   try {
@@ -159,6 +193,11 @@ async function fetchAccountMetrics(integration, options = {}) {
     params.set('time_range', JSON.stringify(timeRangePayload));
   } else if (credentials.date_preset) {
     params.set('date_preset', credentials.date_preset);
+  }
+
+  const filteringPayload = buildFilteringPayload(dimensionFilters);
+  if (filteringPayload.length) {
+    params.set('filtering', JSON.stringify(filteringPayload));
   }
 
   const url = `${baseUrl}/${encodeURIComponent(accountId)}/insights?${params.toString()}`;

@@ -49,6 +49,35 @@ function normalizeList(value) {
   return [];
 }
 
+function normalizeDimensionFilters(filters) {
+  if (!Array.isArray(filters)) return [];
+  return filters
+    .map((filter) => {
+      if (!filter || typeof filter !== 'object') return null;
+      const key = String(filter.key || filter.dimension || filter.field || '').trim();
+      if (!key) return null;
+      const rawValues = Array.isArray(filter.values)
+        ? filter.values
+        : filter.value
+          ? [filter.value]
+          : [];
+      const values = rawValues.map((value) => String(value).trim()).filter(Boolean);
+      if (!values.length) return null;
+      const operator = String(filter.operator || 'IN').toUpperCase();
+      return { key, operator, values };
+    })
+    .filter(Boolean);
+}
+
+function formatGaqlValue(value) {
+  if (value === null || value === undefined) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  if (/^-?\d+(\.\d+)?$/.test(raw)) return raw;
+  const escaped = raw.replace(/\\\\/g, "\\\\").replace(/'/g, "\\'");
+  return `'${escaped}'`;
+}
+
 const METRIC_FIELD_MAP = {
   impressions: 'metrics.impressions',
   clicks: 'metrics.clicks',
@@ -95,26 +124,47 @@ function buildFieldsList(credentials, metricTypes) {
   return ['metrics.impressions', 'metrics.clicks', 'metrics.cost_micros'];
 }
 
-/**
- * buildDateFilter(range)
- * range: { since: 'YYYY-MM-DD', until: 'YYYY-MM-DD' }
- * Retorna string com trecho " WHERE segments.date BETWEEN '...' AND '...'" ou vazio.
- */
-function buildDateFilter(range) {
-  if (!range || typeof range !== 'object') return '';
+function buildDateCondition(range) {
+  if (!range || typeof range !== 'object') return null;
   const { since, until } = range;
-  if (!since && !until) return '';
+  if (!since && !until) return null;
 
   if (since && until) {
-    return ` WHERE segments.date BETWEEN '${since}' AND '${until}'`;
+    return `segments.date BETWEEN '${since}' AND '${until}'`;
   }
   if (since && !until) {
-    return ` WHERE segments.date >= '${since}'`;
+    return `segments.date >= '${since}'`;
   }
   if (!since && until) {
-    return ` WHERE segments.date <= '${until}'`;
+    return `segments.date <= '${until}'`;
   }
-  return '';
+  return null;
+}
+
+function buildDimensionConditions(filters) {
+  if (!filters.length) return [];
+  return filters
+    .map((filter) => {
+      const values = filter.values
+        .map((value) => formatGaqlValue(value))
+        .filter(Boolean);
+      if (!values.length) return null;
+      const operator = filter.operator === 'NOT_IN' ? 'NOT IN' : 'IN';
+      return `${filter.key} ${operator} (${values.join(', ')})`;
+    })
+    .filter(Boolean);
+}
+
+function buildWhereClause(range, dimensionFilters) {
+  const conditions = [];
+  const dateCondition = buildDateCondition(range);
+  if (dateCondition) conditions.push(dateCondition);
+  const dimensionConditions = buildDimensionConditions(dimensionFilters);
+  if (dimensionConditions.length) {
+    conditions.push(...dimensionConditions);
+  }
+  if (!conditions.length) return '';
+  return ` WHERE ${conditions.join(' AND ')}`;
 }
 
 /**
@@ -151,6 +201,11 @@ async function fetchAccountMetrics(integration, options = {}) {
   const metricTypes = Array.isArray(options.metricTypes) ? options.metricTypes : null;
   const granularity = options.granularity || 'day';
   const includeDate = granularity === 'day' || granularity === 'date';
+  const dimensionFilters = normalizeDimensionFilters(
+    options?.filters && typeof options.filters === 'object'
+      ? options.filters.dimensionFilters
+      : [],
+  );
 
   let credentials = {};
   try {
@@ -184,7 +239,7 @@ async function fetchAccountMetrics(integration, options = {}) {
 
   const selectClause = `SELECT ${selectFields.join(', ')}`;
   const fromClause = ' FROM customer';
-  const whereClause = buildDateFilter(range);
+  const whereClause = buildWhereClause(range, dimensionFilters);
 
   const query = `${selectClause}${fromClause}${whereClause}`;
 

@@ -1086,6 +1086,7 @@ export default function DashboardBuilder() {
   const [lastDashboardUpdatedAt, setLastDashboardUpdatedAt] = useState(null);
   const [isInteracting, setIsInteracting] = useState(false);
   const [tvMode, setTvMode] = useState(false);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(isNew);
   const [lastSelectedSource, setLastSelectedSource] = useState("");
   const [configOpen, setConfigOpen] = useState(false);
@@ -1604,6 +1605,8 @@ export default function DashboardBuilder() {
     }
     return !globalBrandId;
   }, [scope, globalBrandId, groupId]);
+  const showAdvanced = showAdvancedFilters || needsGlobalBrand;
+  const canToggleAdvanced = !needsGlobalBrand;
   const hasRecommendedPresets = Boolean(
     recommendedPresets?.kpis?.length || recommendedPresets?.charts?.length
   );
@@ -1763,14 +1766,14 @@ export default function DashboardBuilder() {
 
   if (!isNew && isLoading) {
     return (
-      <PageShell>
+      <PageShell className="reporting-surface">
         <div className="h-48 rounded-[18px] border border-[var(--border)] bg-white/70 animate-pulse" />
       </PageShell>
     );
   }
 
   return (
-    <PageShell>
+    <PageShell className="reporting-surface">
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -1877,6 +1880,317 @@ export default function DashboardBuilder() {
               </div>
             ))}
           </div>
+        ) : null}
+
+        {!tvMode ? (
+          <section className="rounded-[18px] border border-[var(--border)] bg-white px-6 py-5 shadow-[var(--shadow-sm)]">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
+                  Filtros globais
+                </p>
+                <p className="text-sm text-[var(--text-muted)]">
+                  Ajuste periodo, comparacao e segmentacoes principais.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="secondary"
+                type="button"
+                disabled={!canToggleAdvanced}
+                onClick={() => {
+                  if (!canToggleAdvanced) return;
+                  setShowAdvancedFilters((prev) => !prev);
+                }}
+              >
+                {showAdvanced ? "Ocultar avancados" : "Filtros avancados"}
+              </Button>
+            </div>
+            <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <Label>Periodo inicial</Label>
+                <DateField value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
+              </div>
+              <div>
+                <Label>Periodo final</Label>
+                <DateField value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
+              </div>
+              <div>
+                <Label>Comparacao</Label>
+                <SelectNative
+                  value={compareMode}
+                  onChange={(event) => setCompareMode(event.target.value)}
+                >
+                  {COMPARE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </SelectNative>
+              </div>
+              <div className="flex flex-col justify-end text-xs text-[var(--text-muted)]">
+                <span>Escopo</span>
+                <span className="text-sm text-[var(--text)]">
+                  {scope === "BRAND" ? "Marca" : scope === "GROUP" ? "Grupo" : "Tenant"}
+                </span>
+              </div>
+            </div>
+            {compareMode === "CUSTOM" ? (
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <div>
+                  <Label>Comparar de</Label>
+                  <DateField
+                    value={compareDateFrom}
+                    onChange={(event) => setCompareDateFrom(event.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label>Comparar ate</Label>
+                  <DateField
+                    value={compareDateTo}
+                    onChange={(event) => setCompareDateTo(event.target.value)}
+                  />
+                </div>
+              </div>
+            ) : null}
+            {showAdvanced ? (
+              <>
+                {scope === "TENANT" && !isClientScoped ? (
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <div>
+                      <Label>Marca global (opcional)</Label>
+                      <SelectNative
+                        value={globalBrandId}
+                        onChange={(event) => {
+                          setGlobalBrandId(event.target.value);
+                          if (event.target.value) setGlobalGroupId("");
+                        }}
+                      >
+                        <option value="">Sem marca</option>
+                        {scopedClients.map((client) => (
+                          <option key={client.id} value={client.id}>
+                            {client.name}
+                          </option>
+                        ))}
+                      </SelectNative>
+                    </div>
+                    <div>
+                      <Label>Grupo global (opcional)</Label>
+                      <SelectNative
+                        value={globalGroupId}
+                        onChange={(event) => {
+                          setGlobalGroupId(event.target.value);
+                          if (event.target.value) setGlobalBrandId("");
+                        }}
+                      >
+                        <option value="">Sem grupo</option>
+                        {groups.map((group) => (
+                          <option key={group.id} value={group.id}>
+                            {group.name}
+                          </option>
+                        ))}
+                      </SelectNative>
+                    </div>
+                  </div>
+                ) : null}
+
+                {scope === "GROUP" && groupBrands.length && !isClientScoped ? (
+                  <div className="mt-4">
+                    <Label>Marca global (opcional)</Label>
+                    <SelectNative
+                      value={globalBrandId}
+                      onChange={(event) => setGlobalBrandId(event.target.value)}
+                    >
+                      <option value="">Sem marca</option>
+                      {groupBrands.map((brand) => (
+                        <option key={brand.id} value={brand.id}>
+                          {brand.name}
+                        </option>
+                      ))}
+                    </SelectNative>
+                  </div>
+                ) : null}
+
+                <div className="mt-4 rounded-[12px] border border-[var(--border)] bg-[var(--surface)] px-3 py-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-[var(--text)]">
+                        Filtros de dimensao
+                      </p>
+                      <p className="text-xs text-[var(--text-muted)]">
+                        Aplique filtros globais (ex: campanha, adset, cidade).
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      type="button"
+                      onClick={() =>
+                        setDimensionFilters((prev) => [...prev, createDimensionFilter()])
+                      }
+                    >
+                      Adicionar
+                    </Button>
+                  </div>
+
+                  {dimensionFilters.length ? (
+                    <div className="mt-3 space-y-3">
+                      {dimensionFilters.map((filter) => (
+                        <div
+                          key={filter.id}
+                          className="rounded-[12px] border border-[var(--border)] bg-white px-3 py-3"
+                        >
+                          <div className="grid gap-3 md:grid-cols-3">
+                            <div>
+                              <Label>Label</Label>
+                              <Input
+                                value={filter.label}
+                                onChange={(event) =>
+                                  setDimensionFilters((prev) =>
+                                    prev.map((item) =>
+                                      item.id === filter.id
+                                        ? { ...item, label: event.target.value }
+                                        : item
+                                    )
+                                  )
+                                }
+                                placeholder="Campanha"
+                              />
+                            </div>
+                            <div>
+                              <Label>Fonte</Label>
+                              <SelectNative
+                                value={filter.source || ""}
+                                onChange={(event) =>
+                                  setDimensionFilters((prev) =>
+                                    prev.map((item) =>
+                                      item.id === filter.id
+                                        ? { ...item, source: event.target.value }
+                                        : item
+                                    )
+                                  )
+                                }
+                              >
+                                <option value="">Todas</option>
+                                {SOURCE_OPTIONS.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </SelectNative>
+                            </div>
+                            <div>
+                              <Label>Nivel</Label>
+                              <Input
+                                value={filter.level}
+                                onChange={(event) =>
+                                  setDimensionFilters((prev) =>
+                                    prev.map((item) =>
+                                      item.id === filter.id
+                                        ? { ...item, level: event.target.value }
+                                        : item
+                                    )
+                                  )
+                                }
+                                placeholder="CAMPAIGN"
+                              />
+                            </div>
+                          </div>
+                          <div className="mt-3 grid gap-3 md:grid-cols-3">
+                            <div>
+                              <Label>Dimensao (key)</Label>
+                              <datalist id={`dimension-options-${filter.id}`}>
+                                {(dimensionOptionsByKey.get(
+                                  `${filter.source || ""}::${filter.level || ""}`
+                                ) || []
+                                ).map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </datalist>
+                              <Input
+                                list={`dimension-options-${filter.id}`}
+                                value={filter.key}
+                                onChange={(event) =>
+                                  setDimensionFilters((prev) =>
+                                    prev.map((item) =>
+                                      item.id === filter.id
+                                        ? { ...item, key: event.target.value }
+                                        : item
+                                    )
+                                  )
+                                }
+                                placeholder="campaignName"
+                              />
+                            </div>
+                            <div>
+                              <Label>Operador</Label>
+                              <SelectNative
+                                value={filter.operator || "IN"}
+                                onChange={(event) =>
+                                  setDimensionFilters((prev) =>
+                                    prev.map((item) =>
+                                      item.id === filter.id
+                                        ? { ...item, operator: event.target.value }
+                                        : item
+                                    )
+                                  )
+                                }
+                              >
+                                {DIMENSION_FILTER_OPERATORS.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </SelectNative>
+                            </div>
+                            <div>
+                              <Label>Valores (CSV)</Label>
+                              <Input
+                                value={filter.values.join(", ")}
+                                onChange={(event) =>
+                                  setDimensionFilters((prev) =>
+                                    prev.map((item) =>
+                                      item.id === filter.id
+                                        ? {
+                                            ...item,
+                                            values: normalizeFilterValues(event.target.value),
+                                          }
+                                        : item
+                                    )
+                                  )
+                                }
+                                placeholder="Brand, Produto"
+                              />
+                            </div>
+                          </div>
+                          <div className="mt-3 flex justify-end">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                setDimensionFilters((prev) =>
+                                  prev.filter((item) => item.id !== filter.id)
+                                )
+                              }
+                            >
+                              Remover
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-xs text-[var(--text-muted)]">
+                      Nenhum filtro adicional configurado.
+                    </p>
+                  )}
+                </div>
+              </>
+            ) : null}
+          </section>
         ) : null}
 
         {isNew && showTemplatePicker ? (
@@ -2062,287 +2376,6 @@ export default function DashboardBuilder() {
                     </SelectNative>
                   </div>
                 ) : null}
-              </div>
-            </div>
-
-            <div className="rounded-[16px] border border-[var(--border)] bg-white px-4 py-4 shadow-[var(--shadow-sm)]">
-              <p className="text-sm font-semibold text-[var(--text)]">
-                Filtros globais
-              </p>
-              <div className="mt-3 space-y-3">
-                <div>
-                  <Label>Periodo inicial</Label>
-                  <DateField value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
-                </div>
-                <div>
-                  <Label>Periodo final</Label>
-                  <DateField value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
-                </div>
-                <div>
-                  <Label>Comparacao</Label>
-                  <SelectNative
-                    value={compareMode}
-                    onChange={(event) => setCompareMode(event.target.value)}
-                  >
-                    {COMPARE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </SelectNative>
-                </div>
-                {compareMode === "CUSTOM" ? (
-                  <>
-                    <div>
-                      <Label>Comparar de</Label>
-                      <DateField
-                        value={compareDateFrom}
-                        onChange={(event) => setCompareDateFrom(event.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <Label>Comparar ate</Label>
-                      <DateField
-                        value={compareDateTo}
-                        onChange={(event) => setCompareDateTo(event.target.value)}
-                      />
-                    </div>
-                  </>
-                ) : null}
-
-                {scope === "TENANT" && !isClientScoped ? (
-                  <>
-                    <div>
-                      <Label>Marca global (opcional)</Label>
-                      <SelectNative
-                        value={globalBrandId}
-                        onChange={(event) => {
-                          setGlobalBrandId(event.target.value);
-                          if (event.target.value) setGlobalGroupId("");
-                        }}
-                      >
-                        <option value="">Sem marca</option>
-                        {scopedClients.map((client) => (
-                          <option key={client.id} value={client.id}>
-                            {client.name}
-                          </option>
-                        ))}
-                      </SelectNative>
-                    </div>
-                    <div>
-                      <Label>Grupo global (opcional)</Label>
-                      <SelectNative
-                        value={globalGroupId}
-                        onChange={(event) => {
-                          setGlobalGroupId(event.target.value);
-                          if (event.target.value) setGlobalBrandId("");
-                        }}
-                      >
-                        <option value="">Sem grupo</option>
-                        {groups.map((group) => (
-                          <option key={group.id} value={group.id}>
-                            {group.name}
-                          </option>
-                        ))}
-                      </SelectNative>
-                    </div>
-                  </>
-                ) : null}
-
-                {scope === "GROUP" && groupBrands.length && !isClientScoped ? (
-                  <div>
-                    <Label>Marca global (opcional)</Label>
-                    <SelectNative
-                      value={globalBrandId}
-                      onChange={(event) => setGlobalBrandId(event.target.value)}
-                    >
-                      <option value="">Sem marca</option>
-                      {groupBrands.map((brand) => (
-                        <option key={brand.id} value={brand.id}>
-                          {brand.name}
-                        </option>
-                      ))}
-                    </SelectNative>
-                  </div>
-                ) : null}
-
-                <div className="rounded-[12px] border border-[var(--border)] bg-[var(--surface)] px-3 py-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div>
-                      <p className="text-sm font-semibold text-[var(--text)]">
-                        Filtros de dimensao
-                      </p>
-                      <p className="text-xs text-[var(--text-muted)]">
-                        Aplique filtros globais (ex: campanha, adset, cidade).
-                      </p>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      type="button"
-                      onClick={() =>
-                        setDimensionFilters((prev) => [...prev, createDimensionFilter()])
-                      }
-                    >
-                      Adicionar
-                    </Button>
-                  </div>
-
-                  {dimensionFilters.length ? (
-                    <div className="mt-3 space-y-3">
-                      {dimensionFilters.map((filter) => (
-                        <div
-                          key={filter.id}
-                          className="rounded-[12px] border border-[var(--border)] bg-white px-3 py-3"
-                        >
-                          <div className="grid gap-3 md:grid-cols-3">
-                            <div>
-                              <Label>Label</Label>
-                              <Input
-                                value={filter.label}
-                                onChange={(event) =>
-                                  setDimensionFilters((prev) =>
-                                    prev.map((item) =>
-                                      item.id === filter.id
-                                        ? { ...item, label: event.target.value }
-                                        : item
-                                    )
-                                  )
-                                }
-                                placeholder="Campanha"
-                              />
-                            </div>
-                            <div>
-                              <Label>Fonte</Label>
-                              <SelectNative
-                                value={filter.source || ""}
-                                onChange={(event) =>
-                                  setDimensionFilters((prev) =>
-                                    prev.map((item) =>
-                                      item.id === filter.id
-                                        ? { ...item, source: event.target.value }
-                                        : item
-                                    )
-                                  )
-                                }
-                              >
-                                <option value="">Todas</option>
-                                {SOURCE_OPTIONS.map((option) => (
-                                  <option key={option.value} value={option.value}>
-                                    {option.label}
-                                  </option>
-                                ))}
-                              </SelectNative>
-                            </div>
-                            <div>
-                              <Label>Nivel</Label>
-                              <Input
-                                value={filter.level}
-                                onChange={(event) =>
-                                  setDimensionFilters((prev) =>
-                                    prev.map((item) =>
-                                      item.id === filter.id
-                                        ? { ...item, level: event.target.value }
-                                        : item
-                                    )
-                                  )
-                                }
-                                placeholder="CAMPAIGN"
-                              />
-                            </div>
-                          </div>
-                          <div className="mt-3 grid gap-3 md:grid-cols-3">
-                            <div>
-                              <Label>Dimensao (key)</Label>
-                              <datalist id={`dimension-options-${filter.id}`}>
-                                {(dimensionOptionsByKey.get(
-                                  `${filter.source || ""}::${filter.level || ""}`
-                                ) || []
-                                ).map((option) => (
-                                  <option key={option.value} value={option.value}>
-                                    {option.label}
-                                  </option>
-                                ))}
-                              </datalist>
-                              <Input
-                                list={`dimension-options-${filter.id}`}
-                                value={filter.key}
-                                onChange={(event) =>
-                                  setDimensionFilters((prev) =>
-                                    prev.map((item) =>
-                                      item.id === filter.id
-                                        ? { ...item, key: event.target.value }
-                                        : item
-                                    )
-                                  )
-                                }
-                                placeholder="campaignName"
-                              />
-                            </div>
-                            <div>
-                              <Label>Operador</Label>
-                              <SelectNative
-                                value={filter.operator || "IN"}
-                                onChange={(event) =>
-                                  setDimensionFilters((prev) =>
-                                    prev.map((item) =>
-                                      item.id === filter.id
-                                        ? { ...item, operator: event.target.value }
-                                        : item
-                                    )
-                                  )
-                                }
-                              >
-                                {DIMENSION_FILTER_OPERATORS.map((option) => (
-                                  <option key={option.value} value={option.value}>
-                                    {option.label}
-                                  </option>
-                                ))}
-                              </SelectNative>
-                            </div>
-                            <div>
-                              <Label>Valores (CSV)</Label>
-                              <Input
-                                value={filter.values.join(", ")}
-                                onChange={(event) =>
-                                  setDimensionFilters((prev) =>
-                                    prev.map((item) =>
-                                      item.id === filter.id
-                                        ? {
-                                            ...item,
-                                            values: normalizeFilterValues(event.target.value),
-                                          }
-                                        : item
-                                    )
-                                  )
-                                }
-                                placeholder="Brand, Produto"
-                              />
-                            </div>
-                          </div>
-                          <div className="mt-3 flex justify-end">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                setDimensionFilters((prev) =>
-                                  prev.filter((item) => item.id !== filter.id)
-                                )
-                              }
-                            >
-                              Remover
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="mt-3 text-xs text-[var(--text-muted)]">
-                      Nenhum filtro adicional configurado.
-                    </p>
-                  )}
-                </div>
               </div>
             </div>
 

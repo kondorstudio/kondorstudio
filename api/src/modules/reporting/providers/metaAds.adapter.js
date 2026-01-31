@@ -86,10 +86,15 @@ async function queryMetrics(connection, querySpec = {}) {
   };
 
   const metrics = Array.isArray(querySpec.metrics) ? querySpec.metrics : null;
+  const filters =
+    querySpec?.filters && typeof querySpec.filters === 'object'
+      ? querySpec.filters
+      : null;
   const rows = await metaMetricsService.fetchAccountMetrics(integration, {
     range,
     metricTypes: metrics,
     granularity: querySpec.granularity || 'day',
+    filters,
   });
 
   const normalized = normalizeMetricsPayload(rows || []);

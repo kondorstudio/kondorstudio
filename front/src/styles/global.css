@@ -65,6 +65,21 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+.reporting-surface {
+  min-height: 100%;
+  background: radial-gradient(
+      1200px 600px at 10% -10%,
+      rgba(31, 111, 235, 0.12),
+      rgba(255, 255, 255, 0) 60%
+    ),
+    radial-gradient(
+      1000px 500px at 90% 0%,
+      rgba(15, 118, 110, 0.1),
+      rgba(255, 255, 255, 0) 55%
+    ),
+    var(--background);
+}
+
 body.tv-mode .kondor-main-sidebar {
   display: none !important;
 }
