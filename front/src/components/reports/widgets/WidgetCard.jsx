@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { MoreHorizontal, Pencil, Copy, Trash2 } from "lucide-react";
-import { Badge } from "@/components/ui/badge.jsx";
 import { cn } from "@/utils/classnames.js";
 import { getSourceMeta, getWidgetTypeMeta } from "./widgetMeta.js";
 import { WidgetStatusPill } from "./WidgetStates.jsx";
@@ -12,7 +11,7 @@ function SourcePill({ source }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-2 rounded-full border px-2 py-1 text-[11px] font-medium",
+        "looker-pill",
         meta.accent
       )}
     >
@@ -113,7 +112,7 @@ const WidgetCard = React.memo(function WidgetCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-[var(--surface-muted)] text-[var(--text)]">
+          <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-[var(--surface-muted)] text-[var(--text)]">
             {TitleIcon ? <TitleIcon className="h-4 w-4" /> : null}
           </div>
           <div>
@@ -121,7 +120,7 @@ const WidgetCard = React.memo(function WidgetCard({
               {widget?.title || "Widget"}
             </p>
             <div className="mt-1 flex flex-wrap items-center gap-2">
-              <Badge variant="outline">{typeMeta?.label || "Widget"}</Badge>
+              <span className="looker-pill">{typeMeta?.label || "Widget"}</span>
               {widget?.source ? <SourcePill source={widget.source} /> : null}
             </div>
           </div>

@@ -95,7 +95,7 @@ export function DateField({
         onClick={() => setOpen((prev) => !prev)}
         disabled={disabled}
         className={cn(
-          "flex h-10 w-full items-center rounded-[10px] border border-[var(--border)] bg-white px-3 pl-9 text-left text-sm text-[var(--text)] shadow-sm",
+          "k-date-field flex h-10 w-full items-center rounded-[10px] border border-[var(--border)] bg-white px-3 pl-9 text-left text-sm text-[var(--text)] shadow-sm",
           "transition-[border-color,box-shadow,background-color] duration-[var(--motion-fast)] ease-[var(--ease-standard)]",
           "hover:bg-[var(--surface-muted)] focus:outline-none focus:ring-2 focus:ring-[rgba(31,111,235,0.2)]",
           disabled && "cursor-not-allowed bg-[var(--surface-muted)] text-[var(--text-muted)]",
@@ -238,7 +238,7 @@ export function TimeField({
         step={60}
         list={datalistId}
         className={cn(
-          "flex h-10 w-full items-center rounded-[10px] border border-[var(--border)] bg-white px-3 pl-9 text-left text-sm text-[var(--text)] shadow-sm",
+          "k-time-field flex h-10 w-full items-center rounded-[10px] border border-[var(--border)] bg-white px-3 pl-9 text-left text-sm text-[var(--text)] shadow-sm",
           "transition-[border-color,box-shadow,background-color] duration-[var(--motion-fast)] ease-[var(--ease-standard)]",
           "hover:bg-[var(--surface-muted)] focus:outline-none focus:ring-2 focus:ring-[rgba(31,111,235,0.2)]",
           disabled && "cursor-not-allowed bg-[var(--surface-muted)] text-[var(--text-muted)]",

@@ -327,12 +327,12 @@ export default function MetricCatalogPanel() {
                   {item.metricKey} {item.dimensionKey ? `• ${item.dimensionKey}` : ""}
                 </p>
                 {item.isDefault ? (
-                  <span className="mt-1 inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                  <span className="looker-pill looker-pill--accent mt-1">
                     Default
                   </span>
                 ) : null}
                 {item.isCalculated ? (
-                  <span className="ml-2 mt-1 inline-flex rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
+                  <span className="looker-pill ml-2 mt-1">
                     Calculada
                   </span>
                 ) : null}

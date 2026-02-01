@@ -67,49 +67,93 @@ body {
 
 .reporting-surface {
   min-height: 100%;
-  background: #f7f8fb;
+  background: #f6f7fb;
+  --reporting-border: #e4e7ef;
+  --reporting-muted: #8b93a7;
+  --reporting-surface: #ffffff;
+  --reporting-surface-muted: #f1f3f7;
+  --reporting-radius: 10px;
 }
 
-.looker-panel {
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: #fff;
+.reporting-surface .looker-panel {
+  border: 1px solid var(--reporting-border);
+  border-radius: var(--reporting-radius);
+  background: var(--reporting-surface);
   box-shadow: none;
 }
 
-.looker-card {
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: #fff;
+.reporting-surface .looker-card {
+  border: 1px solid var(--reporting-border);
+  border-radius: var(--reporting-radius);
+  background: var(--reporting-surface);
   box-shadow: none;
 }
 
-.looker-chip {
-  border: 1px solid var(--border);
+.reporting-surface .looker-chip {
+  border: 1px solid var(--reporting-border);
   border-radius: 999px;
-  background: #f8fafc;
-  font-size: 11px;
-  letter-spacing: 0.08em;
+  background: var(--reporting-surface-muted);
+  font-size: 10px;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
+  color: var(--text-muted);
 }
 
-.looker-toolbar {
+.reporting-surface .looker-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--reporting-border);
+  border-radius: 999px;
+  background: var(--reporting-surface-muted);
+  padding: 2px 8px;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.reporting-surface .looker-pill--accent {
+  border-color: rgba(31, 111, 235, 0.2);
+  color: var(--primary);
+  background: rgba(31, 111, 235, 0.08);
+}
+
+.reporting-surface .looker-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 14px;
 }
 
-.looker-section-title {
-  font-size: 12px;
-  letter-spacing: 0.16em;
+.reporting-surface .looker-section-title {
+  font-size: 11px;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--reporting-muted);
 }
 
-.looker-muted {
-  color: var(--text-muted);
+.reporting-surface .looker-muted {
+  color: var(--reporting-muted);
+}
+
+.reporting-surface input,
+.reporting-surface textarea,
+.reporting-surface .k-select,
+.reporting-surface .k-date-field,
+.reporting-surface .k-time-field {
+  border-color: var(--reporting-border);
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.reporting-surface input:focus,
+.reporting-surface textarea:focus,
+.reporting-surface .k-select:focus,
+.reporting-surface .k-date-field:focus,
+.reporting-surface .k-time-field:focus {
+  box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.12);
 }
 
 .looker-divider {

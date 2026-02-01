@@ -62,6 +62,23 @@ export default function MetricMultiSelect({
     onChange(value.filter((item) => item !== key));
   };
 
+  const handleClear = (event) => {
+    event?.stopPropagation();
+    if (!onChange) return;
+    onChange([]);
+  };
+
+  const handleSelectAll = () => {
+    if (!onChange) return;
+    const allKeys = filteredOptions.map((option) => option.value);
+    const merged = Array.from(new Set([...value, ...allKeys]));
+    onChange(merged);
+  };
+
+  const canSelectAll =
+    filteredOptions.length &&
+    filteredOptions.some((option) => !value.includes(option.value));
+
   const resolvedEmptyText = useMemo(() => {
     if (typeof emptyText === "string") return emptyText;
     if (emptyText && typeof emptyText === "object") {
@@ -92,13 +109,13 @@ export default function MetricMultiSelect({
           value.map((item) => (
             <span
               key={item}
-              className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700"
+              className="looker-pill"
             >
               {selectedMap.get(item) || item}
               <button
                 type="button"
                 onClick={(event) => handleRemove(item, event)}
-                className="rounded-full p-0.5 text-blue-500 hover:bg-blue-100"
+                className="rounded-full p-0.5 text-[var(--text-muted)] hover:bg-[var(--surface-muted)]"
               >
                 <X className="h-3 w-3" />
               </button>
@@ -114,14 +131,28 @@ export default function MetricMultiSelect({
 
       {open ? (
         <div className="absolute z-30 mt-2 w-full rounded-[12px] border border-[var(--border)] bg-white">
-          <div className="flex items-center gap-2 border-b border-[var(--border)] px-3 py-2 text-sm">
-            <Search className="h-4 w-4 text-[var(--text-muted)]" />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Buscar metrica"
-              className="h-8 flex-1 border-0 bg-transparent px-0 text-sm focus:ring-0"
-            />
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-3 py-2 text-sm">
+            <div className="flex flex-1 items-center gap-2">
+              <Search className="h-4 w-4 text-[var(--text-muted)]" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Buscar metrica"
+                className="h-8 flex-1 border-0 bg-transparent px-0 text-sm focus:ring-0"
+              />
+            </div>
+            <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
+              <span>{value.length} selecionada(s)</span>
+              {value.length ? (
+                <button
+                  type="button"
+                  onClick={handleClear}
+                  className="rounded-full border border-[var(--border)] px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-[var(--text-muted)] hover:text-[var(--text)]"
+                >
+                  Limpar
+                </button>
+              ) : null}
+            </div>
           </div>
           <div className="max-h-56 overflow-y-auto py-1">
             {filteredOptions.length ? (
@@ -135,7 +166,7 @@ export default function MetricMultiSelect({
                     className={cn(
                       "flex w-full items-center justify-between px-3 py-2 text-left text-sm transition",
                       selected
-                        ? "bg-blue-50 text-blue-700"
+                        ? "bg-[var(--primary-light)] text-[var(--primary)]"
                         : "text-[var(--text)] hover:bg-[var(--surface-muted)]"
                     )}
                   >
@@ -150,6 +181,22 @@ export default function MetricMultiSelect({
               </div>
             )}
           </div>
+          {filteredOptions.length ? (
+            <div className="flex items-center justify-between border-t border-[var(--border)] px-3 py-2 text-xs">
+              <span className="text-[var(--text-muted)]">
+                {filteredOptions.length} resultado(s)
+              </span>
+              {canSelectAll ? (
+                <button
+                  type="button"
+                  onClick={handleSelectAll}
+                  className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--primary)] hover:underline"
+                >
+                  Selecionar tudo
+                </button>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

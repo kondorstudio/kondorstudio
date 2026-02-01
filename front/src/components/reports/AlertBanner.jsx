@@ -4,15 +4,15 @@ import { cn } from "@/utils/classnames.js";
 
 const VARIANTS = {
   danger: {
-    container: "border-red-200 bg-red-50 text-red-700",
-    icon: "text-red-600",
+    container: "border-rose-200 bg-rose-50/70 text-rose-700",
+    icon: "text-rose-600",
   },
   warning: {
-    container: "border-amber-200 bg-amber-50 text-amber-700",
+    container: "border-amber-200 bg-amber-50/70 text-amber-700",
     icon: "text-amber-600",
   },
   info: {
-    container: "border-blue-200 bg-blue-50 text-blue-700",
+    container: "border-blue-200 bg-blue-50/70 text-blue-700",
     icon: "text-blue-600",
   },
 };
@@ -30,7 +30,7 @@ export default function AlertBanner({
   return (
     <div
       className={cn(
-        "flex flex-wrap items-center justify-between gap-3 rounded-[12px] border px-4 py-3 text-sm",
+        "flex flex-wrap items-center justify-between gap-3 rounded-[10px] border px-4 py-3 text-sm",
         styles.container,
         className
       )}
