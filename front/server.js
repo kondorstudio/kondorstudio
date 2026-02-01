@@ -6,8 +6,19 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const distDir = path.join(__dirname, "dist");
 
-const rawBase = (process.env.VITE_BASE_PATH || "/").trim();
+const rawBase = (
+  process.env.VITE_BASE_PATH ||
+  process.env.VITE_PUBLIC_APP_URL ||
+  "/"
+).trim();
 let basePath = rawBase || "/";
+if (rawBase) {
+  try {
+    basePath = new URL(rawBase).pathname || "/";
+  } catch (err) {
+    basePath = rawBase;
+  }
+}
 if (!basePath.startsWith("/")) basePath = `/${basePath}`;
 if (!basePath.endsWith("/")) basePath += "/";
 if (basePath === "//") basePath = "/";
