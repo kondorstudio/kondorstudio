@@ -727,20 +727,18 @@ export default function ReportsTemplateBuilder() {
 
   if (!isNew && isLoading) {
     return (
-      <PageShell>
-        <div className="h-48 rounded-[18px] border border-[var(--border)] bg-white/70 animate-pulse" />
+      <PageShell className="reporting-surface">
+        <div className="looker-panel h-48 bg-white/70 animate-pulse" />
       </PageShell>
     );
   }
 
   return (
-    <PageShell>
+    <PageShell className="reporting-surface">
       <div className="space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="looker-toolbar">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
-              Builder de templates
-            </p>
+            <p className="looker-section-title">Templates</p>
             <h1 className="text-2xl font-semibold text-[var(--text)]">
               {isNew ? "Novo template" : name || "Template"}
             </h1>
@@ -772,9 +770,9 @@ export default function ReportsTemplateBuilder() {
 
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
-        <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
+        <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
           <aside className="space-y-4">
-            <div className="rounded-[16px] border border-[var(--border)] bg-white px-4 py-4 shadow-[var(--shadow-sm)]">
+            <div className="looker-panel px-4 py-4">
               <p className="text-sm font-semibold text-[var(--text)]">Detalhes</p>
               <div className="mt-3 space-y-3">
                 <div>
@@ -804,7 +802,7 @@ export default function ReportsTemplateBuilder() {
               </div>
             </div>
 
-            <div className="rounded-[16px] border border-[var(--border)] bg-white px-4 py-4 shadow-[var(--shadow-sm)]">
+            <div className="looker-panel px-4 py-4">
               <p className="text-sm font-semibold text-[var(--text)]">Widgets</p>
               <div className="mt-3 grid gap-2">
                 {WIDGET_TYPES.map((item) => (
@@ -832,7 +830,7 @@ export default function ReportsTemplateBuilder() {
             </div>
           </aside>
 
-          <section className="rounded-[18px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-sm)]">
+          <section className="looker-panel p-4">
             <DashboardCanvas
               layout={layout}
               items={widgets}

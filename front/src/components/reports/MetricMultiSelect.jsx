@@ -83,7 +83,7 @@ export default function MetricMultiSelect({
         disabled={disabled}
         className={cn(
           "flex min-h-[44px] w-full flex-wrap items-center gap-2 rounded-[10px] border border-[var(--border)] " +
-            "bg-white px-3 py-2 text-left text-sm text-[var(--text)] shadow-[var(--shadow-sm)] " +
+            "bg-white px-3 py-2 text-left text-sm text-[var(--text)] " +
             "transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(31,111,235,0.2)]",
           disabled ? "cursor-not-allowed opacity-60" : "hover:border-blue-200"
         )}
@@ -113,7 +113,7 @@ export default function MetricMultiSelect({
       </button>
 
       {open ? (
-        <div className="absolute z-30 mt-2 w-full rounded-[12px] border border-[var(--border)] bg-white shadow-[var(--shadow-md)]">
+        <div className="absolute z-30 mt-2 w-full rounded-[12px] border border-[var(--border)] bg-white">
           <div className="flex items-center gap-2 border-b border-[var(--border)] px-3 py-2 text-sm">
             <Search className="h-4 w-4 text-[var(--text-muted)]" />
             <input

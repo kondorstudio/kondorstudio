@@ -27,14 +27,15 @@ export default function DashboardsHome() {
   }, [dashboards, search]);
 
   return (
-    <PageShell>
+    <PageShell className="reporting-surface">
       <div className="space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="looker-toolbar">
           <div>
+            <p className="looker-section-title">Dashboards</p>
             <h1 className="text-2xl font-semibold text-[var(--text)]">
               Dashboards
             </h1>
-            <p className="text-sm text-[var(--text-muted)]">
+            <p className="text-sm looker-muted">
               Gerencie seus dashboards ao vivo.
             </p>
           </div>
@@ -43,8 +44,8 @@ export default function DashboardsHome() {
           </Button>
         </div>
 
-        <section className="rounded-[18px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-sm)]">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <section className="looker-panel p-4">
+          <div className="looker-toolbar">
             <div className="relative w-full max-w-md">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
               <Input
@@ -58,7 +59,7 @@ export default function DashboardsHome() {
 
           <div className="mt-4">
             {isLoading ? (
-              <div className="rounded-[18px] border border-[var(--border)] bg-white/70 p-6 animate-pulse" />
+              <div className="looker-panel p-6 bg-white/70 animate-pulse" />
             ) : filteredDashboards.length ? (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {filteredDashboards.map((dashboard) => (
@@ -66,7 +67,7 @@ export default function DashboardsHome() {
                     key={dashboard.id}
                     type="button"
                     onClick={() => navigate(`/reports/dashboards/${dashboard.id}`)}
-                    className="rounded-[16px] border border-[var(--border)] bg-white px-4 py-4 text-left shadow-[var(--shadow-sm)] transition hover:border-[var(--primary)]"
+                    className="looker-card px-4 py-4 text-left transition hover:border-[var(--primary)]"
                   >
                     <p className="text-sm font-semibold text-[var(--text)]">
                       {dashboard.name}

@@ -449,7 +449,7 @@ export default function DashboardViewer() {
   if (isLoading) {
     return (
       <PageShell className="reporting-surface">
-        <div className="h-48 rounded-[18px] border border-[var(--border)] bg-white/70 animate-pulse" />
+        <div className="looker-panel h-48 bg-white/70 animate-pulse" />
       </PageShell>
     );
   }
@@ -457,7 +457,7 @@ export default function DashboardViewer() {
   if (!dashboard) {
     return (
       <PageShell className="reporting-surface">
-        <div className="rounded-[18px] border border-[var(--border)] bg-white px-6 py-6 text-center">
+        <div className="looker-panel px-6 py-6 text-center">
           Dashboard nao encontrado.
         </div>
       </PageShell>
@@ -467,68 +467,64 @@ export default function DashboardViewer() {
   return (
     <PageShell className="reporting-surface">
       <div className="space-y-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
-                Dashboard ao vivo
-              </p>
-              <h1 className="text-2xl font-semibold text-[var(--text)]">
-                {dashboard.name}
-              </h1>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="ghost" onClick={() => navigate("/reports/dashboards")}>
-                Voltar
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={() => navigate(`/reports/dashboards/${dashboardId}/edit`)}
-              >
-                Editar
-              </Button>
-              <Button
-                variant={tvMode ? "secondary" : "ghost"}
-                onClick={() => setTvMode((prev) => !prev)}
-              >
-                {tvMode ? "Sair do modo TV" : "Modo TV"}
-              </Button>
-              {!tvMode ? (
-                <div className="min-w-[150px]">
-                  <SelectNative
-                    value={autoRefreshOption}
-                    onChange={(event) => setAutoRefreshOption(event.target.value)}
-                  >
-                    <option value="OFF">Auto-refresh: OFF</option>
-                    <option value="5m">Auto-refresh: 5m</option>
-                    <option value="15m">Auto-refresh: 15m</option>
-                  </SelectNative>
-                </div>
-              ) : null}
-              <Button
-                variant="secondary"
-                onClick={handleRefreshAll}
-                disabled={isRefreshing || !widgets.length}
-              >
-                {isRefreshing ? "Atualizando..." : "Atualizar dados"}
-              </Button>
-              {lastUpdatedLabel && !tvMode ? (
-                <span className="text-xs text-[var(--text-muted)]">{lastUpdatedLabel}</span>
-              ) : null}
-            </div>
+        <div className="looker-toolbar">
+          <div>
+            <p className="looker-section-title">Dashboard ao vivo</p>
+            <h1 className="text-2xl font-semibold text-[var(--text)]">
+              {dashboard.name}
+            </h1>
           </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="ghost" onClick={() => navigate("/reports/dashboards")}>
+              Voltar
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => navigate(`/reports/dashboards/${dashboardId}/edit`)}
+            >
+              Editar
+            </Button>
+            <Button
+              variant={tvMode ? "secondary" : "ghost"}
+              onClick={() => setTvMode((prev) => !prev)}
+            >
+              {tvMode ? "Sair do modo TV" : "Modo TV"}
+            </Button>
+            {!tvMode ? (
+              <div className="min-w-[150px]">
+                <SelectNative
+                  value={autoRefreshOption}
+                  onChange={(event) => setAutoRefreshOption(event.target.value)}
+                >
+                  <option value="OFF">Auto-refresh: OFF</option>
+                  <option value="5m">Auto-refresh: 5m</option>
+                  <option value="15m">Auto-refresh: 15m</option>
+                </SelectNative>
+              </div>
+            ) : null}
+            <Button
+              variant="secondary"
+              onClick={handleRefreshAll}
+              disabled={isRefreshing || !widgets.length}
+            >
+              {isRefreshing ? "Atualizando..." : "Atualizar dados"}
+            </Button>
+            {lastUpdatedLabel && !tvMode ? (
+              <span className="text-xs looker-muted">{lastUpdatedLabel}</span>
+            ) : null}
+          </div>
+        </div>
 
         {tvMode ? (
-          <section className="rounded-[18px] border border-[var(--border)] bg-white px-6 py-5 shadow-[var(--shadow-sm)]">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+          <section className="looker-panel px-6 py-5">
+            <div className="looker-toolbar">
               <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
-                  Modo TV
-                </p>
+                <p className="looker-section-title">Modo TV</p>
                 <p className="text-lg font-semibold text-[var(--text)]">{dashboard.name}</p>
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 {lastUpdatedLabel ? (
-                  <span className="text-xs text-[var(--text-muted)]">{lastUpdatedLabel}</span>
+                  <span className="text-xs looker-muted">{lastUpdatedLabel}</span>
                 ) : null}
                 <Button
                   size="sm"
@@ -594,7 +590,7 @@ export default function DashboardViewer() {
             ) : null}
           </section>
         ) : (
-          <section className="rounded-[18px] border border-[var(--border)] bg-white px-6 py-5 shadow-[var(--shadow-sm)]">
+          <section className="looker-panel px-6 py-5">
             {needsGlobalBrand ? (
               <div className="mb-4 rounded-[12px] border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-700">
                 Selecione uma marca global para carregar os dados deste dashboard.
@@ -798,7 +794,7 @@ export default function DashboardViewer() {
         )}
 
         {widgets.length ? (
-          <section className="rounded-[18px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-sm)]">
+          <section className="looker-panel p-4">
             <DashboardCanvas
               layout={layout}
               items={widgets}
@@ -849,7 +845,7 @@ export default function DashboardViewer() {
             />
           </section>
         ) : (
-          <section className="rounded-[18px] border border-[var(--border)] bg-white px-6 py-6 text-sm text-[var(--text-muted)]">
+          <section className="looker-panel px-6 py-6 text-sm text-[var(--text-muted)]">
             Nenhum widget configurado neste dashboard.
           </section>
         )}

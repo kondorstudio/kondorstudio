@@ -35,7 +35,7 @@ function WidgetMenu({ onEdit, onDuplicate, onRemove }) {
         <MoreHorizontal className="h-4 w-4" />
       </button>
       {open ? (
-        <div className="absolute right-0 top-9 z-20 w-40 rounded-[12px] border border-[var(--border)] bg-white p-1 shadow-[var(--shadow-md)]">
+        <div className="absolute right-0 top-9 z-20 w-40 rounded-[10px] border border-[var(--border)] bg-white p-1">
           {onEdit ? (
             <button
               type="button"
@@ -107,8 +107,7 @@ const WidgetCard = React.memo(function WidgetCard({
   return (
     <div
       className={cn(
-        "group flex h-full flex-col rounded-[16px] border border-[var(--border)] " +
-          "bg-white p-4 shadow-[var(--shadow-sm)] transition hover:border-[rgba(31,111,235,0.35)] hover:shadow-[var(--shadow-md)]",
+        "group flex h-full flex-col looker-card p-4 transition hover:border-[rgba(31,111,235,0.35)]",
         className
       )}
     >

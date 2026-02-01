@@ -297,25 +297,23 @@ export default function ReportsWizard() {
   const prevStep = () => setStep((prev) => Math.max(prev - 1, 0));
 
   return (
-    <PageShell>
+    <PageShell className="reporting-surface">
       <div className="space-y-6">
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
-            Novo relatorio
-          </p>
+          <p className="looker-section-title">Novo relatorio</p>
           <h1 className="text-2xl font-semibold text-[var(--text)]">
             Wizard de criacao
           </h1>
         </div>
 
-        <div className="flex flex-wrap gap-2 text-xs">
+        <div className="flex flex-wrap gap-4 text-xs">
           {stepLabels.map((label, index) => (
             <span
               key={label}
-              className={`rounded-full px-3 py-1 ${
+              className={`pb-1 uppercase tracking-[0.18em] ${
                 index === step
-                  ? "bg-[var(--primary)] text-white"
-                  : "bg-[var(--surface-muted)] text-[var(--text-muted)]"
+                  ? "border-b-2 border-[var(--primary)] text-[var(--text)]"
+                  : "border-b-2 border-transparent text-[var(--text-muted)]"
               }`}
             >
               {index + 1}. {label}
@@ -324,7 +322,7 @@ export default function ReportsWizard() {
         </div>
 
         {step === 0 ? (
-          <section className="rounded-[18px] border border-[var(--border)] bg-white px-6 py-6 shadow-[var(--shadow-sm)]">
+          <section className="looker-panel px-6 py-6">
             <h2 className="text-lg font-semibold text-[var(--text)]">
               Escolha o escopo
             </h2>
@@ -337,10 +335,10 @@ export default function ReportsWizard() {
               <button
                 type="button"
                 onClick={() => setScope("BRAND")}
-                className={`rounded-[16px] border px-4 py-4 text-left transition ${
+                className={`rounded-[12px] border px-4 py-4 text-left transition ${
                   scope === "BRAND"
-                    ? "border-[var(--primary)] bg-blue-50"
-                    : "border-[var(--border)] bg-[var(--surface)]"
+                    ? "border-[var(--primary)] bg-white"
+                    : "border-[var(--border)] bg-white"
                 }`}
               >
                 <p className="text-sm font-semibold text-[var(--text)]">Marca</p>
@@ -352,10 +350,10 @@ export default function ReportsWizard() {
                 <button
                   type="button"
                   onClick={() => setScope("GROUP")}
-                  className={`rounded-[16px] border px-4 py-4 text-left transition ${
+                  className={`rounded-[12px] border px-4 py-4 text-left transition ${
                     scope === "GROUP"
-                      ? "border-[var(--primary)] bg-blue-50"
-                      : "border-[var(--border)] bg-[var(--surface)]"
+                      ? "border-[var(--primary)] bg-white"
+                      : "border-[var(--border)] bg-white"
                   }`}
                 >
                   <p className="text-sm font-semibold text-[var(--text)]">Grupo</p>
@@ -369,11 +367,11 @@ export default function ReportsWizard() {
         ) : null}
 
         {step === 1 ? (
-          <section className="rounded-[18px] border border-[var(--border)] bg-white px-6 py-6 shadow-[var(--shadow-sm)]">
+          <section className="looker-panel px-6 py-6">
             <h2 className="text-lg font-semibold text-[var(--text)]">
               Selecione {scope === "BRAND" ? "a marca" : "o grupo"}
             </h2>
-            <div className="mt-4 rounded-[16px] border border-[var(--border)] bg-[var(--surface)]">
+            <div className="mt-4 rounded-[12px] border border-[var(--border)] bg-white">
               <div className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-3">
                 <Search className="h-4 w-4 text-[var(--text-muted)]" />
                 <Input
@@ -440,7 +438,7 @@ export default function ReportsWizard() {
         ) : null}
 
         {step === 2 ? (
-          <section className="rounded-[18px] border border-[var(--border)] bg-white px-6 py-6 shadow-[var(--shadow-sm)]">
+          <section className="looker-panel px-6 py-6">
             <h2 className="text-lg font-semibold text-[var(--text)]">
               Escolha o template
             </h2>
@@ -453,10 +451,10 @@ export default function ReportsWizard() {
                     key={template.id}
                     type="button"
                     onClick={() => setTemplateId(template.id)}
-                    className={`rounded-[16px] border px-4 py-4 text-left transition ${
+                    className={`looker-card px-4 py-4 text-left transition ${
                       templateId === template.id
-                        ? "border-[var(--primary)] bg-blue-50"
-                        : "border-[var(--border)] bg-[var(--surface)]"
+                        ? "border-[var(--primary)] bg-slate-50"
+                        : "border-[var(--border)] bg-white"
                     }`}
                   >
                     <p className="text-sm font-semibold text-[var(--text)]">
@@ -479,7 +477,7 @@ export default function ReportsWizard() {
         ) : null}
 
         {step === 3 ? (
-          <section className="rounded-[18px] border border-[var(--border)] bg-white px-6 py-6 shadow-[var(--shadow-sm)]">
+          <section className="looker-panel px-6 py-6">
             <h2 className="text-lg font-semibold text-[var(--text)]">
               Periodo para analise
             </h2>
@@ -553,7 +551,7 @@ export default function ReportsWizard() {
         ) : null}
 
         {step === 4 ? (
-          <section className="rounded-[18px] border border-[var(--border)] bg-white px-6 py-6 shadow-[var(--shadow-sm)]">
+          <section className="looker-panel px-6 py-6">
             <h2 className="text-lg font-semibold text-[var(--text)]">Revisao</h2>
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <div>
@@ -564,7 +562,7 @@ export default function ReportsWizard() {
                   placeholder={selectedTemplate?.name || "Relatorio"}
                 />
               </div>
-              <div className="rounded-[12px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm">
+              <div className="looker-card px-4 py-3 text-sm">
                 <p className="text-xs text-[var(--text-muted)]">Resumo</p>
                 <p className="mt-1 text-[var(--text)]">
                   {scope === "BRAND"

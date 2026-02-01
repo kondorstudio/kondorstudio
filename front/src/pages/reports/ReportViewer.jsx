@@ -188,16 +188,16 @@ export default function ReportViewer() {
 
   if (isLoading) {
     return (
-      <PageShell>
-        <div className="h-48 rounded-[18px] border border-[var(--border)] bg-white/70 animate-pulse" />
+      <PageShell className="reporting-surface">
+        <div className="looker-panel h-48 bg-white/70 animate-pulse" />
       </PageShell>
     );
   }
 
   if (!report) {
     return (
-      <PageShell>
-        <div className="rounded-[18px] border border-[var(--border)] bg-white px-6 py-6 text-center">
+      <PageShell className="reporting-surface">
+        <div className="looker-panel px-6 py-6 text-center">
           Relatorio nao encontrado.
         </div>
       </PageShell>
@@ -205,17 +205,15 @@ export default function ReportViewer() {
   }
 
   return (
-    <PageShell>
+    <PageShell className="reporting-surface">
       <div className="space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="looker-toolbar">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
-              Relatorio
-            </p>
+            <p className="looker-section-title">Relatorio</p>
             <h1 className="text-2xl font-semibold text-[var(--text)]">
               {report.name}
             </h1>
-            <p className="text-sm text-[var(--text-muted)]">
+            <p className="text-sm looker-muted">
               Status: {report.status || "DRAFT"}
             </p>
           </div>
@@ -261,7 +259,7 @@ export default function ReportViewer() {
           </div>
         </div>
         {report?.generatedAt ? (
-          <p className="text-xs text-[var(--text-muted)]">
+          <p className="text-xs looker-muted">
             Atualizado em {new Date(report.generatedAt).toLocaleString("pt-BR")}
           </p>
         ) : null}
@@ -303,7 +301,7 @@ export default function ReportViewer() {
           </div>
         ) : null}
 
-        <section className="rounded-[18px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-sm)]">
+        <section className="looker-panel p-4">
           <DashboardCanvas
             layout={layout}
             items={widgets}

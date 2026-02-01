@@ -43,24 +43,21 @@ export default function ReportsTemplates() {
   }, [templates, search]);
 
   return (
-    <PageShell>
+    <PageShell className="reporting-surface">
       <div className="space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="looker-toolbar">
           <div>
-            <h1 className="text-2xl font-semibold text-[var(--text)]">
-              Meus templates
-            </h1>
-            <p className="text-sm text-[var(--text-muted)]">
-              Gerencie seus templates personalizados.
-            </p>
+            <p className="looker-section-title">Templates</p>
+            <h1 className="text-2xl font-semibold text-[var(--text)]">Meus templates</h1>
+            <p className="text-sm looker-muted">Gerencie seus templates personalizados.</p>
           </div>
           <Button variant="success" onClick={() => navigate("/reports/templates/new")}>
             Novo Template
           </Button>
         </div>
 
-        <section className="rounded-[18px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-sm)]">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <section className="looker-panel p-4">
+          <div className="looker-toolbar">
             <div className="relative w-full max-w-md">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
               <Input
@@ -78,7 +75,7 @@ export default function ReportsTemplates() {
                 {[1, 2, 3].map((item) => (
                   <div
                     key={item}
-                    className="h-36 rounded-[16px] border border-[var(--border)] bg-white/70 animate-pulse"
+                    className="h-36 rounded-[12px] border border-[var(--border)] bg-white/70 animate-pulse"
                   />
                 ))}
               </div>
@@ -87,7 +84,7 @@ export default function ReportsTemplates() {
                 {filteredTemplates.map((template) => (
                   <div
                     key={template.id}
-                    className="rounded-[16px] border border-[var(--border)] bg-white px-5 py-4 shadow-[var(--shadow-sm)]"
+                    className="looker-card px-5 py-4"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -100,7 +97,7 @@ export default function ReportsTemplates() {
                           </p>
                         ) : null}
                       </div>
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                      <span className="looker-chip px-2 py-0.5 font-semibold text-slate-700">
                         {visibilityLabel(template.visibility)}
                       </span>
                     </div>

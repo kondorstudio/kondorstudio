@@ -1913,7 +1913,7 @@ export default function DashboardBuilder() {
   if (!isNew && isLoading) {
     return (
       <PageShell className="reporting-surface">
-        <div className="h-48 rounded-[18px] border border-[var(--border)] bg-white/70 animate-pulse" />
+        <div className="looker-panel h-48 bg-white/70 animate-pulse" />
       </PageShell>
     );
   }
@@ -1921,11 +1921,9 @@ export default function DashboardBuilder() {
   return (
     <PageShell className="reporting-surface">
       <div className="space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="looker-toolbar">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
-              Builder de dashboards
-            </p>
+            <p className="looker-section-title">Builder de dashboards</p>
             <h1 className="text-2xl font-semibold text-[var(--text)]">
               {isNew ? "Novo dashboard" : name || "Dashboard"}
             </h1>
@@ -2029,13 +2027,11 @@ export default function DashboardBuilder() {
         ) : null}
 
         {!tvMode ? (
-          <section className="rounded-[18px] border border-[var(--border)] bg-white px-6 py-5 shadow-[var(--shadow-sm)]">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+          <section className="looker-panel px-6 py-5">
+            <div className="looker-toolbar">
               <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
-                  Filtros globais
-                </p>
-                <p className="text-sm text-[var(--text-muted)]">
+                <p className="looker-section-title">Filtros globais</p>
+                <p className="text-sm looker-muted">
                   Ajuste periodo, comparacao e segmentacoes principais.
                 </p>
               </div>
@@ -2157,7 +2153,7 @@ export default function DashboardBuilder() {
                   </div>
                 ) : null}
 
-                <div className="mt-4 rounded-[12px] border border-[var(--border)] bg-[var(--surface)] px-3 py-3">
+                <div className="mt-4 looker-card px-3 py-3">
                   <div className="flex items-center justify-between gap-2">
                     <div>
                       <p className="text-sm font-semibold text-[var(--text)]">
@@ -2207,7 +2203,7 @@ export default function DashboardBuilder() {
                       {dimensionFilters.map((filter) => (
                         <div
                           key={filter.id}
-                          className="rounded-[12px] border border-[var(--border)] bg-white px-3 py-3"
+                          className="looker-card px-3 py-3"
                         >
                           <div className="grid gap-3 md:grid-cols-3">
                             <div>
@@ -2363,13 +2359,13 @@ export default function DashboardBuilder() {
         ) : null}
 
         {isNew && showTemplatePicker ? (
-          <section className="rounded-[18px] border border-[var(--border)] bg-white px-6 py-6 shadow-[var(--shadow-sm)]">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+          <section className="looker-panel px-6 py-6">
+            <div className="looker-toolbar">
               <div>
                 <h2 className="text-lg font-semibold text-[var(--text)]">
                   Comece com um template
                 </h2>
-                <p className="text-sm text-[var(--text-muted)]">
+                <p className="text-sm looker-muted">
                   Escolha uma estrutura pronta e personalize depois.
                 </p>
               </div>
@@ -2381,7 +2377,7 @@ export default function DashboardBuilder() {
               {DASHBOARD_TEMPLATES.map((template) => (
                 <div
                   key={template.id}
-                  className="rounded-[16px] border border-[var(--border)] bg-[var(--surface)] px-4 py-4 shadow-[var(--shadow-sm)]"
+                  className="looker-card px-4 py-4"
                 >
                   <p className="text-sm font-semibold text-[var(--text)]">
                     {template.name}
@@ -2403,17 +2399,15 @@ export default function DashboardBuilder() {
         ) : null}
 
         {tvMode ? (
-          <section className="rounded-[18px] border border-[var(--border)] bg-white px-6 py-5 shadow-[var(--shadow-sm)]">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+          <section className="looker-panel px-6 py-5">
+            <div className="looker-toolbar">
               <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
-                  Modo TV
-                </p>
+                <p className="looker-section-title">Modo TV</p>
                 <p className="text-lg font-semibold text-[var(--text)]">{name || "Dashboard"}</p>
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 {lastUpdatedLabel ? (
-                  <span className="text-xs text-[var(--text-muted)]">{lastUpdatedLabel}</span>
+                  <span className="text-xs looker-muted">{lastUpdatedLabel}</span>
                 ) : null}
                 <Button
                   size="sm"
@@ -2482,7 +2476,7 @@ export default function DashboardBuilder() {
 
         <div className={tvMode ? "grid gap-6" : "grid gap-6 lg:grid-cols-[280px_1fr]"}>
           {!tvMode ? <aside className="space-y-4">
-            <div className="rounded-[16px] border border-[var(--border)] bg-white px-4 py-4 shadow-[var(--shadow-sm)]">
+            <div className="looker-panel px-4 py-4">
               <p className="text-sm font-semibold text-[var(--text)]">Config</p>
               <div className="mt-3 space-y-3">
                 <div>
@@ -2549,7 +2543,7 @@ export default function DashboardBuilder() {
             </div>
 
             {hasRecommendedPresets ? (
-              <div className="rounded-[16px] border border-[var(--border)] bg-white px-4 py-4 shadow-[var(--shadow-sm)]">
+              <div className="looker-panel px-4 py-4">
                 <p className="text-sm font-semibold text-[var(--text)]">Recomendados</p>
                 <p className="mt-1 text-xs text-[var(--text-muted)]">
                   {recommendedSourceMeta?.label
@@ -2581,7 +2575,7 @@ export default function DashboardBuilder() {
               </div>
             ) : null}
 
-            <div className="rounded-[16px] border border-[var(--border)] bg-white px-4 py-4 shadow-[var(--shadow-sm)]">
+            <div className="looker-panel px-4 py-4">
               <p className="text-sm font-semibold text-[var(--text)]">Widgets</p>
               <div className="mt-3 grid gap-2">
                 {WIDGET_TYPES.map((item) => (
@@ -2609,7 +2603,7 @@ export default function DashboardBuilder() {
             </div>
           </aside> : null}
 
-          <section className="rounded-[18px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-sm)]">
+          <section className="looker-panel p-4">
             <DashboardCanvas
               layout={layout}
               items={widgets}

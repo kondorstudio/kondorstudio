@@ -268,8 +268,8 @@ export default function MetricCatalogPanel() {
   const items = useMemo(() => data?.items || [], [data]);
 
   return (
-    <section className="rounded-[18px] border border-[var(--border)] bg-white px-6 py-6 shadow-[var(--shadow-sm)]">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <section className="looker-panel px-6 py-6">
+      <div className="looker-toolbar">
         <div>
           <h2 className="text-lg font-semibold text-[var(--text)]">
             Catalogo de metricas
@@ -318,7 +318,7 @@ export default function MetricCatalogPanel() {
             {items.map((item) => (
               <div
                 key={item.id}
-                className="rounded-[12px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3"
+                className="looker-card px-4 py-3"
               >
                 <p className="text-sm font-semibold text-[var(--text)]">
                   {item.label}
@@ -345,7 +345,7 @@ export default function MetricCatalogPanel() {
             ))}
           </div>
         ) : (
-          <div className="rounded-[12px] border border-dashed border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm text-[var(--text-muted)]">
+          <div className="looker-card border-dashed px-4 py-3 text-sm text-[var(--text-muted)]">
             Nenhuma metrica encontrada para essa fonte/nivel. Cadastre uma metrica
             para habilitar a selecao nos widgets.
           </div>

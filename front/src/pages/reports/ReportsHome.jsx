@@ -318,7 +318,7 @@ export default function ReportsHome() {
     : "Selecione marca";
 
   return (
-    <PageShell>
+    <PageShell className="reporting-surface">
       <div className="space-y-8">
         <ReportsIntro />
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -327,25 +327,21 @@ export default function ReportsHome() {
               title: "Relatorios ativos",
               value: totalReports,
               helper: totalReports ? "Total criados" : "Crie o primeiro relatorio",
-              accent: "rgba(31,111,235,0.12)",
             },
             {
               title: "Marcas",
               value: totalBrands,
               helper: totalBrands ? "No workspace" : "Sem marcas cadastradas",
-              accent: "rgba(15,118,110,0.12)",
             },
             {
               title: "Grupos",
               value: totalGroups,
               helper: totalGroups ? "Organizacao por grupos" : "Sem grupos ativos",
-              accent: "rgba(245,158,11,0.12)",
             },
             {
               title: "Conexoes ativas",
               value: connectedCount ?? "—",
               helper: selectedBrandId ? "Marca selecionada" : "Selecione uma marca",
-              accent: "rgba(249,115,22,0.12)",
               badge: (
                 <Badge variant={connectionBadgeVariant} className="text-[10px] uppercase tracking-[0.16em]">
                   {connectionBadgeLabel}
@@ -355,13 +351,9 @@ export default function ReportsHome() {
           ].map((stat) => (
             <div
               key={stat.title}
-              className="relative overflow-hidden rounded-[18px] border border-[var(--border)] bg-white px-5 py-4 shadow-[var(--shadow-sm)]"
+              className="looker-card px-5 py-4"
             >
-              <div
-                className="pointer-events-none absolute -right-10 -top-10 h-24 w-24 rounded-full"
-                style={{ background: `radial-gradient(circle, ${stat.accent} 0%, rgba(255,255,255,0) 70%)` }}
-              />
-              <div className="relative flex items-start justify-between gap-2">
+              <div className="flex items-start justify-between gap-2">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
                   {stat.title}
                 </p>
@@ -372,8 +364,8 @@ export default function ReportsHome() {
             </div>
           ))}
         </section>
-        <section className="rounded-[18px] border border-[var(--border)] bg-white px-6 py-6 shadow-[var(--shadow-sm)]">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <section className="looker-panel px-6 py-6">
+          <div className="looker-toolbar">
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-semibold text-[var(--text)]">
@@ -412,7 +404,7 @@ export default function ReportsHome() {
             </Badge>
           </div>
 
-          <div className="mt-4 overflow-hidden rounded-[16px] border border-[var(--border)] bg-white">
+          <div className="mt-4 overflow-hidden rounded-[12px] border border-[var(--border)] bg-white">
             {reportsLoading ? (
               <div className="h-32 animate-pulse rounded-[16px] bg-[var(--surface-muted)]" />
             ) : filteredReports.length ? (
@@ -507,9 +499,8 @@ export default function ReportsHome() {
           </div>
         </section>
         <div className="grid gap-6 lg:grid-cols-[1.1fr_1fr]">
-          <section className="relative overflow-hidden rounded-[18px] border border-[var(--border)] bg-white px-6 py-6 shadow-[var(--shadow-sm)]">
-            <div className="pointer-events-none absolute -right-10 top-6 h-24 w-24 rounded-full bg-[radial-gradient(circle,rgba(31,111,235,0.12),rgba(31,111,235,0))]" />
-            <div className="relative flex flex-wrap items-center justify-between gap-3">
+          <section className="looker-panel px-6 py-6">
+            <div className="looker-toolbar">
               <div>
                 <div className="flex items-center gap-2">
                   <h2 className="text-lg font-semibold text-[var(--text)]">
@@ -534,7 +525,7 @@ export default function ReportsHome() {
               ].map((item) => (
                 <div
                   key={item.title}
-                  className="rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 shadow-[var(--shadow-sm)]"
+                  className="looker-card px-4 py-3"
                 >
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
                     {item.title}
@@ -545,8 +536,8 @@ export default function ReportsHome() {
             </div>
           </section>
 
-          <section className="rounded-[18px] border border-[var(--border)] bg-white px-6 py-6 shadow-[var(--shadow-sm)]">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+          <section className="looker-panel px-6 py-6">
+            <div className="looker-toolbar">
               <div>
                 <div className="flex items-center gap-2">
                   <h2 className="text-lg font-semibold text-[var(--text)]">
@@ -606,7 +597,7 @@ export default function ReportsHome() {
                   return (
                     <div
                       key={source.key}
-                      className="rounded-[16px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-sm)]"
+                      className="looker-card p-4"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">

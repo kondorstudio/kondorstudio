@@ -30,7 +30,7 @@ export default function AlertBanner({
   return (
     <div
       className={cn(
-        "flex flex-wrap items-center justify-between gap-3 rounded-[12px] border px-4 py-3 text-sm shadow-[var(--shadow-sm)]",
+        "flex flex-wrap items-center justify-between gap-3 rounded-[12px] border px-4 py-3 text-sm",
         styles.container,
         className
       )}
