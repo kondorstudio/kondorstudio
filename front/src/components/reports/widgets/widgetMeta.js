@@ -27,22 +27,22 @@ export const SOURCE_META = {
   META_ADS: {
     label: "Meta Ads",
     icon: Facebook,
-    accent: "bg-blue-50/70 text-blue-700 border-blue-200",
+    accent: "bg-blue-50/40 text-blue-700 border-blue-200",
   },
   META_SOCIAL: {
     label: "Facebook/Instagram",
     icon: Instagram,
-    accent: "bg-pink-50/70 text-pink-700 border-pink-200",
+    accent: "bg-pink-50/40 text-pink-700 border-pink-200",
   },
   GOOGLE_ADS: {
     label: "Google Ads",
     icon: Megaphone,
-    accent: "bg-amber-50/70 text-amber-700 border-amber-200",
+    accent: "bg-amber-50/40 text-amber-700 border-amber-200",
   },
   GA4: {
     label: "Google Analytics 4",
     icon: BarChart3,
-    accent: "bg-orange-50/70 text-orange-700 border-orange-200",
+    accent: "bg-orange-50/40 text-orange-700 border-orange-200",
   },
   TIKTOK_ADS: {
     label: "TikTok Ads",
@@ -52,12 +52,12 @@ export const SOURCE_META = {
   LINKEDIN_ADS: {
     label: "LinkedIn Ads",
     icon: Linkedin,
-    accent: "bg-sky-50/70 text-sky-700 border-sky-200",
+    accent: "bg-sky-50/40 text-sky-700 border-sky-200",
   },
   GBP: {
     label: "Google Meu Negocio",
     icon: MapPin,
-    accent: "bg-emerald-50/70 text-emerald-700 border-emerald-200",
+    accent: "bg-emerald-50/40 text-emerald-700 border-emerald-200",
   },
 };
 

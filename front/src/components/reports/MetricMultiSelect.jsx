@@ -99,17 +99,17 @@ export default function MetricMultiSelect({
         onClick={handleToggle}
         disabled={disabled}
         className={cn(
-          "flex min-h-[44px] w-full flex-wrap items-center gap-2 rounded-[10px] border border-[var(--border)] " +
-            "bg-white px-3 py-2 text-left text-sm text-[var(--text)] " +
+          "flex min-h-[38px] w-full flex-wrap items-center gap-2 rounded-[8px] border border-[var(--border)] " +
+            "bg-[var(--surface)] px-3 py-1.5 text-left text-[13px] text-[var(--text)] " +
             "transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(31,111,235,0.2)]",
-          disabled ? "cursor-not-allowed opacity-60" : "hover:border-blue-200"
+          disabled ? "cursor-not-allowed opacity-60" : "hover:border-[var(--border)]"
         )}
       >
         {value.length ? (
           value.map((item) => (
             <span
               key={item}
-              className="looker-pill"
+              className="looker-pill looker-pill--accent"
             >
               {selectedMap.get(item) || item}
               <button
@@ -130,7 +130,7 @@ export default function MetricMultiSelect({
       </button>
 
       {open ? (
-        <div className="absolute z-30 mt-2 w-full rounded-[12px] border border-[var(--border)] bg-white">
+        <div className="absolute z-30 mt-2 w-full rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-3 py-2 text-sm">
             <div className="flex flex-1 items-center gap-2">
               <Search className="h-4 w-4 text-[var(--text-muted)]" />
@@ -138,7 +138,7 @@ export default function MetricMultiSelect({
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Buscar metrica"
-                className="h-8 flex-1 border-0 bg-transparent px-0 text-sm focus:ring-0"
+                className="h-8 flex-1 border-0 bg-transparent px-0 text-[13px] focus:ring-0"
               />
             </div>
             <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
@@ -147,7 +147,7 @@ export default function MetricMultiSelect({
                 <button
                   type="button"
                   onClick={handleClear}
-                  className="rounded-full border border-[var(--border)] px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-[var(--text-muted)] hover:text-[var(--text)]"
+                  className="rounded-full border border-[var(--border)] px-2 py-0.5 text-[9px] uppercase tracking-[0.2em] text-[var(--text-muted)] hover:text-[var(--text)]"
                 >
                   Limpar
                 </button>
@@ -190,7 +190,7 @@ export default function MetricMultiSelect({
                 <button
                   type="button"
                   onClick={handleSelectAll}
-                  className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--primary)] hover:underline"
+                  className="text-[9.5px] font-semibold uppercase tracking-[0.2em] text-[var(--primary)] hover:underline"
                 >
                   Selecionar tudo
                 </button>

@@ -444,9 +444,7 @@ const WidgetRenderer = React.memo(function WidgetRenderer({
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-[var(--text-muted)]">
         {compareLabel ? <span>{compareLabel}</span> : <span />}
         {showUpdating ? (
-          <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-sky-700">
-            Atualizando...
-          </span>
+          <span className="looker-pill looker-pill--accent">Atualizando...</span>
         ) : updatedLabel ? (
           <span>{updatedLabel}</span>
         ) : null}
@@ -457,13 +455,13 @@ const WidgetRenderer = React.memo(function WidgetRenderer({
   if (!needsData) {
     if (widgetType === "TEXT") {
       return (
-        <div className="rounded-[12px] border border-[var(--border)] bg-[var(--surface)] px-3 py-3 text-sm text-[var(--text)]">
+        <div className="rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--text)]">
           {widget?.options?.text || "Sem conteudo"}
         </div>
       );
     }
     return (
-      <div className="rounded-[12px] border border-[var(--border)] bg-[var(--surface)] px-3 py-3 text-sm text-[var(--text)]">
+      <div className="rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--text)]">
         {widget?.options?.imageUrl ? (
           <img
             src={widget.options.imageUrl}
@@ -599,7 +597,7 @@ const WidgetRenderer = React.memo(function WidgetRenderer({
       deltaPct = (delta / compareValue) * 100;
     }
     return (
-      <div className="rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-4 py-4">
+      <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3.5 py-3">
         <p className="text-xs text-[var(--text-muted)]">{metricKey || "Metrica"}</p>
         <p className="mt-1 text-2xl font-semibold text-[var(--text)]">
           {formatValue(value, metaWithCurrency)}
@@ -725,12 +723,12 @@ const WidgetRenderer = React.memo(function WidgetRenderer({
     }
     return (
       <div>
-        <div className="max-h-56 overflow-auto rounded-[12px] border border-[var(--border)]">
+        <div className="max-h-56 overflow-auto rounded-[8px] border border-[var(--border)]">
           <table className="w-full text-xs">
             <thead className="bg-[var(--surface-muted)] text-[var(--text-muted)]">
               <tr>
                 {table.columns.map((column) => (
-                  <th key={column.key} className="px-3 py-2 text-left">
+                  <th key={column.key} className="px-2.5 py-2 text-left">
                     {column.label}
                   </th>
                 ))}
@@ -740,7 +738,7 @@ const WidgetRenderer = React.memo(function WidgetRenderer({
               {table.rows.map((row, index) => (
                 <tr key={index} className="border-t border-[var(--border)]">
                   {table.columns.map((column) => (
-                    <td key={column.key} className="px-3 py-2 text-[var(--text)]">
+                    <td key={column.key} className="px-2.5 py-2 text-[var(--text)]">
                       {formatValue(row[column.key], metaWithCurrency)}
                     </td>
                   ))}

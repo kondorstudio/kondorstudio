@@ -106,17 +106,17 @@ const WidgetCard = React.memo(function WidgetCard({
   return (
     <div
       className={cn(
-        "group flex h-full flex-col looker-card p-4 transition hover:border-[rgba(31,111,235,0.35)]",
+        "group flex h-full flex-col looker-card p-3 transition hover:border-[var(--reporting-border)]",
         className
       )}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-[var(--surface-muted)] text-[var(--text)]">
+          <div className="flex h-9 w-9 items-center justify-center rounded-[8px] bg-[var(--surface-muted)] text-[var(--text)]">
             {TitleIcon ? <TitleIcon className="h-4 w-4" /> : null}
           </div>
           <div>
-            <p className="text-sm font-semibold text-[var(--text)]">
+            <p className="text-[13px] font-semibold text-[var(--text)]">
               {widget?.title || "Widget"}
             </p>
             <div className="mt-1 flex flex-wrap items-center gap-2">

@@ -67,12 +67,22 @@ body {
 
 .reporting-surface {
   min-height: 100%;
-  background: #f6f7fb;
-  --reporting-border: #e4e7ef;
-  --reporting-muted: #8b93a7;
+  background: #f8f9fb;
+  font-size: 14px;
+  --reporting-border: #e6e9f0;
+  --reporting-muted: #8a93a5;
   --reporting-surface: #ffffff;
-  --reporting-surface-muted: #f1f3f7;
-  --reporting-radius: 10px;
+  --reporting-surface-muted: #f3f5f9;
+  --reporting-radius: 8px;
+  --border: var(--reporting-border);
+  --surface: var(--reporting-surface);
+  --surface-muted: var(--reporting-surface-muted);
+  --text-muted: var(--reporting-muted);
+  --radius-card: 8px;
+  --radius-input: 8px;
+  --radius-button: 8px;
+  --shadow-sm: none;
+  --shadow-md: none;
 }
 
 .reporting-surface .looker-panel {
@@ -80,6 +90,7 @@ body {
   border-radius: var(--reporting-radius);
   background: var(--reporting-surface);
   box-shadow: none;
+  padding: 16px;
 }
 
 .reporting-surface .looker-card {
@@ -87,14 +98,15 @@ body {
   border-radius: var(--reporting-radius);
   background: var(--reporting-surface);
   box-shadow: none;
+  padding: 12px;
 }
 
 .reporting-surface .looker-chip {
   border: 1px solid var(--reporting-border);
   border-radius: 999px;
   background: var(--reporting-surface-muted);
-  font-size: 10px;
-  letter-spacing: 0.12em;
+  font-size: 9.5px;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--text-muted);
 }
@@ -106,17 +118,17 @@ body {
   border: 1px solid var(--reporting-border);
   border-radius: 999px;
   background: var(--reporting-surface-muted);
-  padding: 2px 8px;
-  font-size: 10px;
-  letter-spacing: 0.12em;
+  padding: 2px 6px;
+  font-size: 9.5px;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--text-muted);
 }
 
 .reporting-surface .looker-pill--accent {
-  border-color: rgba(31, 111, 235, 0.2);
+  border-color: rgba(31, 111, 235, 0.18);
   color: var(--primary);
-  background: rgba(31, 111, 235, 0.08);
+  background: rgba(31, 111, 235, 0.06);
 }
 
 .reporting-surface .looker-toolbar {
@@ -124,12 +136,12 @@ body {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 10px;
 }
 
 .reporting-surface .looker-section-title {
-  font-size: 11px;
-  letter-spacing: 0.2em;
+  font-size: 10px;
+  letter-spacing: 0.24em;
   text-transform: uppercase;
   color: var(--reporting-muted);
 }
@@ -148,12 +160,29 @@ body {
   box-shadow: none;
 }
 
+.reporting-surface input,
+.reporting-surface .k-select,
+.reporting-surface .k-date-field,
+.reporting-surface .k-time-field {
+  height: 38px;
+}
+
 .reporting-surface input:focus,
 .reporting-surface textarea:focus,
 .reporting-surface .k-select:focus,
 .reporting-surface .k-date-field:focus,
 .reporting-surface .k-time-field:focus {
   box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.12);
+}
+
+.reporting-surface button {
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.reporting-surface button:hover {
+  box-shadow: none !important;
+  transform: none !important;
 }
 
 .looker-divider {
