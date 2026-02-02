@@ -839,6 +839,41 @@ const Reporting = {
 };
 
 // --------------------
+// Reports V2 (new endpoints)
+// --------------------
+
+const ReportsV2 = {
+  async listDashboards(params = {}) {
+    const qs = buildQuery(params);
+    return jsonFetch(`/reports/dashboards${qs}`, { method: "GET" });
+  },
+
+  async getDashboard(id) {
+    if (!id) throw new Error("dashboardId obrigatorio");
+    return jsonFetch(`/reports/dashboards/${id}`, { method: "GET" });
+  },
+
+  async listTemplates() {
+    return jsonFetch("/reports/templates", { method: "GET" });
+  },
+
+  async instantiateTemplate(id, payload = {}) {
+    if (!id) throw new Error("templateId obrigatorio");
+    return jsonFetch(`/reports/templates/${id}/instantiate`, {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    });
+  },
+
+  async queryMetrics(payload = {}) {
+    return jsonFetch("/metrics/query", {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    });
+  },
+};
+
+// --------------------
 // GA4 + Analytics
 // --------------------
 
@@ -1346,6 +1381,7 @@ export const base44 = {
     Competitor,
   },
   reporting: Reporting,
+  reportsV2: ReportsV2,
   ga4: GA4,
   analytics: Analytics,
   uploads: {
