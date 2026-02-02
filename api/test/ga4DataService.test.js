@@ -3,6 +3,18 @@ process.env.NODE_ENV = 'test';
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
+function mockModule(path, exports) {
+  const resolved = require.resolve(path);
+  require.cache[resolved] = { exports };
+}
+
+function resetModule(path) {
+  const resolved = require.resolve(path);
+  delete require.cache[resolved];
+}
+
+mockModule('../src/prisma', { prisma: {}, useTenant: () => ({}) });
+resetModule('../src/services/ga4DataService');
 const { normalizeRunReportPayload } = require('../src/services/ga4DataService');
 
 test('normalizeRunReportPayload enforces metrics limit', () => {

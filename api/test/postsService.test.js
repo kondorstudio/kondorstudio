@@ -2,6 +2,19 @@ process.env.NODE_ENV = 'test';
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+
+function mockModule(path, exports) {
+  const resolved = require.resolve(path);
+  require.cache[resolved] = { exports };
+}
+
+function resetModule(path) {
+  const resolved = require.resolve(path);
+  delete require.cache[resolved];
+}
+
+mockModule('../src/prisma', { prisma: {}, useTenant: () => ({}) });
+resetModule('../src/services/postsService');
 const postsService = require('../src/services/postsService');
 
 const { _internal } = postsService;
