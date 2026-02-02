@@ -269,6 +269,10 @@ model Tenant {
   reportTemplates  ReportTemplate[]
   reportWidgets    ReportWidget[]
   dashboards       Dashboard[]
+  reportDashboardsV2 ReportDashboard[]
+  reportTemplatesV2  ReportTemplateV2[]
+  brandSourceConnections BrandSourceConnection[]
+  factMetricsDaily  FactKondorMetricsDaily[]
   reportExports    ReportExport[]
   reportSchedules  ReportSchedule[]
   reportDeliveries ReportDelivery[]
@@ -325,6 +329,8 @@ model User {
   supportNotes       TenantNote[]   @relation("TenantNoteAuthor")
   mfaChallenges      MfaChallenge[]
   preferences        UserPreference[]
+  reportDashboardsCreated ReportDashboard[] @relation("ReportDashboardAuthor")
+  reportDashboardVersionsCreated ReportDashboardVersion[] @relation("ReportDashboardVersionAuthor")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -482,6 +488,9 @@ model Client {
   reports          Report[]
   reportSchedules  ReportSchedule[]
   dashboards       Dashboard[]
+  reportDashboardsV2 ReportDashboard[]
+  brandSourceConnections BrandSourceConnection[]
+  factMetricsDaily  FactKondorMetricsDaily[]
   reportDeliveries ReportDelivery[]
   metrics          Metric[]   @relation("ClientMetrics")
   competitors      Competitor[]
@@ -815,6 +824,7 @@ model BrandGroup {
   members   BrandGroupMember[]
   reports   Report[]
   dashboards Dashboard[]
+  reportDashboardsV2 ReportDashboard[]
   reportSchedules ReportSchedule[]
 
   createdAt DateTime @default(now())
@@ -1057,7 +1067,7 @@ model ReportDashboard {
   group              BrandGroup?            @relation(fields: [groupId], references: [id], onDelete: SetNull)
   name               String
   status             ReportDashboardStatus  @default(DRAFT)
-  publishedVersionId String?
+  publishedVersionId String? @unique
   publishedVersion   ReportDashboardVersion? @relation("ReportDashboardPublished", fields: [publishedVersionId], references: [id], onDelete: SetNull)
   createdByUserId    String
   createdBy          User                   @relation("ReportDashboardAuthor", fields: [createdByUserId], references: [id], onDelete: Restrict)
@@ -1081,6 +1091,7 @@ model ReportDashboardVersion {
   layoutJson      Json
   createdByUserId String
   createdBy       User   @relation("ReportDashboardVersionAuthor", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  publishedInDashboard ReportDashboard? @relation("ReportDashboardPublished")
   createdAt       DateTime @default(now())
 
   @@unique([dashboardId, versionNumber])
