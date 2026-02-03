@@ -1,4 +1,6 @@
 // api/src/routes/reporting.js
+// DEPRECATED (Reports V1): mantido apenas por compatibilidade.
+// TODO: remover após migração total para Reports V2.
 // Entry point for the reporting module (protected by auth + tenant).
 
 const express = require('express');

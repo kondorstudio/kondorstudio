@@ -1,4 +1,6 @@
 // api/src/routes/reports.js
+// DEPRECATED (legado PDF/TXT): mantido apenas por compatibilidade.
+// TODO: remover após migração total para Reports V2.
 // Rotas para relatórios (PDF, métricas, etc.) do KONDOR STUDIO.
 // Multi-tenant e protegidas por auth.
 
