@@ -42,6 +42,11 @@ export default function ReportsV2Templates() {
     queryFn: () => base44.entities.Clients.list(),
   });
 
+  React.useEffect(() => {
+    if (brandId || !clients.length) return;
+    setBrandId(clients[0].id);
+  }, [brandId, clients]);
+
   const templates = templatesData?.items || [];
 
   const instantiate = useMutation({

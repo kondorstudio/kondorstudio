@@ -91,6 +91,11 @@ export default function ReportsV2Connections() {
     queryFn: () => base44.entities.Clients.list(),
   });
 
+  React.useEffect(() => {
+    if (brandId || !clients.length) return;
+    setBrandId(clients[0].id);
+  }, [brandId, clients]);
+
   const { data: connectionsData, isLoading: connectionsLoading } = useQuery({
     queryKey: ["reportsV2-connections", brandId],
     queryFn: () => base44.reportsV2.listConnections({ brandId }),
@@ -138,6 +143,8 @@ export default function ReportsV2Connections() {
     setNameOverride("");
   };
 
+  const isBrandSelected = Boolean(brandId);
+
   return (
     <div className="min-h-screen bg-white" style={themeStyle}>
       <PageShell>
@@ -174,6 +181,11 @@ export default function ReportsV2Connections() {
         </div>
 
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {!isBrandSelected ? (
+            <div className="col-span-full rounded-[16px] border border-amber-200 bg-amber-50 px-6 py-4 text-sm text-amber-700">
+              Selecione uma marca para habilitar as conexoes.
+            </div>
+          ) : null}
           {PLATFORMS.map((platform) => {
             const items = connectionsByPlatform.get(platform.value) || [];
             const activeItems = items.filter((item) => item.status === "ACTIVE");
@@ -182,7 +194,10 @@ export default function ReportsV2Connections() {
               : "Sem conta";
 
             return (
-              <Card key={platform.value}>
+              <Card
+                key={platform.value}
+                className={cn(!isBrandSelected && "pointer-events-none opacity-60")}
+              >
                 <CardContent className="space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-[var(--primary-light)] text-[var(--primary)]">
