@@ -90,6 +90,7 @@ enum DataSourceConnectionStatus {
 enum Ga4IntegrationStatus {
   CONNECTED
   DISCONNECTED
+  NEEDS_RECONNECT
   ERROR
 }
 

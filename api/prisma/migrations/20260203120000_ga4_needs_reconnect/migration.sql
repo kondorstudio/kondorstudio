@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "Ga4IntegrationStatus" ADD VALUE IF NOT EXISTS 'NEEDS_RECONNECT';
