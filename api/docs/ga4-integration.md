@@ -51,6 +51,10 @@ npm run prisma:migrate
 4. Google redirects to `/api/integrations/ga4/oauth/callback`.
 5. Backend stores tokens (encrypted) and redirects back to the frontend.
 
+Notas:
+- `prompt=consent` só é usado quando o status do tenant é `NEEDS_RECONNECT` ou quando o frontend envia `forceConsent=true`.
+- A integração GA4 é **tenant-scoped** (1 integração por tenant).
+
 ## 5) Main endpoints
 
 ### GA4 integration
@@ -94,6 +98,9 @@ npm run prisma:migrate
 
 - Refresh token missing:
   - If Google does not return `refresh_token`, use `prompt=consent` and reconnect.
+- Status `NEEDS_RECONNECT`:
+  - Indica que o refresh token foi revogado/expirou e o usuário precisa reconectar.
+  - O frontend deve mostrar CTA de reconexão e reiniciar o OAuth.
 - 403 / insufficient permissions:
   - Check that the connected Google account has access to the GA4 property.
 - Quota exceeded:
