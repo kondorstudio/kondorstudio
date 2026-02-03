@@ -238,6 +238,34 @@ async function clone(req, res) {
   }
 }
 
+async function share(req, res) {
+  try {
+    const result = await dashboardsService.shareDashboard(req.tenantId, req.params.id);
+    if (!result) {
+      return res.status(404).json({
+        error: { code: 'DASHBOARD_NOT_FOUND', message: 'Dashboard não encontrado', details: null },
+      });
+    }
+    return res.status(201).json({ publicUrlPath: `/public/reports/${result.token}` });
+  } catch (err) {
+    return handleError(res, err);
+  }
+}
+
+async function unshare(req, res) {
+  try {
+    const dashboard = await dashboardsService.unshareDashboard(req.tenantId, req.params.id);
+    if (!dashboard) {
+      return res.status(404).json({
+        error: { code: 'DASHBOARD_NOT_FOUND', message: 'Dashboard não encontrado', details: null },
+      });
+    }
+    return res.json({ ok: true });
+  } catch (err) {
+    return handleError(res, err);
+  }
+}
+
 module.exports = {
   create,
   list,
@@ -248,4 +276,6 @@ module.exports = {
   publish,
   rollback,
   clone,
+  share,
+  unshare,
 };

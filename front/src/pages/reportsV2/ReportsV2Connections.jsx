@@ -1,5 +1,5 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link2, PlusCircle, CheckCircle2, AlertTriangle } from "lucide-react";
 import PageShell from "@/components/ui/page-shell.jsx";
@@ -79,6 +79,7 @@ function groupConnections(items) {
 
 export default function ReportsV2Connections() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const [brandId, setBrandId] = React.useState("");
   const [selectedPlatform, setSelectedPlatform] = React.useState(null);
@@ -93,8 +94,12 @@ export default function ReportsV2Connections() {
 
   React.useEffect(() => {
     if (brandId || !clients.length) return;
-    setBrandId(clients[0].id);
-  }, [brandId, clients]);
+    const fromQuery = searchParams.get("brandId");
+    const match = fromQuery
+      ? clients.find((client) => client.id === fromQuery)
+      : null;
+    setBrandId(match ? match.id : clients[0].id);
+  }, [brandId, clients, searchParams]);
 
   const { data: connectionsData, isLoading: connectionsLoading } = useQuery({
     queryKey: ["reportsV2-connections", brandId],

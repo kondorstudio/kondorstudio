@@ -20,6 +20,7 @@ export default function DashboardRenderer({
   layout,
   dashboardId,
   brandId,
+  publicToken,
   globalFilters,
 }) {
   const widgets = Array.isArray(layout?.widgets) ? layout.widgets : [];
@@ -63,6 +64,7 @@ export default function DashboardRenderer({
               widget={widget}
               dashboardId={dashboardId}
               brandId={brandId}
+              publicToken={publicToken}
               globalFilters={globalFilters}
             />
           </div>

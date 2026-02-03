@@ -394,6 +394,7 @@ safeMount("/api/uploads", require("./routes/uploads"));
 safeMount("/api/reports/dashboards", require("./routes/reportsDashboards"));
 safeMount("/api/reports/templates", require("./routes/reportsTemplates"));
 safeMount("/api/reports/connections", require("./routes/reportsConnections"));
+safeMount("/api/reports/exports", require("./routes/reportsExports"));
 safeMount("/api/reports", require("./routes/reports"));
 safeMount("/api/reporting", require("./routes/reporting"));
 safeMount("/api/analytics", require("./routes/analyticsDashboards"));

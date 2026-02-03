@@ -693,6 +693,28 @@ const ReportsV2 = {
     });
   },
 
+  async createExport(id, payload = {}) {
+    if (!id) throw new Error("dashboardId obrigatorio");
+    return jsonFetch(`/reports/dashboards/${id}/exports`, {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    });
+  },
+
+  async createShare(id) {
+    if (!id) throw new Error("dashboardId obrigatorio");
+    return jsonFetch(`/reports/dashboards/${id}/share`, {
+      method: "POST",
+    });
+  },
+
+  async disableShare(id) {
+    if (!id) throw new Error("dashboardId obrigatorio");
+    return jsonFetch(`/reports/dashboards/${id}/share`, {
+      method: "DELETE",
+    });
+  },
+
   async rollbackDashboard(id, payload = {}) {
     if (!id) throw new Error("dashboardId obrigatorio");
     return jsonFetch(`/reports/dashboards/${id}/rollback`, {
@@ -731,6 +753,24 @@ const ReportsV2 = {
 
   async linkConnection(payload = {}) {
     return jsonFetch("/reports/connections", {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    });
+  },
+};
+
+// --------------------
+// Reports V2 Public
+// --------------------
+
+const PublicReports = {
+  async getReport(token) {
+    if (!token) throw new Error("token obrigatorio");
+    return jsonFetch(`/public/reports/${token}`, { method: "GET" });
+  },
+
+  async queryMetrics(payload = {}) {
+    return jsonFetch("/public/metrics/query", {
       method: "POST",
       body: JSON.stringify(payload || {}),
     });
@@ -1245,6 +1285,7 @@ export const base44 = {
     Competitor,
   },
   reportsV2: ReportsV2,
+  publicReports: PublicReports,
   ga4: GA4,
   analytics: Analytics,
   uploads: {

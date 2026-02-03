@@ -1070,6 +1070,9 @@ model ReportDashboard {
   status             ReportDashboardStatus  @default(DRAFT)
   publishedVersionId String? @unique
   publishedVersion   ReportDashboardVersion? @relation("ReportDashboardPublished", fields: [publishedVersionId], references: [id], onDelete: SetNull)
+  sharedEnabled      Boolean                @default(false)
+  sharedTokenHash    String?
+  sharedAt           DateTime?
   createdByUserId    String
   createdBy          User                   @relation("ReportDashboardAuthor", fields: [createdByUserId], references: [id], onDelete: Restrict)
   versions           ReportDashboardVersion[] @relation("ReportDashboardVersions")
@@ -1098,6 +1101,28 @@ model ReportDashboardVersion {
   @@unique([dashboardId, versionNumber])
   @@index([dashboardId])
   @@map("report_dashboard_version")
+}
+
+model ReportDashboardExport {
+  id             String            @id @default(uuid())
+  tenantId       String
+  tenant         Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  dashboardId    String
+  dashboard      ReportDashboard   @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+  status         ReportExportStatus @default(PENDING)
+  format         String            @default("PDF")
+  fileId         String?
+  file           Upload?           @relation(fields: [fileId], references: [id], onDelete: SetNull)
+  publicTokenHash String?
+  meta           Json?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@index([tenantId])
+  @@index([dashboardId])
+  @@index([status])
+  @@index([publicTokenHash])
+  @@map("report_dashboard_export")
 }
 
 model ReportTemplateV2 {

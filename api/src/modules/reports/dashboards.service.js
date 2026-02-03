@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const { prisma } = require('../../prisma');
 const { reportLayoutSchema } = require('../../shared/validators/reportLayout');
 
@@ -22,6 +23,14 @@ const DEFAULT_LAYOUT = {
   },
   widgets: [],
 };
+
+function generateShareToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+function hashShareToken(token) {
+  return crypto.createHash('sha256').update(String(token)).digest('hex');
+}
 
 async function assertBrand(tenantId, brandId) {
   if (!brandId) return null;
@@ -365,6 +374,50 @@ async function cloneDashboard(tenantId, userId, dashboardId) {
   });
 }
 
+async function shareDashboard(tenantId, dashboardId) {
+  const dashboard = await prisma.reportDashboard.findFirst({
+    where: { id: dashboardId, tenantId },
+  });
+  if (!dashboard) return null;
+
+  if (!dashboard.publishedVersionId) {
+    const err = new Error('Dashboard precisa estar publicado');
+    err.code = 'DASHBOARD_NOT_PUBLISHED';
+    err.status = 400;
+    throw err;
+  }
+
+  const token = generateShareToken();
+  const tokenHash = hashShareToken(token);
+
+  await prisma.reportDashboard.update({
+    where: { id: dashboard.id },
+    data: {
+      sharedEnabled: true,
+      sharedTokenHash: tokenHash,
+      sharedAt: new Date(),
+    },
+  });
+
+  return { token };
+}
+
+async function unshareDashboard(tenantId, dashboardId) {
+  const dashboard = await prisma.reportDashboard.findFirst({
+    where: { id: dashboardId, tenantId },
+  });
+  if (!dashboard) return null;
+
+  return prisma.reportDashboard.update({
+    where: { id: dashboard.id },
+    data: {
+      sharedEnabled: false,
+      sharedTokenHash: null,
+      sharedAt: null,
+    },
+  });
+}
+
 module.exports = {
   createDashboard,
   listDashboards,
@@ -375,5 +428,7 @@ module.exports = {
   publishDashboard,
   rollbackDashboard,
   cloneDashboard,
+  shareDashboard,
+  unshareDashboard,
   ensureLayoutValid,
 };

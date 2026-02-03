@@ -145,9 +145,11 @@ export default function WidgetRenderer({
   widget,
   dashboardId,
   brandId,
+  publicToken,
   globalFilters,
 }) {
   const navigate = useNavigate();
+  const isPublic = Boolean(publicToken);
   const metrics = Array.isArray(widget?.query?.metrics) ? widget.query.metrics : [];
   const dimensions = Array.isArray(widget?.query?.dimensions)
     ? widget.query.dimensions
@@ -188,7 +190,7 @@ export default function WidgetRenderer({
     : undefined;
 
   const payload = {
-    brandId,
+    ...(isPublic ? { token: publicToken } : { brandId }),
     dateRange,
     dimensions,
     metrics,
@@ -207,8 +209,16 @@ export default function WidgetRenderer({
 
   const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey,
-    queryFn: () => base44.reportsV2.queryMetrics(payload),
-    enabled: Boolean(brandId && dateRange.start && dateRange.end && metrics.length),
+    queryFn: () =>
+      isPublic
+        ? base44.publicReports.queryMetrics(payload)
+        : base44.reportsV2.queryMetrics(payload),
+    enabled: Boolean(
+      (isPublic ? publicToken : brandId) &&
+        dateRange.start &&
+        dateRange.end &&
+        metrics.length
+    ),
     keepPreviousData: true,
   });
 
@@ -242,9 +252,14 @@ export default function WidgetRenderer({
         title="Conexoes pendentes"
         description={`Conecte ${formatPlatformList(missing)} para ver este widget.`}
         variant="connection"
-        actionLabel="Ir para conexoes"
-        onAction={() =>
-          navigate(`/relatorios/v2/conexoes${brandId ? `?brandId=${brandId}` : ""}`)
+        actionLabel={isPublic ? undefined : "Ir para conexoes"}
+        onAction={
+          isPublic
+            ? undefined
+            : () =>
+                navigate(
+                  `/relatorios/v2/conexoes${brandId ? `?brandId=${brandId}` : ""}`
+                )
         }
         className="border-0 bg-transparent p-0"
       />

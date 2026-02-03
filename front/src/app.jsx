@@ -69,6 +69,9 @@ const AdminIntegrations = lazy(() => import("./pages/admin/AdminIntegrations.jsx
 const AdminReports = lazy(() => import("./pages/admin/AdminReports.jsx"));
 const AdminDataConsole = lazy(() => import("./pages/admin/AdminDataConsole.jsx"));
 const PublicApproval = lazy(() => import("./pages/publicApproval.jsx"));
+const PublicReportViewer = lazy(() =>
+  import("./pages/public/PublicReportViewer.jsx")
+);
 
 // ✅ Novas páginas públicas (Meta exige URLs públicas válidas)
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy.jsx"));
@@ -98,6 +101,7 @@ export default function App() {
         <Route path="/terms" element={<Terms />} />
 
         <Route path="/public/approvals/:token" element={<PublicApproval />} />
+        <Route path="/public/reports/:token" element={<PublicReportViewer />} />
 
         <Route path="/admin/login" element={<AdminLogin />} />
 
