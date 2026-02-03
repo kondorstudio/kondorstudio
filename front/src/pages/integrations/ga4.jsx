@@ -122,7 +122,7 @@ export default function Ga4IntegrationPage() {
     if (typeof window === "undefined") return undefined;
     const handleReauth = () => {
       setReauthNotice(
-        "Sua conexão com o GA4 expirou. Reconecte para continuar."
+        "Sua conexão com o GA4 expirou ou foi revogada. Reconecte para continuar."
       );
       queryClient.invalidateQueries({ queryKey: ["ga4-status"] });
     };
@@ -169,6 +169,11 @@ export default function Ga4IntegrationPage() {
   useEffect(() => {
     if (status === "CONNECTED") {
       setReauthNotice("");
+    }
+    if (status === "NEEDS_RECONNECT") {
+      setReauthNotice(
+        "Sua conexão com o GA4 expirou ou foi revogada. Reconecte para continuar."
+      );
     }
   }, [status]);
 
@@ -247,22 +252,13 @@ export default function Ga4IntegrationPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     {status === "CONNECTED" && !needsReconnect ? (
-                      <>
-                        <Button
-                          variant="outline"
-                          onClick={() => syncMutation.mutate()}
-                          disabled={syncMutation.isPending}
-                        >
-                          Atualizar dados
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={() => disconnectMutation.mutate()}
-                          disabled={disconnectMutation.isPending}
-                        >
-                          Desconectar
-                        </Button>
-                      </>
+                      <Button
+                        variant="outline"
+                        onClick={() => disconnectMutation.mutate()}
+                        disabled={disconnectMutation.isPending}
+                      >
+                        Desconectar
+                      </Button>
                     ) : (
                       <Button
                         onClick={() => {
@@ -329,7 +325,7 @@ export default function Ga4IntegrationPage() {
                     {!selectedProperty ? (
                       <p className="text-xs text-amber-600">
                         Nenhuma propriedade selecionada. Selecione uma para
-                        habilitar relatórios.
+                        habilitar relatórios e dashboards.
                       </p>
                     ) : null}
                     <Button
