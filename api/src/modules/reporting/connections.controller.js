@@ -2,6 +2,17 @@ const { linkConnectionSchema } = require('./connections.validators');
 const connectionsService = require('./connections.service');
 const { logReportingAction } = require('./reportingAudit.service');
 
+function respondReauth(res, error) {
+  if (!error) return false;
+  const code = error?.code;
+  if (code !== 'REAUTH_REQUIRED' && code !== 'GA4_REAUTH_REQUIRED') {
+    return false;
+  }
+  const message = 'Reconecte o GA4 para continuar.';
+  res.status(409).json({ code: 'REAUTH_REQUIRED', message, error: message });
+  return true;
+}
+
 function parseLinkPayload(body = {}) {
   const parsed = linkConnectionSchema.safeParse(body || {});
   if (!parsed.success) {
@@ -40,6 +51,7 @@ module.exports = {
       return res.json(data);
     } catch (err) {
       const status = err.status || 500;
+      if (respondReauth(res, err)) return;
       return res.status(status).json({ error: err.message || 'Erro ao buscar metadata GA4' });
     }
   },
@@ -56,6 +68,7 @@ module.exports = {
       return res.json(data);
     } catch (err) {
       const status = err.status || 500;
+      if (respondReauth(res, err)) return;
       return res
         .status(status)
         .json({

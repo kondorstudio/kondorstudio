@@ -62,6 +62,17 @@ function normalizeGa4Error(error) {
   return message;
 }
 
+function respondReauth(res, error) {
+  if (!error) return false;
+  const code = error?.code;
+  if (code !== 'REAUTH_REQUIRED' && code !== 'GA4_REAUTH_REQUIRED') {
+    return false;
+  }
+  const message = 'Reconecte o GA4 para continuar.';
+  res.status(409).json({ code: 'REAUTH_REQUIRED', message, error: message });
+  return true;
+}
+
 function formatGa4Date(value) {
   const raw = String(value || '');
   if (!/^\d{8}$/.test(raw)) return raw;
@@ -281,6 +292,7 @@ module.exports = {
       });
     } catch (error) {
       console.error('GA4 status error:', error);
+      if (respondReauth(res, error)) return;
       return res.status(500).json({ error: 'Failed to fetch GA4 status' });
     }
   },
@@ -298,6 +310,7 @@ module.exports = {
       return res.json({ items, selectedProperty });
     } catch (error) {
       console.error('GA4 propertiesSync error:', error);
+      if (respondReauth(res, error)) return;
       const message = normalizeGa4Error(error);
       return res
         .status(error.status || 500)
@@ -322,6 +335,7 @@ module.exports = {
       return res.json({ items, selectedProperty });
     } catch (error) {
       console.error('GA4 propertiesList error:', error);
+      if (respondReauth(res, error)) return;
       return res.status(500).json({ error: 'Failed to list GA4 properties' });
     }
   },
@@ -343,6 +357,7 @@ module.exports = {
       return res.json({ selected });
     } catch (error) {
       console.error('GA4 propertiesSelect error:', error);
+      if (respondReauth(res, error)) return;
       return res
         .status(error.status || 500)
         .json({ error: error.message || 'Failed to select GA4 property' });
@@ -408,6 +423,7 @@ module.exports = {
         code: error?.code,
         status: error?.status,
       });
+      if (respondReauth(res, error)) return;
       return res
         .status(error.status || 500)
         .json({ error: message || 'Failed to run GA4 demo report' });
@@ -445,6 +461,7 @@ module.exports = {
       return res.json(metadata);
     } catch (error) {
       console.error('GA4 metadata error:', error);
+      if (respondReauth(res, error)) return;
       return res
         .status(error.status || 500)
         .json({ error: error.message || 'Failed to fetch GA4 metadata' });

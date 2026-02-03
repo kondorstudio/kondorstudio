@@ -1,6 +1,17 @@
 const ga4AdminService = require('../services/ga4AdminService');
 const ga4DataService = require('../services/ga4DataService');
 
+function respondReauth(res, error) {
+  if (!error) return false;
+  const code = error?.code;
+  if (code !== 'REAUTH_REQUIRED' && code !== 'GA4_REAUTH_REQUIRED') {
+    return false;
+  }
+  const message = 'Reconecte o GA4 para continuar.';
+  res.status(409).json({ code: 'REAUTH_REQUIRED', message, error: message });
+  return true;
+}
+
 async function resolvePropertyId({ tenantId, userId, propertyId }) {
   if (propertyId) return propertyId;
   const selected = await ga4AdminService.getSelectedProperty({
@@ -235,6 +246,7 @@ module.exports = {
       return res.json(response);
     } catch (error) {
       console.error('previewWidget error:', error);
+      if (respondReauth(res, error)) return;
       return res
         .status(error.status || 500)
         .json({ error: error.message || 'Failed to preview widget' });
@@ -267,6 +279,7 @@ module.exports = {
       return res.json(response);
     } catch (error) {
       console.error('runReport error:', error);
+      if (respondReauth(res, error)) return;
       return res
         .status(error.status || 500)
         .json({ error: error.message || 'Failed to run GA4 report' });

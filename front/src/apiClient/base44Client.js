@@ -266,7 +266,8 @@ async function _jsonFetchInternal(path, options = {}) {
     if (
       typeof window !== "undefined" &&
       res.status === 409 &&
-      data?.code === "REAUTH_REQUIRED"
+      (data?.code === "REAUTH_REQUIRED" ||
+        data?.code === "GA4_REAUTH_REQUIRED")
     ) {
       try {
         window.dispatchEvent(
