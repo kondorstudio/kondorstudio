@@ -22,6 +22,7 @@ Auditoria e cleanup do módulo de Relatórios no front e back, consolidando V2 c
 - `front/src/pages/reportsV2/ReportsV2Connections.jsx` — Vincula contas por marca (V2).
 - `front/src/pages/reportsV2/ReportsV2Viewer.jsx` — Viewer V2 (filtros globais + widgets).
 - `front/src/pages/reportsV2/ReportsV2Editor.jsx` — Editor V2 (layout, versões, publish).
+- `front/src/pages/public/PublicReportViewer.jsx` — Viewer público read-only via token.
 - `front/src/components/reportsV2/DashboardRenderer.jsx` — Renderiza grid V2.
 - `front/src/components/reportsV2/WidgetRenderer.jsx` — Query de dados via `/metrics/query`.
 - `front/src/components/reportsV2/GlobalFiltersBar.jsx` — UI filtros globais V2.
@@ -51,6 +52,11 @@ Auditoria e cleanup do módulo de Relatórios no front e back, consolidando V2 c
 - `api/src/modules/reports/templates.controller.js` — Controller V2.
 - `api/src/modules/reports/templates.service.js` — Instancia dashboards a partir de template.
 - `api/src/modules/reports/templates.validators.js` — Validação V2.
+- `api/src/routes/reportsExports.js` — Entry point `/api/reports/exports`.
+- `api/src/modules/reports/exports.*` — Export PDF V2 (Playwright + uploads).
+- `api/src/routes/public.js` — Rotas públicas (`/api/public`).
+- `api/src/routes/publicReports.js` — Public reports `/api/public/reports/:token`.
+- `api/src/modules/reports/publicReports.*` — Resolução via token + query pública.
 - `api/src/routes/reportsConnections.js` — Entry point `/api/reports/connections`.
 - `api/src/modules/reports/connections.routes.js` — Rotas V2 de conexões.
 - `api/src/modules/reports/connections.controller.js` — Controller V2.
@@ -94,7 +100,10 @@ Auditoria e cleanup do módulo de Relatórios no front e back, consolidando V2 c
 2. **Instanciar template**: `/api/reports/templates/:id/instantiate` cria `report_dashboard` + versão `report_dashboard_version` com `layoutJson`.
 3. **Editor**: `/api/reports/dashboards/:id/versions` cria versões; `/publish` aponta versão publicada. Layout validado por `reportLayoutSchema`.
 4. **Viewer**: widgets chamam `/api/metrics/query`, que agrega dados em `fact_kondor_metrics_daily` e valida métricas em `metrics_catalog`.
-5. **Conexões**: `/api/reports/connections` grava `brand_source_connection`. `available` lê `data_source_connections` (contas conectadas).
+5. **Gating de conexões**: `/api/metrics/query` valida `brand_source_connection` para as plataformas exigidas e retorna `409 MISSING_CONNECTIONS` quando faltam conexões.
+6. **Conexões**: `/api/reports/connections` grava `brand_source_connection`. `available` lê `data_source_connections` (contas conectadas).
+7. **Compartilhamento**: `/api/reports/dashboards/:id/share` habilita link público `/public/reports/:token`.
+8. **Export PDF**: `/api/reports/dashboards/:id/exports` gera PDF via Playwright e retorna download em `/api/reports/exports/:id/download`.
 
 ### 2.2 Reporting V1 (compatibilidade)
 - Mantido em `/api/reporting/*` apenas para compatibilidade.
@@ -116,6 +125,8 @@ Auditoria e cleanup do módulo de Relatórios no front e back, consolidando V2 c
 - `/api/reports/templates` — Templates V2 (`report_template`).
 - `/api/reports/connections` — `brand_source_connection` (linkagem por marca).
 - `/api/metrics/query` — Consulta agregada em `fact_kondor_metrics_daily` com validação via `metrics_catalog`.
+- `/api/public/reports/:token` — Viewer público read-only (layout publicado).
+- `/api/public/metrics/query` — Query pública por token.
 
 ### (c) Acoplado a integrações externas
 - `/api/reporting/*` — Adapters em `api/src/modules/reporting/providers/*` (Meta, Google Ads, GA4, TikTok, LinkedIn).
@@ -157,9 +168,9 @@ Auditoria e cleanup do módulo de Relatórios no front e back, consolidando V2 c
 - **Dois catálogos de métricas**: `metric_catalog` (V1) vs `metrics_catalog` (V2).
 - **Conexões duplicadas**: `data_source_connections` (V1) e `brand_source_connection` (V2) não estão unificadas.
 - **V2 não aplica reportingScope**: `/api/reports/*` usa apenas role, sem restrição por marca.
-- **V2 não usa conexões para query**: `/metrics/query` filtra por `brandId`, sem validar `brand_source_connection`.
-- **Adapters parciais**: `META_SOCIAL` e `GBP` retornam dados mockados (V1).
 - **Exports dependem de Playwright**: falha se não instalado/configurado.
+- **Public share não persiste token em claro**: regenerar link ao reativar compartilhamento.
+- **Adapters parciais**: `META_SOCIAL` e `GBP` retornam dados mockados (V1).
 - **Legado /reports send email**: placeholder (não envia de fato).
 
 ## 6) O que ainda existe por compatibilidade
