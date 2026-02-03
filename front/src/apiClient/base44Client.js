@@ -263,9 +263,24 @@ async function _jsonFetchInternal(path, options = {}) {
       } catch (e) {}
     }
 
+    if (
+      typeof window !== "undefined" &&
+      res.status === 409 &&
+      data?.code === "REAUTH_REQUIRED"
+    ) {
+      try {
+        window.dispatchEvent(
+          new CustomEvent("ga4_reauth_required", {
+            detail: { status: res.status, data },
+          })
+        );
+      } catch (e) {}
+    }
+
     const error = new Error(data?.error || "Request failed");
     error.status = res.status;
     error.data = data;
+    error.code = data?.code || null;
     throw error;
   }
 

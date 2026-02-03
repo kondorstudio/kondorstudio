@@ -30,6 +30,7 @@ export default function Ga4IntegrationPage() {
   const [connectError, setConnectError] = useState("");
   const [disconnectError, setDisconnectError] = useState("");
   const [syncError, setSyncError] = useState("");
+  const [reauthNotice, setReauthNotice] = useState("");
   const [demoData, setDemoData] = useState(null);
   const [demoError, setDemoError] = useState("");
 
@@ -41,7 +42,8 @@ export default function Ga4IntegrationPage() {
   const status = data?.status || "DISCONNECTED";
   const properties = data?.properties || [];
   const selectedProperty = data?.selectedProperty || null;
-  const needsReconnect = Boolean(data?.lastError);
+  const needsReconnect = status === "NEEDS_RECONNECT";
+  const googleEmail = data?.googleAccountEmail || null;
 
   useEffect(() => {
     if (!properties.length) return;
@@ -110,6 +112,24 @@ export default function Ga4IntegrationPage() {
   const errorParam = queryParams.get("error");
   const messageParam = queryParams.get("message");
 
+  useEffect(() => {
+    if (connectedParam === "1") {
+      queryClient.invalidateQueries({ queryKey: ["ga4-status"] });
+    }
+  }, [connectedParam, queryClient]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const handleReauth = () => {
+      setReauthNotice(
+        "Sua conexão com o GA4 expirou. Reconecte para continuar."
+      );
+      queryClient.invalidateQueries({ queryKey: ["ga4-status"] });
+    };
+    window.addEventListener("ga4_reauth_required", handleReauth);
+    return () => window.removeEventListener("ga4_reauth_required", handleReauth);
+  }, [queryClient]);
+
   const demoMutation = useMutation({
     mutationFn: () =>
       base44.ga4.demoReport(
@@ -146,6 +166,12 @@ export default function Ga4IntegrationPage() {
     setDemoError("");
   }, [selectedPropertyId, status]);
 
+  useEffect(() => {
+    if (status === "CONNECTED") {
+      setReauthNotice("");
+    }
+  }, [status]);
+
   const demoRows = demoData?.rows || [];
 
   return (
@@ -165,6 +191,11 @@ export default function Ga4IntegrationPage() {
         >
           {connectionBanner.text}
           {errorParam ? ` (${errorParam})` : ""}
+        </div>
+      ) : null}
+      {reauthNotice ? (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+          {reauthNotice}
         </div>
       ) : null}
 
@@ -187,9 +218,27 @@ export default function Ga4IntegrationPage() {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <p className="text-sm text-[var(--text-muted)]">Status</p>
-                    <p className="text-lg font-semibold text-[var(--text)]">
-                      {status}
-                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-lg font-semibold text-[var(--text)]">
+                        {status}
+                      </p>
+                      {needsReconnect ? (
+                        <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                          Reconectar
+                        </span>
+                      ) : null}
+                    </div>
+                    {googleEmail ? (
+                      <p className="text-xs text-[var(--text-muted)]">
+                        {googleEmail}
+                      </p>
+                    ) : null}
+                    {selectedProperty ? (
+                      <p className="text-xs text-[var(--text-muted)]">
+                        Propriedade: {selectedProperty.displayName} (
+                        {selectedProperty.propertyId})
+                      </p>
+                    ) : null}
                     {data?.lastError ? (
                       <p className="text-xs text-rose-600">
                         {data.lastError}
@@ -198,13 +247,22 @@ export default function Ga4IntegrationPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     {status === "CONNECTED" && !needsReconnect ? (
-                      <Button
-                        variant="outline"
-                        onClick={() => disconnectMutation.mutate()}
-                        disabled={disconnectMutation.isPending}
-                      >
-                        Desconectar
-                      </Button>
+                      <>
+                        <Button
+                          variant="outline"
+                          onClick={() => syncMutation.mutate()}
+                          disabled={syncMutation.isPending}
+                        >
+                          Atualizar dados
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => disconnectMutation.mutate()}
+                          disabled={disconnectMutation.isPending}
+                        >
+                          Desconectar
+                        </Button>
+                      </>
                     ) : (
                       <Button
                         onClick={() => {
@@ -268,6 +326,12 @@ export default function Ga4IntegrationPage() {
                         </option>
                       ))}
                     </SelectNative>
+                    {!selectedProperty ? (
+                      <p className="text-xs text-amber-600">
+                        Nenhuma propriedade selecionada. Selecione uma para
+                        habilitar relatórios.
+                      </p>
+                    ) : null}
                     <Button
                       onClick={() => selectMutation.mutate(selectedPropertyId)}
                       disabled={
