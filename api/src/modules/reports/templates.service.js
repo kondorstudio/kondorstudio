@@ -32,9 +32,21 @@ async function ensureDefaultTemplates() {
   }
 }
 
+function collectRequiredPlatforms(layoutJson) {
+  const platforms = new Set();
+  const widgets = Array.isArray(layoutJson?.widgets) ? layoutJson.widgets : [];
+  widgets.forEach((widget) => {
+    const required = widget?.query?.requiredPlatforms;
+    if (Array.isArray(required)) {
+      required.forEach((platform) => platforms.add(platform));
+    }
+  });
+  return Array.from(platforms);
+}
+
 async function listTemplates(tenantId) {
   await ensureDefaultTemplates();
-  return prisma.reportTemplateV2.findMany({
+  const templates = await prisma.reportTemplateV2.findMany({
     where: {
       OR: [{ tenantId: null }, { tenantId }],
     },
@@ -43,6 +55,11 @@ async function listTemplates(tenantId) {
       { name: 'asc' },
     ],
   });
+
+  return templates.map((template) => ({
+    ...template,
+    requiredPlatforms: collectRequiredPlatforms(template.layoutJson),
+  }));
 }
 
 async function getTemplateForTenant(tenantId, templateId) {
