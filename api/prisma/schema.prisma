@@ -272,6 +272,7 @@ model Tenant {
   dashboards       Dashboard[]
   reportDashboardsV2 ReportDashboard[]
   reportTemplatesV2  ReportTemplateV2[]
+  reportDashboardExports ReportDashboardExport[]
   brandSourceConnections BrandSourceConnection[]
   factMetricsDaily  FactKondorMetricsDaily[]
   reportExports    ReportExport[]
@@ -767,6 +768,7 @@ model Upload {
   creatives Creative[]
   reports   Report[]   @relation("ReportFiles")
   reportExports ReportExport[] @relation("ReportExportFile")
+  reportDashboardExports ReportDashboardExport[] @relation("ReportDashboardExportFile")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1076,6 +1078,7 @@ model ReportDashboard {
   createdByUserId    String
   createdBy          User                   @relation("ReportDashboardAuthor", fields: [createdByUserId], references: [id], onDelete: Restrict)
   versions           ReportDashboardVersion[] @relation("ReportDashboardVersions")
+  exports            ReportDashboardExport[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1112,7 +1115,7 @@ model ReportDashboardExport {
   status         ReportExportStatus @default(PENDING)
   format         String            @default("PDF")
   fileId         String?
-  file           Upload?           @relation(fields: [fileId], references: [id], onDelete: SetNull)
+  file           Upload?           @relation("ReportDashboardExportFile", fields: [fileId], references: [id], onDelete: SetNull)
   publicTokenHash String?
   meta           Json?
   createdAt      DateTime          @default(now())
