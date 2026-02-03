@@ -251,7 +251,11 @@ export default function ReportsV2Home() {
                           >
                             Ver
                           </Button>
-                          <Button size="sm" variant="ghost" disabled>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => navigate(`/relatorios/v2/${dashboard.id}/edit`)}
+                          >
                             Editar
                           </Button>
                         </div>

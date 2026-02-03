@@ -127,7 +127,7 @@ const vizSchema = z
 const widgetSchema = z
   .object({
     id: z.string().uuid(),
-    type: z.enum(['kpi', 'timeseries', 'bar', 'table']),
+    type: z.enum(['kpi', 'timeseries', 'bar', 'table', 'pie']),
     title: z.string().min(1),
     layout: layoutSchema,
     query: querySchema,
@@ -168,6 +168,15 @@ const widgetSchema = z
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           message: 'Widget bar exige uma dimensão não-date',
+        });
+      }
+    }
+
+    if (value.type === 'pie') {
+      if (dimensions.length !== 1 || dimensions[0] === 'date') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Widget pie exige uma dimensão não-date',
         });
       }
     }

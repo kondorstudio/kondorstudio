@@ -865,6 +865,22 @@ const ReportsV2 = {
     });
   },
 
+  async createDashboardVersion(id, payload = {}) {
+    if (!id) throw new Error("dashboardId obrigatorio");
+    return jsonFetch(`/reports/dashboards/${id}/versions`, {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    });
+  },
+
+  async publishDashboard(id, payload = {}) {
+    if (!id) throw new Error("dashboardId obrigatorio");
+    return jsonFetch(`/reports/dashboards/${id}/publish`, {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    });
+  },
+
   async queryMetrics(payload = {}) {
     return jsonFetch("/metrics/query", {
       method: "POST",

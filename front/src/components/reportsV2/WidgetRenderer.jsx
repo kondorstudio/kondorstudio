@@ -9,6 +9,7 @@ import {
   PieChart,
   Pie,
   Cell,
+  Legend,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -26,10 +27,25 @@ const PERCENT_METRICS = new Set(["ctr"]);
 const RATIO_METRICS = new Set(["roas"]);
 const CURRENCY_METRICS = new Set(["spend", "revenue", "cpc", "cpm", "cpa"]);
 
-function formatMetricValue(metricKey, value, meta) {
+function formatMetricValue(metricKey, value, meta, formatOverride = "auto") {
   if (value === null || value === undefined || value === "") return "-";
   const number = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(number)) return String(value);
+
+  if (formatOverride && formatOverride !== "auto") {
+    if (formatOverride === "percent") {
+      return `${(number * 100).toFixed(2)}%`;
+    }
+    if (formatOverride === "currency") {
+      if (meta?.currency) {
+        return formatNumber(number, { currency: meta.currency, compact: true });
+      }
+      return formatNumber(number, { compact: true });
+    }
+    if (formatOverride === "compact") {
+      return formatNumber(number, { compact: true });
+    }
+  }
 
   if (PERCENT_METRICS.has(metricKey)) {
     return `${(number * 100).toFixed(2)}%`;
@@ -43,7 +59,7 @@ function formatMetricValue(metricKey, value, meta) {
   return formatNumber(number, { compact: true });
 }
 
-function ChartTooltip({ active, payload, label, meta }) {
+function ChartTooltip({ active, payload, label, meta, formatOverride }) {
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-[12px] border border-[var(--border)] bg-white px-3 py-2 text-xs shadow-[var(--shadow-sm)]">
@@ -61,7 +77,7 @@ function ChartTooltip({ active, payload, label, meta }) {
               {entry.name}
             </span>
             <span className="font-semibold text-[var(--text)]">
-              {formatMetricValue(entry.dataKey, entry.value, meta)}
+              {formatMetricValue(entry.dataKey, entry.value, meta, formatOverride)}
             </span>
           </div>
         ))}
@@ -100,6 +116,8 @@ export default function WidgetRenderer({
     ? widget.query.dimensions
     : [];
   const widgetType = widget?.type || "kpi";
+  const formatOverride = widget?.viz?.format || "auto";
+  const showLegend = widget?.viz?.showLegend !== false;
 
   const dateRange = resolveDateRange(globalFilters?.dateRange || {});
   const mergedFilters = mergeWidgetFilters(widget?.query?.filters || [], globalFilters);
@@ -187,7 +205,7 @@ export default function WidgetRenderer({
           {metric}
         </div>
         <div className="text-3xl font-semibold text-[var(--text)]">
-          {formatMetricValue(metric, value, meta)}
+          {formatMetricValue(metric, value, meta, formatOverride)}
         </div>
         {isFetching ? (
           <div className="text-xs text-[var(--text-muted)]">Atualizando...</div>
@@ -206,7 +224,8 @@ export default function WidgetRenderer({
           <CartesianGrid stroke="#E2E8F0" strokeDasharray="3 3" />
           <XAxis dataKey="label" tick={{ fontSize: 11 }} />
           <YAxis tick={{ fontSize: 11 }} />
-          <Tooltip content={<ChartTooltip meta={meta} />} />
+          <Tooltip content={<ChartTooltip meta={meta} formatOverride={formatOverride} />} />
+          {showLegend ? <Legend /> : null}
           {metrics.map((metric, index) => (
             <Line
               key={metric}
@@ -232,7 +251,8 @@ export default function WidgetRenderer({
           <CartesianGrid stroke="#E2E8F0" strokeDasharray="3 3" />
           <XAxis dataKey="label" tick={{ fontSize: 11 }} />
           <YAxis tick={{ fontSize: 11 }} />
-          <Tooltip content={<ChartTooltip meta={meta} />} />
+          <Tooltip content={<ChartTooltip meta={meta} formatOverride={formatOverride} />} />
+          {showLegend ? <Legend /> : null}
           {metrics.map((metric, index) => (
             <Bar
               key={metric}
@@ -267,7 +287,7 @@ export default function WidgetRenderer({
                 {columns.map((col) => (
                   <td key={`${col}-${index}`} className="px-3 py-2 text-sm text-[var(--text)]">
                     {metrics.includes(col)
-                      ? formatMetricValue(col, row[col], meta)
+                      ? formatMetricValue(col, row[col], meta, formatOverride)
                       : row[col] ?? "-"}
                   </td>
                 ))}
@@ -302,7 +322,8 @@ export default function WidgetRenderer({
               />
             ))}
           </Pie>
-          <Tooltip content={<ChartTooltip meta={meta} />} />
+          <Tooltip content={<ChartTooltip meta={meta} formatOverride={formatOverride} />} />
+          {showLegend ? <Legend /> : null}
         </PieChart>
       </ResponsiveContainer>
     );

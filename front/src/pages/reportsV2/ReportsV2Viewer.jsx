@@ -109,7 +109,11 @@ export default function ReportsV2Viewer() {
               {dashboard.status === "PUBLISHED" ? "Publicado" : "Rascunho"}
             </p>
           </div>
-          <Button variant="secondary" disabled leftIcon={Edit3}>
+          <Button
+            variant="secondary"
+            leftIcon={Edit3}
+            onClick={() => navigate(`/relatorios/v2/${dashboard.id}/edit`)}
+          >
             Editar
           </Button>
         </div>
