@@ -278,6 +278,7 @@ async function runReport({
   payload,
   rateKey,
   cacheTtlMs,
+  skipSelectionCheck,
 }) {
   if (!propertyId) {
     const err = new Error('propertyId missing');
@@ -290,7 +291,9 @@ async function runReport({
     return buildMockReport(normalized);
   }
 
-  await assertSelectedProperty({ tenantId, propertyId });
+  if (!skipSelectionCheck) {
+    await assertSelectedProperty({ tenantId, propertyId });
+  }
 
   await validateAgainstMetadata({
     tenantId,

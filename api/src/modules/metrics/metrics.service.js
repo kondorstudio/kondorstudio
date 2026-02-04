@@ -1,4 +1,5 @@
 const { prisma } = require('../../prisma');
+const { ensureGa4FactMetrics } = require('../../services/ga4FactMetricsService');
 
 const DIMENSION_COLUMN_MAP = {
   date: 'date',
@@ -594,6 +595,16 @@ async function executeQueryMetrics(tenantId, payload = {}) {
       derivedForSelect = [derivedMatch];
     }
   }
+
+  await ensureGa4FactMetrics({
+    tenantId,
+    brandId,
+    dateRange,
+    metrics,
+    dimensions,
+    filters,
+    requiredPlatforms: payload.requiredPlatforms,
+  });
 
   const baseResult = await runAggregates({
     tenantId,

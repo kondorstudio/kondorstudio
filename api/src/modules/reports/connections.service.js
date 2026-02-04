@@ -63,13 +63,42 @@ async function listAvailableAccounts(tenantId, brandId, platform) {
     orderBy: { createdAt: 'desc' },
   });
 
-  return accounts.map((item) => ({
+  const mapped = accounts.map((item) => ({
     connectionId: item.id,
     externalAccountId: item.externalAccountId,
     externalAccountName: item.displayName,
     source: item.source,
     status: item.status,
   }));
+
+  if (source !== 'GA4') {
+    return mapped;
+  }
+
+  const integration = await prisma.integrationGoogleGa4.findFirst({
+    where: { tenantId, status: 'CONNECTED' },
+  });
+  if (!integration) {
+    return mapped;
+  }
+
+  const properties = await prisma.integrationGoogleGa4Property.findMany({
+    where: { tenantId, integrationId: integration.id },
+    orderBy: { displayName: 'asc' },
+  });
+
+  const existingIds = new Set(mapped.map((item) => String(item.externalAccountId)));
+  const supplemental = properties
+    .filter((prop) => !existingIds.has(String(prop.propertyId)))
+    .map((prop) => ({
+      connectionId: null,
+      externalAccountId: String(prop.propertyId),
+      externalAccountName: prop.displayName || `Property ${prop.propertyId}`,
+      source: 'GA4',
+      status: 'CONNECTED',
+    }));
+
+  return [...mapped, ...supplemental];
 }
 
 async function linkConnection(tenantId, userId, payload) {
@@ -84,7 +113,7 @@ async function linkConnection(tenantId, userId, payload) {
     throw err;
   }
 
-  const available = await prisma.dataSourceConnection.findFirst({
+  let available = await prisma.dataSourceConnection.findFirst({
     where: {
       tenantId,
       brandId,
@@ -93,6 +122,28 @@ async function linkConnection(tenantId, userId, payload) {
       status: 'CONNECTED',
     },
   });
+
+  if (!available && source === 'GA4') {
+    const integration = await prisma.integrationGoogleGa4.findFirst({
+      where: { tenantId, status: 'CONNECTED' },
+    });
+    if (integration) {
+      const property = await prisma.integrationGoogleGa4Property.findFirst({
+        where: {
+          tenantId,
+          integrationId: integration.id,
+          propertyId: String(externalAccountId),
+        },
+      });
+      if (property) {
+        available = {
+          id: null,
+          displayName: property.displayName || String(property.propertyId),
+          externalAccountId: String(property.propertyId),
+        };
+      }
+    }
+  }
 
   if (!available) {
     const err = new Error('Conta não encontrada para esta marca');
