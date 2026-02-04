@@ -18,18 +18,58 @@ function resetModule(path) {
 function buildExportServiceHarness(options = {}) {
   const createCalls = [];
   const updateCalls = [];
+  const defaultLayout = {
+    theme: {
+      mode: 'light',
+      brandColor: '#F59E0B',
+      accentColor: '#22C55E',
+      bg: '#FFFFFF',
+      text: '#0F172A',
+      mutedText: '#64748B',
+      cardBg: '#FFFFFF',
+      border: '#E2E8F0',
+      radius: 16,
+    },
+    globalFilters: {
+      dateRange: { preset: 'last_7_days' },
+      platforms: [],
+      accounts: [],
+      compareTo: null,
+      autoRefreshSec: 0,
+    },
+    pages: [
+      {
+        id: 'a3f2a8ee-0f0f-4f34-84af-9d53d3ed4d73',
+        name: 'Pagina 1',
+        widgets: [
+          {
+            id: 'f95f9e5f-af6f-4fdb-b7e2-a93e7992fd2d',
+            type: 'text',
+            title: 'Cabecalho',
+            layout: { x: 0, y: 0, w: 12, h: 2, minW: 2, minH: 2 },
+            content: { text: 'Texto', format: 'plain' },
+            viz: {},
+          },
+        ],
+      },
+    ],
+  };
+  const dashboard =
+    options.dashboard ||
+    {
+      id: 'dashboard-1',
+      tenantId: 'tenant-1',
+      brandId: 'brand-1',
+      name: 'Dashboard Exportavel',
+      status: 'PUBLISHED',
+      publishedVersionId: 'version-1',
+      publishedVersion: { id: 'version-1', layoutJson: defaultLayout },
+    };
 
   mockModule('../src/prisma', {
     prisma: {
       reportDashboard: {
-        findFirst: async () => ({
-          id: 'dashboard-1',
-          tenantId: 'tenant-1',
-          name: 'Dashboard Exportavel',
-          status: 'PUBLISHED',
-          publishedVersionId: 'version-1',
-          publishedVersion: { id: 'version-1' },
-        }),
+        findFirst: async () => dashboard,
       },
       reportDashboardExport: {
         create: async ({ data }) => {
@@ -218,6 +258,32 @@ test('export-pdf requires editor permissions', async () => {
   assert.equal(res.status, 403);
 });
 
+test('export-pdf returns 422 when dashboard is invalid', async () => {
+  const { app } = buildApp({
+    serviceMock: {
+      createDashboardExport: async () => ({
+        export: { id: 'export-1', status: 'READY' },
+        url: 'https://files.example.com/export.pdf',
+      }),
+      exportDashboardPdf: async () => {
+        const err = new Error(
+          'Nao e possivel exportar este relatorio pois existem widgets com dados invalidos ou conexoes pendentes.',
+        );
+        err.code = 'DASHBOARD_INVALID';
+        err.status = 422;
+        throw err;
+      },
+    },
+  });
+
+  const res = await request(app)
+    .post('/api/reports/dashboards/dashboard-1/export-pdf')
+    .send({});
+
+  assert.equal(res.status, 422);
+  assert.equal(res.body?.error?.code, 'DASHBOARD_INVALID');
+});
+
 test('exportDashboardPdf persists temporary token expiry and clears token after success', async () => {
   const { service, createCalls, updateCalls, restore } = buildExportServiceHarness();
   try {
@@ -263,6 +329,41 @@ test('exportDashboardPdf invalidates temporary token when generation fails', asy
     assert.equal(finalUpdate.publicTokenHash, null);
     assert.equal(finalUpdate.publicTokenExpiresAt, null);
     assert.ok(finalUpdate.publicTokenUsedAt instanceof Date);
+  } finally {
+    restore();
+  }
+});
+
+test('exportDashboardPdf rejects when published layout is invalid', async () => {
+  const invalidDashboard = {
+    id: 'dashboard-1',
+    tenantId: 'tenant-1',
+    brandId: 'brand-1',
+    name: 'Dashboard Invalido',
+    status: 'PUBLISHED',
+    publishedVersionId: 'version-1',
+    publishedVersion: {
+      id: 'version-1',
+      layoutJson: { theme: {}, globalFilters: {} },
+    },
+  };
+  const { service, createCalls, restore } = buildExportServiceHarness({
+    dashboard: invalidDashboard,
+  });
+  try {
+    await assert.rejects(
+      () =>
+        service.exportDashboardPdf('tenant-1', 'user-1', 'dashboard-1', {
+          page: 'current',
+          orientation: 'portrait',
+        }),
+      (error) => {
+        assert.equal(error?.code, 'DASHBOARD_INVALID');
+        assert.equal(error?.status, 422);
+        return true;
+      },
+    );
+    assert.equal(createCalls.length, 0);
   } finally {
     restore();
   }

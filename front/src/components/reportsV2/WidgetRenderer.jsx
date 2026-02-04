@@ -152,6 +152,15 @@ function getKpiValue(rows, totals, metric, dimensions) {
   return totals?.[metric];
 }
 
+function WidgetStatusReporter({ widgetId, status, reason, onStatusChange }) {
+  React.useEffect(() => {
+    if (!onStatusChange || !widgetId) return undefined;
+    onStatusChange(widgetId, { status, reason: reason || null });
+    return undefined;
+  }, [onStatusChange, reason, status, widgetId]);
+  return null;
+}
+
 export default function WidgetRenderer({
   widget,
   dashboardId,
@@ -159,6 +168,7 @@ export default function WidgetRenderer({
   publicToken,
   pageId,
   globalFilters,
+  onStatusChange,
 }) {
   const navigate = useNavigate();
   const isPublic = Boolean(publicToken);
@@ -264,26 +274,52 @@ export default function WidgetRenderer({
   });
 
   if (widgetType === "text") {
-    return <WidgetText widget={widget} />;
+    return (
+      <>
+        <WidgetStatusReporter
+          widgetId={widget?.id}
+          status="ok"
+          reason={null}
+          onStatusChange={onStatusChange}
+        />
+        <WidgetText widget={widget} />
+      </>
+    );
   }
 
   if (!metrics.length) {
     return (
-      <WidgetEmptyState
-        title="Widget sem metricas"
-        description="Edite este widget para selecionar metricas."
-        variant="metrics"
-        className="border-0 bg-transparent p-0"
-      />
+      <>
+        <WidgetStatusReporter
+          widgetId={widget?.id}
+          status="invalid"
+          reason="MISSING_METRICS"
+          onStatusChange={onStatusChange}
+        />
+        <WidgetEmptyState
+          title="Widget sem metricas"
+          description="Edite este widget para selecionar metricas."
+          variant="metrics"
+          className="border-0 bg-transparent p-0"
+        />
+      </>
     );
   }
 
   if (isLoading) {
     return (
-      <WidgetSkeleton
-        widgetType={widgetType}
-        className="border-0 bg-transparent p-0"
-      />
+      <>
+        <WidgetStatusReporter
+          widgetId={widget?.id}
+          status="loading"
+          reason={null}
+          onStatusChange={onStatusChange}
+        />
+        <WidgetSkeleton
+          widgetType={widgetType}
+          className="border-0 bg-transparent p-0"
+        />
+      </>
     );
   }
 
@@ -293,32 +329,48 @@ export default function WidgetRenderer({
   ) {
     const missing = error?.data?.error?.details?.missing || [];
     return (
-      <WidgetEmptyState
-        title="Conexoes pendentes"
-        description={`Conecte ${formatPlatformList(missing)} para ver este widget.`}
-        variant="connection"
-        actionLabel={isPublic ? undefined : "Ir para conexoes"}
-        onAction={
-          isPublic
-            ? undefined
-            : () =>
-                navigate(
-                  `/relatorios/v2/conexoes${brandId ? `?brandId=${brandId}` : ""}`
-                )
-        }
-        className="border-0 bg-transparent p-0"
-      />
+      <>
+        <WidgetStatusReporter
+          widgetId={widget?.id}
+          status="invalid"
+          reason="MISSING_CONNECTIONS"
+          onStatusChange={onStatusChange}
+        />
+        <WidgetEmptyState
+          title="Conexoes pendentes"
+          description={`Conecte ${formatPlatformList(missing)} para ver este widget.`}
+          variant="connection"
+          actionLabel={isPublic ? undefined : "Ir para conexoes"}
+          onAction={
+            isPublic
+              ? undefined
+              : () =>
+                  navigate(
+                    `/relatorios/v2/conexoes${brandId ? `?brandId=${brandId}` : ""}`
+                  )
+          }
+          className="border-0 bg-transparent p-0"
+        />
+      </>
     );
   }
 
   if (error) {
     return (
-      <WidgetErrorState
-        title="Nao foi possivel carregar"
-        description="Verifique sua conexao e tente novamente."
-        onRetry={() => refetch()}
-        className="border-0 bg-transparent p-0"
-      />
+      <>
+        <WidgetStatusReporter
+          widgetId={widget?.id}
+          status="error"
+          reason="QUERY_ERROR"
+          onStatusChange={onStatusChange}
+        />
+        <WidgetErrorState
+          title="Nao foi possivel carregar"
+          description="Verifique sua conexao e tente novamente."
+          onRetry={() => refetch()}
+          className="border-0 bg-transparent p-0"
+        />
+      </>
     );
   }
 
@@ -333,12 +385,20 @@ export default function WidgetRenderer({
 
   if (!rows.length && widgetType !== "kpi") {
     return (
-      <WidgetEmptyState
-        title="Sem dados para este periodo"
-        description="Ajuste os filtros globais para ver resultados."
-        variant="no-data"
-        className="border-0 bg-transparent p-0"
-      />
+      <>
+        <WidgetStatusReporter
+          widgetId={widget?.id}
+          status="ok"
+          reason="EMPTY_DATA"
+          onStatusChange={onStatusChange}
+        />
+        <WidgetEmptyState
+          title="Sem dados para este periodo"
+          description="Ajuste os filtros globais para ver resultados."
+          variant="no-data"
+          className="border-0 bg-transparent p-0"
+        />
+      </>
     );
   }
 
@@ -346,19 +406,27 @@ export default function WidgetRenderer({
     const metric = metrics[0];
     const value = getKpiValue(rows, totals, metric, dimensions);
     return (
-      <div className="flex h-full flex-col justify-between gap-3">
-        <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-          {metric}
+      <>
+        <WidgetStatusReporter
+          widgetId={widget?.id}
+          status="ok"
+          reason={null}
+          onStatusChange={onStatusChange}
+        />
+        <div className="flex h-full flex-col justify-between gap-3">
+          <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+            {metric}
+          </div>
+          <div className="text-3xl font-semibold text-[var(--text)]">
+            {formatMetricValue(metric, value, meta, formatOverride)}
+          </div>
+          {isFetching ? (
+            <div className="text-xs text-[var(--muted)]">Atualizando...</div>
+          ) : (
+            <div className="text-xs text-[var(--muted)]">Atualizado agora</div>
+          )}
         </div>
-        <div className="text-3xl font-semibold text-[var(--text)]">
-          {formatMetricValue(metric, value, meta, formatOverride)}
-        </div>
-        {isFetching ? (
-          <div className="text-xs text-[var(--muted)]">Atualizando...</div>
-        ) : (
-          <div className="text-xs text-[var(--muted)]">Atualizado agora</div>
-        )}
-      </div>
+      </>
     );
   }
 
@@ -366,26 +434,34 @@ export default function WidgetRenderer({
     const chartData = buildChartData(rows, metrics, "date");
     const lineType = vizOptions.lineType || "monotone";
     return (
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={chartData}>
-          {showGrid ? <CartesianGrid stroke="#E2E8F0" strokeDasharray="3 3" /> : null}
-          <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-          <YAxis tick={{ fontSize: 11 }} />
-          <Tooltip content={<ChartTooltip meta={meta} formatOverride={formatOverride} />} />
-          {showLegend ? <Legend {...legendProps} /> : null}
-          {metrics.map((metric, index) => (
-            <Line
-              key={metric}
-              type={lineType}
-              dataKey={metric}
-              stroke={CHART_COLORS[index % CHART_COLORS.length]}
-              strokeWidth={2}
-              dot={false}
-              name={metric}
-            />
-          ))}
-        </LineChart>
-      </ResponsiveContainer>
+      <>
+        <WidgetStatusReporter
+          widgetId={widget?.id}
+          status="ok"
+          reason={null}
+          onStatusChange={onStatusChange}
+        />
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={chartData}>
+            {showGrid ? <CartesianGrid stroke="#E2E8F0" strokeDasharray="3 3" /> : null}
+            <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+            <YAxis tick={{ fontSize: 11 }} />
+            <Tooltip content={<ChartTooltip meta={meta} formatOverride={formatOverride} />} />
+            {showLegend ? <Legend {...legendProps} /> : null}
+            {metrics.map((metric, index) => (
+              <Line
+                key={metric}
+                type={lineType}
+                dataKey={metric}
+                stroke={CHART_COLORS[index % CHART_COLORS.length]}
+                strokeWidth={2}
+                dot={false}
+                name={metric}
+              />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      </>
     );
   }
 
@@ -396,24 +472,32 @@ export default function WidgetRenderer({
       ? vizOptions.barRadius
       : [6, 6, 0, 0];
     return (
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={chartData}>
-          {showGrid ? <CartesianGrid stroke="#E2E8F0" strokeDasharray="3 3" /> : null}
-          <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-          <YAxis tick={{ fontSize: 11 }} />
-          <Tooltip content={<ChartTooltip meta={meta} formatOverride={formatOverride} />} />
-          {showLegend ? <Legend {...legendProps} /> : null}
-          {metrics.map((metric, index) => (
-            <Bar
-              key={metric}
-              dataKey={metric}
-              fill={CHART_COLORS[index % CHART_COLORS.length]}
-              name={metric}
-              radius={barRadius}
-            />
-          ))}
-        </BarChart>
-      </ResponsiveContainer>
+      <>
+        <WidgetStatusReporter
+          widgetId={widget?.id}
+          status="ok"
+          reason={null}
+          onStatusChange={onStatusChange}
+        />
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={chartData}>
+            {showGrid ? <CartesianGrid stroke="#E2E8F0" strokeDasharray="3 3" /> : null}
+            <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+            <YAxis tick={{ fontSize: 11 }} />
+            <Tooltip content={<ChartTooltip meta={meta} formatOverride={formatOverride} />} />
+            {showLegend ? <Legend {...legendProps} /> : null}
+            {metrics.map((metric, index) => (
+              <Bar
+                key={metric}
+                dataKey={metric}
+                fill={CHART_COLORS[index % CHART_COLORS.length]}
+                name={metric}
+                radius={barRadius}
+              />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+      </>
     );
   }
 
@@ -435,113 +519,121 @@ export default function WidgetRenderer({
     const hasNextPage = Boolean(pageInfo?.hasMore) && hasNextWithinLimit;
     const showTotals = vizOptions.showTotals !== false;
     return (
-      <div className="flex h-full flex-col">
-        <div className="flex-1 overflow-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead className="sticky top-0 bg-[var(--card)]">
-              <tr className="border-b border-[var(--border)]">
-                {columns.map((col) => (
-                  <th
-                    key={col}
-                    className="px-3 py-2 text-xs font-semibold uppercase text-[var(--muted)]"
-                  >
-                    {col}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, index) => (
-                <tr
-                  key={`${row.id || index}`}
-                  className="border-b border-[var(--border)] last:border-none"
-                >
+      <>
+        <WidgetStatusReporter
+          widgetId={widget?.id}
+          status="ok"
+          reason={null}
+          onStatusChange={onStatusChange}
+        />
+        <div className="flex h-full flex-col">
+          <div className="flex-1 overflow-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead className="sticky top-0 bg-[var(--card)]">
+                <tr className="border-b border-[var(--border)]">
                   {columns.map((col) => (
-                    <td
-                      key={`${col}-${index}`}
-                      className="px-3 py-2 text-sm text-[var(--text)]"
+                    <th
+                      key={col}
+                      className="px-3 py-2 text-xs font-semibold uppercase text-[var(--muted)]"
                     >
-                      {metrics.includes(col)
-                        ? formatMetricValue(col, row[col], meta, formatOverride)
-                        : row[col] ?? "-"}
-                    </td>
+                      {col}
+                    </th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-          {showTotals ? (
-            <div className="rounded-[12px] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-xs">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-                Totais
-              </div>
-              <div className="mt-1 flex flex-wrap gap-3">
-                {metrics.map((metric) => (
-                  <div key={`total-${metric}`} className="text-[var(--text)]">
-                    <span className="mr-1 text-[11px] font-semibold uppercase text-[var(--muted)]">
-                      {metric}
-                    </span>
-                    {formatMetricValue(metric, totals?.[metric], meta, formatOverride)}
-                  </div>
+              </thead>
+              <tbody>
+                {rows.map((row, index) => (
+                  <tr
+                    key={`${row.id || index}`}
+                    className="border-b border-[var(--border)] last:border-none"
+                  >
+                    {columns.map((col) => (
+                      <td
+                        key={`${col}-${index}`}
+                        className="px-3 py-2 text-sm text-[var(--text)]"
+                      >
+                        {metrics.includes(col)
+                          ? formatMetricValue(col, row[col], meta, formatOverride)
+                          : row[col] ?? "-"}
+                      </td>
+                    ))}
+                  </tr>
                 ))}
-              </div>
-            </div>
-          ) : null}
+              </tbody>
+            </table>
+          </div>
 
-          <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
-            <label
-              className="text-[11px] font-semibold uppercase tracking-[0.2em]"
-              htmlFor={`page-size-${widget?.id || "table"}`}
-            >
-              Itens
-            </label>
-            <select
-              id={`page-size-${widget?.id || "table"}`}
-              value={pageSize}
-              onChange={(event) => {
-                setPageSize(Number(event.target.value));
-                setPageIndex(0);
-              }}
-              className="rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-2 py-1 text-xs text-[var(--text)]"
-            >
-              {pageOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-
-            <div className="text-xs text-[var(--muted)]">
-              Pagina {currentPage}
-            </div>
-            {widgetLimit ? (
-              <div className="text-[11px] text-[var(--muted)]">
-                Limite do widget: {widgetLimit} linhas
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            {showTotals ? (
+              <div className="rounded-[12px] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-xs">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+                  Totais
+                </div>
+                <div className="mt-1 flex flex-wrap gap-3">
+                  {metrics.map((metric) => (
+                    <div key={`total-${metric}`} className="text-[var(--text)]">
+                      <span className="mr-1 text-[11px] font-semibold uppercase text-[var(--muted)]">
+                        {metric}
+                      </span>
+                      {formatMetricValue(metric, totals?.[metric], meta, formatOverride)}
+                    </div>
+                  ))}
+                </div>
               </div>
             ) : null}
 
-            <button
-              type="button"
-              onClick={() => setPageIndex((prev) => Math.max(prev - 1, 0))}
-              disabled={pageIndex === 0}
-              className="rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3 py-1 text-xs font-semibold text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Anterior
-            </button>
-            <button
-              type="button"
-              onClick={() => setPageIndex((prev) => prev + 1)}
-              disabled={!hasNextPage}
-              className="rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3 py-1 text-xs font-semibold text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Proximo
-            </button>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
+              <label
+                className="text-[11px] font-semibold uppercase tracking-[0.2em]"
+                htmlFor={`page-size-${widget?.id || "table"}`}
+              >
+                Itens
+              </label>
+              <select
+                id={`page-size-${widget?.id || "table"}`}
+                value={pageSize}
+                onChange={(event) => {
+                  setPageSize(Number(event.target.value));
+                  setPageIndex(0);
+                }}
+                className="rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-2 py-1 text-xs text-[var(--text)]"
+              >
+                {pageOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+
+              <div className="text-xs text-[var(--muted)]">
+                Pagina {currentPage}
+              </div>
+              {widgetLimit ? (
+                <div className="text-[11px] text-[var(--muted)]">
+                  Limite do widget: {widgetLimit} linhas
+                </div>
+              ) : null}
+
+              <button
+                type="button"
+                onClick={() => setPageIndex((prev) => Math.max(prev - 1, 0))}
+                disabled={pageIndex === 0}
+                className="rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3 py-1 text-xs font-semibold text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Anterior
+              </button>
+              <button
+                type="button"
+                onClick={() => setPageIndex((prev) => prev + 1)}
+                disabled={!hasNextPage}
+                className="rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3 py-1 text-xs font-semibold text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Proximo
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      </>
     );
   }
 
@@ -555,25 +647,41 @@ export default function WidgetRenderer({
         ? "donut"
         : "pie";
     return (
-      <WidgetPie
-        rows={rows}
-        dimension={dimension}
-        metric={metric}
-        meta={meta}
-        format={formatOverride}
-        showLegend={showLegend}
-        variant={variant}
-        options={widget?.viz?.options}
-      />
+      <>
+        <WidgetStatusReporter
+          widgetId={widget?.id}
+          status="ok"
+          reason={null}
+          onStatusChange={onStatusChange}
+        />
+        <WidgetPie
+          rows={rows}
+          dimension={dimension}
+          metric={metric}
+          meta={meta}
+          format={formatOverride}
+          showLegend={showLegend}
+          variant={variant}
+          options={widget?.viz?.options}
+        />
+      </>
     );
   }
 
   return (
-    <WidgetEmptyState
-      title="Tipo nao suportado"
-      description="Este widget ainda nao possui visualizacao."
-      variant="metrics"
-      className="border-0 bg-transparent p-0"
-    />
+    <>
+      <WidgetStatusReporter
+        widgetId={widget?.id}
+        status="invalid"
+        reason="UNSUPPORTED_WIDGET"
+        onStatusChange={onStatusChange}
+      />
+      <WidgetEmptyState
+        title="Tipo nao suportado"
+        description="Este widget ainda nao possui visualizacao."
+        variant="metrics"
+        className="border-0 bg-transparent p-0"
+      />
+    </>
   );
 }

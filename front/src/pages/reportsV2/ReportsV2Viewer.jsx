@@ -77,6 +77,7 @@ export default function ReportsV2Viewer() {
   const pages = normalizedLayout?.pages || [];
   const globalFilterControls = normalizedLayout?.globalFilters?.controls;
   const [activePageId, setActivePageId] = React.useState(pages[0]?.id || null);
+  const [widgetStatusById, setWidgetStatusById] = React.useState({});
   const shareStatusQuery = useQuery({
     queryKey: ["reportsV2-public-share", id],
     queryFn: () => base44.reportsV2.getPublicShareStatus(id),
@@ -107,6 +108,67 @@ export default function ReportsV2Viewer() {
       return pages[0].id;
     });
   }, [pages]);
+
+  const activePageWidgets = React.useMemo(() => {
+    if (!pages.length) return [];
+    const activePage =
+      pages.find((page) => page.id === activePageId) || pages[0] || null;
+    return Array.isArray(activePage?.widgets) ? activePage.widgets : [];
+  }, [activePageId, pages]);
+
+  const activeWidgetIds = React.useMemo(
+    () => new Set(activePageWidgets.map((widget) => widget.id)),
+    [activePageWidgets]
+  );
+
+  React.useEffect(() => {
+    if (!activeWidgetIds.size) {
+      setWidgetStatusById({});
+      return;
+    }
+    setWidgetStatusById((previous) => {
+      const next = {};
+      for (const widgetId of Object.keys(previous)) {
+        if (activeWidgetIds.has(widgetId)) {
+          next[widgetId] = previous[widgetId];
+        }
+      }
+      if (
+        Object.keys(next).length === Object.keys(previous).length &&
+        Object.keys(next).every((key) => next[key] === previous[key])
+      ) {
+        return previous;
+      }
+      return next;
+    });
+  }, [activeWidgetIds]);
+
+  const handleWidgetStatusChange = React.useCallback((widgetId, payload) => {
+    if (!widgetId) return;
+    setWidgetStatusById((previous) => {
+      const nextPayload = payload || { status: "ok", reason: null };
+      const current = previous[widgetId];
+      if (
+        current?.status === nextPayload.status &&
+        current?.reason === nextPayload.reason
+      ) {
+        return previous;
+      }
+      return {
+        ...previous,
+        [widgetId]: nextPayload,
+      };
+    });
+  }, []);
+
+  const hasInvalidWidgets = React.useMemo(() => {
+    for (const widgetId of activeWidgetIds) {
+      const status = widgetStatusById[widgetId];
+      if (!status) continue;
+      if (status.status === "error" || status.status === "invalid") return true;
+    }
+    return false;
+  }, [activeWidgetIds, widgetStatusById]);
 
   React.useEffect(() => {
     const refreshSec = Number(filters?.autoRefreshSec || 0);
@@ -241,6 +303,12 @@ export default function ReportsV2Viewer() {
 
   const handleExport = () => {
     if (!ensurePublished()) return;
+    if (hasInvalidWidgets) {
+      window.alert(
+        "Nao e possivel exportar este relatorio pois existem widgets com dados invalidos ou conexoes pendentes."
+      );
+      return;
+    }
     exportMutation.mutate();
   };
 
@@ -294,8 +362,13 @@ export default function ReportsV2Viewer() {
             <h1 className="text-2xl font-semibold text-[var(--text)]">
               {dashboard.name}
             </h1>
-            <p className="text-sm text-[var(--muted)]">
-              {dashboard.status === "PUBLISHED" ? "Publicado" : "Rascunho"}
+            <p className="flex items-center gap-2 text-sm text-[var(--muted)]">
+              <span>{dashboard.status === "PUBLISHED" ? "Publicado" : "Rascunho"}</span>
+              {hasInvalidWidgets ? (
+                <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                  Dados invalidos
+                </span>
+              ) : null}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -365,6 +438,7 @@ export default function ReportsV2Viewer() {
               brandId={dashboard.brandId}
               globalFilters={debouncedFilters}
               activePageId={activePageId}
+              onWidgetStatusChange={handleWidgetStatusChange}
             />
             </>
           ) : (

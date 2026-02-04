@@ -1,6 +1,10 @@
 const crypto = require('crypto');
 const { prisma } = require('../../prisma');
 const uploadsService = require('../../services/uploadsService');
+const {
+  reportLayoutSchema,
+  normalizeLayout,
+} = require('../../shared/validators/reportLayout');
 
 function slugify(value) {
   return String(value || '')
@@ -135,6 +139,120 @@ function buildPdfFileName(dashboardName) {
   return `Relatorio - ${String(dashboardName || 'Dashboard').trim() || 'Dashboard'} - ${dateKey}.pdf`;
 }
 
+function mergeGlobalFiltersIntoWidgetFilters(widgetFilters = [], globalFilters = {}) {
+  const merged = Array.isArray(widgetFilters) ? [...widgetFilters] : [];
+  const platforms = Array.isArray(globalFilters?.platforms) ? globalFilters.platforms : [];
+  const accounts = Array.isArray(globalFilters?.accounts) ? globalFilters.accounts : [];
+
+  if (platforms.length) {
+    merged.push({ field: 'platform', op: 'in', value: platforms });
+  }
+
+  const accountIds = Array.from(
+    new Set(
+      accounts
+        .map((account) => {
+          if (typeof account === 'string') return account.trim();
+          if (!account || typeof account !== 'object') return '';
+          return String(
+            account.external_account_id ||
+              account.externalAccountId ||
+              account.account_id ||
+              account.id ||
+              account.value ||
+              '',
+          ).trim();
+        })
+        .filter(Boolean),
+    ),
+  );
+
+  if (accountIds.length) {
+    merged.push({ field: 'account_id', op: 'in', value: accountIds });
+  }
+
+  return merged;
+}
+
+function resolveWidgetsForExport(layout, options = {}) {
+  const pages = Array.isArray(layout?.pages) ? layout.pages : [];
+  if (!pages.length) return [];
+
+  if (options.page === 'all') {
+    return pages.flatMap((page) =>
+      Array.isArray(page?.widgets) ? page.widgets : [],
+    );
+  }
+
+  const currentPage =
+    pages.find((page) => page.id === options.activePageId) || pages[0] || null;
+  return Array.isArray(currentPage?.widgets) ? currentPage.widgets : [];
+}
+
+async function assertDashboardIsRenderableForPdf(dashboard, options = {}) {
+  const metricsService = require('../metrics/metrics.service');
+  const parsedLayout = reportLayoutSchema.safeParse(
+    dashboard?.publishedVersion?.layoutJson,
+  );
+  if (!parsedLayout.success) {
+    const err = new Error(
+      'Nao e possivel exportar este relatorio pois o layout publicado esta invalido.',
+    );
+    err.code = 'DASHBOARD_INVALID';
+    err.status = 422;
+    err.details = parsedLayout.error?.flatten?.() || null;
+    throw err;
+  }
+
+  const normalizedLayout = normalizeLayout(parsedLayout.data);
+  const widgets = resolveWidgetsForExport(normalizedLayout, options);
+  const globalFilters =
+    options.filters && typeof options.filters === 'object' ? options.filters : {};
+
+  for (const widget of widgets) {
+    if (!widget || widget.type === 'text') continue;
+    const query = widget.query || null;
+    const metrics = Array.isArray(query?.metrics) ? query.metrics : [];
+    if (!query || !metrics.length) {
+      const err = new Error(
+        'Nao e possivel exportar este relatorio pois existem widgets com dados invalidos ou conexoes pendentes.',
+      );
+      err.code = 'DASHBOARD_INVALID';
+      err.status = 422;
+      err.details = { widgetId: widget?.id || null, reason: 'INVALID_WIDGET_QUERY' };
+      throw err;
+    }
+
+    const mergedFilters = mergeGlobalFiltersIntoWidgetFilters(
+      query.filters || [],
+      globalFilters,
+    );
+
+    try {
+      await metricsService.ensureBrandConnections(dashboard.tenantId, dashboard.brandId, {
+        metrics,
+        filters: mergedFilters,
+        requiredPlatforms: query.requiredPlatforms,
+      });
+    } catch (error) {
+      if (error?.code === 'MISSING_CONNECTIONS') {
+        const err = new Error(
+          'Nao e possivel exportar este relatorio pois existem widgets com dados invalidos ou conexoes pendentes.',
+        );
+        err.code = 'DASHBOARD_INVALID';
+        err.status = 422;
+        err.details = {
+          widgetId: widget?.id || null,
+          reason: 'MISSING_CONNECTIONS',
+          missing: error?.details?.missing || [],
+        };
+        throw err;
+      }
+      throw error;
+    }
+  }
+}
+
 async function exportDashboardPdf(tenantId, userId, dashboardId, options = {}) {
   const dashboard = await prisma.reportDashboard.findFirst({
     where: { id: dashboardId, tenantId },
@@ -154,6 +272,8 @@ async function exportDashboardPdf(tenantId, userId, dashboardId, options = {}) {
     err.status = 400;
     throw err;
   }
+
+  await assertDashboardIsRenderableForPdf(dashboard, options);
 
   const token = generateToken();
   const tokenHash = hashToken(token);
