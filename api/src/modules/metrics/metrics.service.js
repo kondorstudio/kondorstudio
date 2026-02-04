@@ -1,37 +1,5 @@
 const { prisma } = require('../../prisma');
 
-const PLATFORM_ENUM = [
-  'META_ADS',
-  'GOOGLE_ADS',
-  'TIKTOK_ADS',
-  'LINKEDIN_ADS',
-  'GA4',
-  'GMB',
-  'FB_IG',
-];
-
-const ADS_PLATFORMS = new Set([
-  'META_ADS',
-  'GOOGLE_ADS',
-  'TIKTOK_ADS',
-  'LINKEDIN_ADS',
-  'FB_IG',
-]);
-
-const GA4_METRICS = new Set(['sessions', 'leads']);
-const ADS_METRICS = new Set([
-  'spend',
-  'impressions',
-  'clicks',
-  'ctr',
-  'cpc',
-  'cpm',
-  'cpa',
-  'conversions',
-  'revenue',
-  'roas',
-]);
-
 const DIMENSION_COLUMN_MAP = {
   date: 'date',
   platform: 'platform',
@@ -68,108 +36,6 @@ const SORTABLE_FIELD_ALIAS = {
   cpa: '"cpa"',
   roas: '"roas"',
 };
-
-function normalizePlatform(value) {
-  if (!value) return null;
-  const normalized = String(value).toUpperCase();
-  return PLATFORM_ENUM.includes(normalized) ? normalized : null;
-}
-
-function extractPlatformsFromFilters(filters = []) {
-  const platforms = new Set();
-  (filters || []).forEach((filter) => {
-    if (filter.field !== 'platform') return;
-    if (filter.op === 'eq' && filter.value) {
-      const value = normalizePlatform(filter.value);
-      if (value) platforms.add(value);
-      return;
-    }
-    if (filter.op === 'in') {
-      const values = Array.isArray(filter.value) ? filter.value : [];
-      values.forEach((entry) => {
-        const value = normalizePlatform(entry);
-        if (value) platforms.add(value);
-      });
-    }
-  });
-  return platforms;
-}
-
-function inferPlatformsFromMetrics(metrics = []) {
-  const platforms = new Set();
-  let requiresAds = false;
-
-  metrics.forEach((metric) => {
-    if (GA4_METRICS.has(metric)) {
-      platforms.add('GA4');
-    } else if (ADS_METRICS.has(metric)) {
-      requiresAds = true;
-    }
-  });
-
-  return { platforms, requiresAds };
-}
-
-async function ensureBrandConnections(tenantId, brandId, payload = {}) {
-  const explicitPlatforms = Array.isArray(payload.requiredPlatforms)
-    ? payload.requiredPlatforms.map(normalizePlatform).filter(Boolean)
-    : [];
-  const filterPlatforms = extractPlatformsFromFilters(payload.filters || []);
-
-  let platforms = new Set();
-  let requiresAds = false;
-
-  if (explicitPlatforms.length) {
-    platforms = new Set(explicitPlatforms);
-  } else if (filterPlatforms.size) {
-    platforms = filterPlatforms;
-  } else {
-    const inferred = inferPlatformsFromMetrics(payload.metrics || []);
-    platforms = inferred.platforms;
-    requiresAds = inferred.requiresAds;
-  }
-
-  if (!platforms.size && !requiresAds) return;
-
-  const platformsToCheck = new Set(platforms);
-  if (requiresAds) {
-    ADS_PLATFORMS.forEach((platform) => platformsToCheck.add(platform));
-  }
-
-  const activeConnections = await prisma.brandSourceConnection.findMany({
-    where: {
-      tenantId,
-      brandId,
-      platform: { in: Array.from(platformsToCheck) },
-      status: 'ACTIVE',
-    },
-    select: { platform: true },
-  });
-
-  const activeSet = new Set(activeConnections.map((item) => item.platform));
-  const missing = new Set();
-
-  platforms.forEach((platform) => {
-    if (!activeSet.has(platform)) missing.add(platform);
-  });
-
-  if (requiresAds) {
-    const hasAds = Array.from(ADS_PLATFORMS).some((platform) =>
-      activeSet.has(platform),
-    );
-    if (!hasAds) {
-      ADS_PLATFORMS.forEach((platform) => missing.add(platform));
-    }
-  }
-
-  if (missing.size) {
-    const err = new Error('Conexões ausentes');
-    err.code = 'MISSING_CONNECTIONS';
-    err.status = 409;
-    err.details = { missing: Array.from(missing) };
-    throw err;
-  }
-}
 
 function toNumber(value) {
   if (value === null || value === undefined) return 0;
@@ -568,8 +434,6 @@ async function queryMetrics(tenantId, payload = {}) {
     err.status = 404;
     throw err;
   }
-
-  await ensureBrandConnections(tenantId, brandId, payload);
 
   const catalogEntries = await prisma.metricsCatalog.findMany({
     where: { key: { in: metrics } },

@@ -79,10 +79,10 @@ function buildConnectionsPath(brandId, platform) {
 
 function describeIssue(issue) {
   if (!issue) return "Widget com pendencia.";
-  if (issue.reason === "MISSING_CONNECTION") {
+  if (issue.status === "MISSING_CONNECTION") {
     return `Conexao pendente: ${formatPlatform(issue.platform || "plataforma desconhecida")}.`;
   }
-  if (issue.reason === "INVALID_QUERY") {
+  if (issue.status === "INVALID_QUERY") {
     return "Configuracao de widget invalida.";
   }
   return "Widget com pendencia.";
@@ -127,11 +127,11 @@ export default function ReportsV2Viewer() {
   });
   const health = healthQuery.data || null;
   const healthStatus = health?.status || null;
-  const missingPlatforms = Array.isArray(health?.missingPlatforms)
-    ? health.missingPlatforms
+  const missingPlatforms = Array.isArray(health?.summary?.missingPlatforms)
+    ? health.summary.missingPlatforms
     : [];
-  const invalidWidgets = Array.isArray(health?.invalidWidgets)
-    ? health.invalidWidgets
+  const invalidWidgets = Array.isArray(health?.widgets)
+    ? health.widgets.filter((item) => item.status !== "OK")
     : [];
   const isHealthBlocked = healthStatus === "BLOCKED";
   const isHealthWarn = healthStatus === "WARN";
@@ -174,7 +174,10 @@ export default function ReportsV2Viewer() {
         map[issue.widgetId] = issue;
         return;
       }
-      if (current.reason !== "MISSING_CONNECTION" && issue.reason === "MISSING_CONNECTION") {
+      if (
+        current.status !== "MISSING_CONNECTION" &&
+        issue.status === "MISSING_CONNECTION"
+      ) {
         map[issue.widgetId] = issue;
       }
     });
@@ -206,6 +209,10 @@ export default function ReportsV2Viewer() {
       }
     },
     onError: (err) => {
+      if (err?.data?.error?.code === "DASHBOARD_BLOCKED") {
+        setBlockedAction("share");
+        return;
+      }
       const message =
         err?.data?.error?.message ||
         err?.message ||
@@ -226,6 +233,10 @@ export default function ReportsV2Viewer() {
       showToast("Link rotacionado com sucesso.", "success");
     },
     onError: (err) => {
+      if (err?.data?.error?.code === "DASHBOARD_BLOCKED") {
+        setBlockedAction("share");
+        return;
+      }
       const message =
         err?.data?.error?.message ||
         err?.message ||
@@ -244,10 +255,6 @@ export default function ReportsV2Viewer() {
       showToast("Compartilhamento desativado.", "success");
     },
     onError: (err) => {
-      if (err?.data?.error?.code === "DASHBOARD_INVALID") {
-        setBlockedAction("export");
-        return;
-      }
       const message =
         err?.data?.error?.message ||
         err?.message ||
@@ -283,6 +290,10 @@ export default function ReportsV2Viewer() {
       showToast("PDF gerado com sucesso.", "success");
     },
     onError: (err) => {
+      if (err?.data?.error?.code === "DASHBOARD_BLOCKED") {
+        setBlockedAction("export");
+        return;
+      }
       const message =
         err?.data?.error?.message ||
         err?.message ||
@@ -402,7 +413,7 @@ export default function ReportsV2Viewer() {
               variant="secondary"
               leftIcon={Download}
               onClick={handleExport}
-              disabled={exportMutation.isPending}
+              disabled={exportMutation.isPending || isHealthBlocked}
             >
               {exportMutation.isPending ? "Exportando..." : "Exportar PDF"}
             </Button>
@@ -467,7 +478,7 @@ export default function ReportsV2Viewer() {
                 </summary>
                 <ul className="mt-2 space-y-2 text-sm text-[var(--muted)]">
                   {invalidWidgets.map((issue, index) => (
-                    <li key={`${issue.widgetId || index}-${issue.reason}-${issue.platform || ""}`}>
+                    <li key={`${issue.widgetId || index}-${issue.status}-${issue.platform || ""}`}>
                       <span className="font-semibold text-[var(--text)]">
                         {widgetTitleById.get(issue.widgetId) ||
                           issue.widgetTitle ||
@@ -615,7 +626,7 @@ export default function ReportsV2Viewer() {
               ) : null}
               {isHealthBlocked ? (
                 <p className="mt-2 text-xs text-amber-700">
-                  Compartilhamento bloqueado ate resolver as conexoes pendentes.
+                  Compartilhamento bloqueado ate resolver as pendencias bloqueantes do dashboard.
                 </p>
               ) : null}
             </div>
@@ -651,7 +662,7 @@ export default function ReportsV2Viewer() {
             </DialogTitle>
             <DialogDescription>
               Nao e possivel {blockedAction === "share" ? "compartilhar" : "exportar"} este
-              relatorio enquanto houver conexoes pendentes.
+              relatorio enquanto houver pendencias bloqueantes.
             </DialogDescription>
           </DialogHeader>
 
@@ -676,10 +687,14 @@ export default function ReportsV2Viewer() {
               onClick={() => {
                 const firstPlatform = missingPlatforms[0] || null;
                 setBlockedAction(null);
-                navigate(buildConnectionsPath(dashboard?.brandId, firstPlatform));
+                if (missingPlatforms.length) {
+                  navigate(buildConnectionsPath(dashboard?.brandId, firstPlatform));
+                  return;
+                }
+                navigate(`/relatorios/v2/${dashboard?.id}/edit`);
               }}
             >
-              Gerenciar conexoes
+              {missingPlatforms.length ? "Gerenciar conexoes" : "Abrir no editor"}
             </Button>
           </DialogFooter>
         </DialogContent>

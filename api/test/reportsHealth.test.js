@@ -141,9 +141,11 @@ test('health returns BLOCKED when required platform is missing', async () => {
   const res = await request(app).get(`/api/reports/dashboards/${dashboardId}/health`);
   assert.equal(res.status, 200);
   assert.equal(res.body?.status, 'BLOCKED');
-  assert.deepEqual(res.body?.missingPlatforms, ['META_ADS']);
-  assert.equal(res.body?.invalidWidgets?.[0]?.reason, 'MISSING_CONNECTION');
-  assert.equal(res.body?.invalidWidgets?.[0]?.platform, 'META_ADS');
+  assert.deepEqual(res.body?.summary?.missingPlatforms, ['META_ADS']);
+  assert.equal(
+    res.body?.widgets?.find((item) => item.status === 'MISSING_CONNECTION')?.platform,
+    'META_ADS',
+  );
 });
 
 test('health returns WARN when no platform is explicitly required', async () => {
@@ -176,10 +178,11 @@ test('health returns WARN when no platform is explicitly required', async () => 
   const res = await request(app).get(`/api/reports/dashboards/${dashboardId}/health`);
   assert.equal(res.status, 200);
   assert.equal(res.body?.status, 'WARN');
-  assert.deepEqual(res.body?.missingPlatforms, []);
+  assert.deepEqual(res.body?.summary?.missingPlatforms, []);
+  assert.equal(res.body?.summary?.unknownPlatformRequirement, true);
 });
 
-test('health returns WARN with INVALID_QUERY widget issues', async () => {
+test('health returns BLOCKED with INVALID_QUERY widget issues', async () => {
   const { app, state } = buildApp();
   const dashboardId = createPublishedDashboard(state, {
     theme: {},
@@ -208,7 +211,9 @@ test('health returns WARN with INVALID_QUERY widget issues', async () => {
 
   const res = await request(app).get(`/api/reports/dashboards/${dashboardId}/health`);
   assert.equal(res.status, 200);
-  assert.equal(res.body?.status, 'WARN');
-  assert.equal(res.body?.invalidWidgets?.[0]?.reason, 'INVALID_QUERY');
+  assert.equal(res.body?.status, 'BLOCKED');
+  assert.equal(
+    res.body?.widgets?.find((item) => item.status === 'INVALID_QUERY')?.reasonCode,
+    'INVALID_QUERY',
+  );
 });
-

@@ -159,9 +159,9 @@ async function exportDashboardPdf(tenantId, userId, dashboardId, options = {}) {
   const health = await computeDashboardHealth(dashboard);
   if (health?.status === 'BLOCKED') {
     const err = new Error(
-      'Nao e possivel exportar este relatorio enquanto houver conexoes pendentes.',
+      'Nao e possivel exportar este relatorio enquanto houver pendencias bloqueantes.',
     );
-    err.code = 'DASHBOARD_INVALID';
+    err.code = 'DASHBOARD_BLOCKED';
     err.status = 422;
     err.details = health;
     throw err;

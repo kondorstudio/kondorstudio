@@ -175,7 +175,7 @@ function uniqIssues(issues) {
   const seen = new Set();
   const list = [];
   (issues || []).forEach((issue) => {
-    const key = `${issue.widgetId || ''}:${issue.reason || ''}:${issue.platform || ''}`;
+    const key = `${issue.widgetId || ''}:${issue.status || ''}:${issue.platform || ''}`;
     if (seen.has(key)) return;
     seen.add(key);
     list.push(issue);
@@ -183,18 +183,20 @@ function uniqIssues(issues) {
   return list;
 }
 
-async function computeDashboardHealth(dashboard) {
+async function computeDashboardHealthForDashboard(dashboard) {
   if (!dashboard) return null;
 
   if (!dashboard.publishedVersion || !dashboard.publishedVersionId) {
     return {
       status: 'WARN',
-      missingPlatforms: [],
-      invalidWidgets: [],
+      summary: {
+        missingPlatforms: [],
+        invalidWidgets: [],
+        unknownPlatformRequirement: true,
+      },
+      widgets: [],
       meta: {
         generatedAt: new Date().toISOString(),
-        unknownPlatformRequirement: true,
-        reason: 'NOT_PUBLISHED',
       },
     };
   }
@@ -223,65 +225,108 @@ async function computeDashboardHealth(dashboard) {
     (platform) => !connectedPlatforms.has(platform),
   );
 
-  const invalidWidgets = [];
+  const widgetHealth = [];
 
   allWidgets.forEach((widget) => {
-    if (!widget || widget.type === 'text') return;
+    if (!widget) return;
     const widgetId = widget.id || null;
-    const widgetTitle = String(widget.title || '').trim() || 'Widget';
-    const queryValidation = validateWidgetQuery(widget);
-    if (!queryValidation.valid) {
-      invalidWidgets.push({
+    if (widget.type === 'text') {
+      widgetHealth.push({
         widgetId,
-        widgetTitle,
-        reason: 'INVALID_QUERY',
+        status: 'OK',
+        reasonCode: 'OK',
       });
       return;
     }
 
+    const queryValidation = validateWidgetQuery(widget);
+    if (!queryValidation.valid) {
+      widgetHealth.push({
+        widgetId,
+        status: 'INVALID_QUERY',
+        reasonCode: 'INVALID_QUERY',
+      });
+      return;
+    }
+
+    let pushedMissingConnection = false;
     const widgetRequired = buildWidgetRequiredPlatforms(widget, requiredPlatforms);
     widgetRequired.forEach((platform) => {
       if (!connectedPlatforms.has(platform)) {
-        invalidWidgets.push({
+        pushedMissingConnection = true;
+        widgetHealth.push({
           widgetId,
-          widgetTitle,
-          reason: 'MISSING_CONNECTION',
+          status: 'MISSING_CONNECTION',
           platform,
+          reasonCode: 'MISSING_CONNECTION',
         });
       }
     });
+
+    if (!pushedMissingConnection) {
+      widgetHealth.push({
+        widgetId,
+        status: 'OK',
+        reasonCode: 'OK',
+      });
+    }
   });
 
-  const uniqueInvalidWidgets = uniqIssues(invalidWidgets);
-  const hasMissingConnectionIssues = uniqueInvalidWidgets.some(
-    (item) => item.reason === 'MISSING_CONNECTION',
+  const uniqueWidgetHealth = uniqIssues(widgetHealth);
+  const invalidWidgets = uniqueWidgetHealth.filter(
+    (item) => item.status === 'MISSING_CONNECTION' || item.status === 'INVALID_QUERY',
   );
-  const hasInvalidQueryIssues = uniqueInvalidWidgets.some(
-    (item) => item.reason === 'INVALID_QUERY',
+
+  const hasMissingConnectionIssues = invalidWidgets.some(
+    (item) => item.status === 'MISSING_CONNECTION',
+  );
+  const hasInvalidQueryIssues = invalidWidgets.some(
+    (item) => item.status === 'INVALID_QUERY',
   );
 
   let status = 'OK';
-  if (missingPlatforms.length || hasMissingConnectionIssues) {
+  if (missingPlatforms.length || hasMissingConnectionIssues || hasInvalidQueryIssues) {
     status = 'BLOCKED';
-  } else if (unknownPlatformRequirement || hasInvalidQueryIssues) {
+  } else if (unknownPlatformRequirement) {
     status = 'WARN';
   }
 
   return {
     status,
-    missingPlatforms,
-    invalidWidgets: uniqueInvalidWidgets,
+    summary: {
+      missingPlatforms,
+      invalidWidgets,
+      unknownPlatformRequirement,
+    },
+    widgets: uniqueWidgetHealth,
     meta: {
       generatedAt: new Date().toISOString(),
-      unknownPlatformRequirement,
     },
   };
 }
 
+async function computeDashboardHealth(input) {
+  if (!input) return null;
+  if (input?.id && input?.tenantId) {
+    return computeDashboardHealthForDashboard(input);
+  }
+
+  const dashboardId = input?.dashboardId;
+  const tenantId = input?.tenantId;
+  if (!dashboardId || !tenantId) return null;
+
+  const dashboard = await prisma.reportDashboard.findFirst({
+    where: { id: dashboardId, tenantId },
+    include: { publishedVersion: true },
+  });
+  if (!dashboard) return null;
+  return computeDashboardHealthForDashboard(dashboard);
+}
+
 module.exports = {
   computeDashboardHealth,
+  computeDashboardHealthForDashboard,
   normalizeLayoutPages,
   validateWidgetQuery,
   collectRequiredPlatforms,
 };
-

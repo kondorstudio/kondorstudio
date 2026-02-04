@@ -285,7 +285,7 @@ test('export-pdf returns 422 when dashboard is invalid', async () => {
         const err = new Error(
           'Nao e possivel exportar este relatorio pois existem widgets com dados invalidos ou conexoes pendentes.',
         );
-        err.code = 'DASHBOARD_INVALID';
+        err.code = 'DASHBOARD_BLOCKED';
         err.status = 422;
         throw err;
       },
@@ -297,7 +297,7 @@ test('export-pdf returns 422 when dashboard is invalid', async () => {
     .send({});
 
   assert.equal(res.status, 422);
-  assert.equal(res.body?.error?.code, 'DASHBOARD_INVALID');
+  assert.equal(res.body?.error?.code, 'DASHBOARD_BLOCKED');
 });
 
 test('exportDashboardPdf persists temporary token expiry and clears token after success', async () => {
@@ -403,7 +403,7 @@ test('exportDashboardPdf blocks when health status is BLOCKED', async () => {
           orientation: 'portrait',
         }),
       (error) => {
-        assert.equal(error?.code, 'DASHBOARD_INVALID');
+        assert.equal(error?.code, 'DASHBOARD_BLOCKED');
         assert.equal(error?.status, 422);
         assert.equal(error?.details?.status, 'BLOCKED');
         return true;

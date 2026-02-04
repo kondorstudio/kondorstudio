@@ -418,7 +418,7 @@ test('metrics query rejects tenantId mismatch', async () => {
   assert.equal(res.body?.error?.code, 'TENANT_MISMATCH');
 });
 
-test('metrics query rejects when required connections are missing', async () => {
+test('metrics query does not enforce brand connection checks', async () => {
   const { app } = buildMetricsApp({ connections: [] });
   const brandId = randomUUID();
 
@@ -433,9 +433,7 @@ test('metrics query rejects when required connections are missing', async () => 
       filters: [],
     });
 
-  assert.equal(res.status, 409);
-  assert.equal(res.body?.error?.code, 'MISSING_CONNECTIONS');
-  assert.ok(res.body?.error?.details?.missing?.includes('META_ADS'));
+  assert.equal(res.status, 200);
 });
 
 test('metrics query allows when GA4 connection exists', async () => {

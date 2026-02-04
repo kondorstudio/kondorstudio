@@ -266,7 +266,7 @@ export default function WidgetRenderer({
         : base44.reportsV2.queryMetrics(payload),
     enabled: Boolean(
       widgetType !== "text" &&
-        !(healthIssue?.reason === "MISSING_CONNECTION" || healthIssue?.reason === "INVALID_QUERY") &&
+        !(healthIssue?.status === "MISSING_CONNECTION" || healthIssue?.status === "INVALID_QUERY") &&
         (isPublic ? publicToken : brandId) &&
         dateRange.start &&
         dateRange.end &&
@@ -289,7 +289,7 @@ export default function WidgetRenderer({
     );
   }
 
-  if (healthIssue?.reason === "MISSING_CONNECTION") {
+  if (healthIssue?.status === "MISSING_CONNECTION") {
     const platformLabel = formatPlatformList([healthIssue.platform]);
     return (
       <>
@@ -321,7 +321,7 @@ export default function WidgetRenderer({
     );
   }
 
-  if (healthIssue?.reason === "INVALID_QUERY") {
+  if (healthIssue?.status === "INVALID_QUERY") {
     return (
       <>
         <WidgetStatusReporter
