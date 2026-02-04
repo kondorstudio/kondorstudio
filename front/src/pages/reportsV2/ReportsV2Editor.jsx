@@ -11,6 +11,8 @@ import {
   Save,
   CheckCircle2,
   History,
+  Undo2,
+  Redo2,
 } from "lucide-react";
 import DashboardCanvas from "@/components/reports/widgets/DashboardCanvas.jsx";
 import DashboardRenderer from "@/components/reportsV2/DashboardRenderer.jsx";
@@ -19,6 +21,7 @@ import ThemeProvider from "@/components/reportsV2/ThemeProvider.jsx";
 import SidePanel from "@/components/reportsV2/editor/SidePanel.jsx";
 import AddMenu from "@/components/reportsV2/editor/AddMenu.jsx";
 import WidgetContextMenu from "@/components/reportsV2/editor/WidgetContextMenu.jsx";
+import useHistoryState from "@/components/reportsV2/editor/useHistoryState.js";
 import { PIE_DEFAULTS } from "@/components/reportsV2/widgets/pieUtils.js";
 import {
   normalizeFilterArrayValue,
@@ -566,7 +569,10 @@ export default function ReportsV2Editor() {
     initialWidth: 960,
   });
 
-  const [layoutJson, setLayoutJson] = React.useState(DEFAULT_LAYOUT);
+  const history = useHistoryState(DEFAULT_LAYOUT);
+  const layoutJson = history.state;
+  const setLayoutJson = history.setState;
+  const { undo, redo, canUndo, canRedo, resetState } = history;
   const [activePageId, setActivePageId] = React.useState(null);
   const [selectedWidgetId, setSelectedWidgetId] = React.useState(null);
   const [activeTab, setActiveTab] = React.useState("data");
@@ -613,7 +619,7 @@ export default function ReportsV2Editor() {
     if (!layoutFromApi) return;
     const merged = mergeLayoutDefaults(layoutFromApi);
     const initialPayload = sanitizeLayoutForSave(merged);
-    setLayoutJson(merged);
+    resetState(merged);
     setThemeDraft({
       brandColor: merged.theme.brandColor,
       accentColor: merged.theme.accentColor,
@@ -630,7 +636,7 @@ export default function ReportsV2Editor() {
     }
     setLastSavedKey(stableStringify(initialPayload));
     setHasHydrated(true);
-  }, [layoutFromApi]);
+  }, [layoutFromApi, resetState]);
 
   React.useEffect(() => {
     const pages = Array.isArray(layoutJson.pages) ? layoutJson.pages : [];
@@ -652,6 +658,40 @@ export default function ReportsV2Editor() {
     }
     setSelectedWidgetId(activePage.widgets?.[0]?.id || null);
   }, [activePageId, layoutJson.pages, selectedWidgetId]);
+
+  React.useEffect(() => {
+    const isEditableField = (element) => {
+      if (!element) return false;
+      const tag = String(element.tagName || "").toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select") return true;
+      return Boolean(element.isContentEditable);
+    };
+
+    const onKeyDown = (event) => {
+      if (isEditableField(document.activeElement)) return;
+
+      const key = String(event.key || "").toLowerCase();
+      const withModifier = event.metaKey || event.ctrlKey;
+
+      if (withModifier && key === "z") {
+        event.preventDefault();
+        if (event.shiftKey) {
+          redo();
+        } else {
+          undo();
+        }
+        return;
+      }
+
+      if (event.ctrlKey && key === "y") {
+        event.preventDefault();
+        redo();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [redo, undo]);
 
   const validation = React.useMemo(
     () => validateLayout(layoutJson),
@@ -788,7 +828,7 @@ export default function ReportsV2Editor() {
   }, [activeWidgets]);
 
   const updateWidget = React.useCallback(
-    (widgetId, updater) => {
+    (widgetId, updater, options = {}) => {
       setLayoutJson((prev) => {
         const pages = prev.pages.map((page) => {
           if (page.id !== activePageId) return page;
@@ -800,38 +840,53 @@ export default function ReportsV2Editor() {
           return { ...page, widgets: nextWidgets };
         });
         return { ...prev, pages };
+      }, options);
+    },
+    [activePageId, setLayoutJson]
+  );
+
+  const applyGridLayout = React.useCallback(
+    (prev, nextLayout) => {
+      if (!Array.isArray(nextLayout)) return prev;
+      const nextPages = prev.pages.map((page) => {
+        if (page.id !== activePageId) return page;
+        const nextWidgets = (page.widgets || []).map((widget) => {
+          const next = nextLayout.find((item) => item.i === widget.id);
+          if (!next) return widget;
+          return {
+            ...widget,
+            layout: {
+              ...widget.layout,
+              x: next.x,
+              y: next.y,
+              w: next.w,
+              h: next.h,
+              minW: next.minW || widget.layout?.minW || 2,
+              minH: next.minH || widget.layout?.minH || 2,
+            },
+          };
+        });
+        return { ...page, widgets: nextWidgets };
       });
+      return { ...prev, pages: nextPages };
     },
     [activePageId]
   );
 
   const handleLayoutChange = React.useCallback(
     (nextLayout) => {
+      setLayoutJson((prev) => applyGridLayout(prev, nextLayout), { snapshot: false });
+    },
+    [applyGridLayout, setLayoutJson]
+  );
+
+  const handleLayoutCommit = React.useCallback(
+    (nextLayout) => {
       setLayoutJson((prev) => {
-        const pages = prev.pages.map((page) => {
-          if (page.id !== activePageId) return page;
-          const nextWidgets = (page.widgets || []).map((widget) => {
-            const next = nextLayout.find((item) => item.i === widget.id);
-            if (!next) return widget;
-            return {
-              ...widget,
-              layout: {
-                ...widget.layout,
-                x: next.x,
-                y: next.y,
-                w: next.w,
-                h: next.h,
-                minW: next.minW || widget.layout?.minW || 2,
-                minH: next.minH || widget.layout?.minH || 2,
-              },
-            };
-          });
-          return { ...page, widgets: nextWidgets };
-        });
-        return { ...prev, pages };
+        return applyGridLayout(prev, nextLayout);
       });
     },
-    [activePageId]
+    [applyGridLayout, setLayoutJson]
   );
 
   React.useEffect(() => {
@@ -1507,7 +1562,7 @@ export default function ReportsV2Editor() {
   const handleRestoreVersion = (version) => {
     if (!version?.layoutJson) return;
     const merged = mergeLayoutDefaults(version.layoutJson);
-    setLayoutJson(merged);
+    resetState(merged);
     setThemeDraft({
       brandColor: merged.theme.brandColor,
       accentColor: merged.theme.accentColor,
@@ -1620,6 +1675,26 @@ export default function ReportsV2Editor() {
               <span className="font-semibold text-[var(--text)]">Auto-salvar</span>
               <span className="text-[var(--text-muted)]">{autoSaveLabel}</span>
             </div>
+            <Button
+              variant="secondary"
+              onClick={undo}
+              disabled={!canUndo}
+              leftIcon={Undo2}
+              aria-label="Desfazer"
+              title="Desfazer"
+            >
+              Desfazer
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={redo}
+              disabled={!canRedo}
+              leftIcon={Redo2}
+              aria-label="Refazer"
+              title="Refazer"
+            >
+              Refazer
+            </Button>
             <Button
               variant="secondary"
               onClick={() => setShowHistory(true)}
@@ -1788,6 +1863,8 @@ export default function ReportsV2Editor() {
                 rowHeight={28}
                 margin={[16, 16]}
                 onLayoutChange={handleLayoutChange}
+                onDragStop={handleLayoutCommit}
+                onResizeStop={handleLayoutCommit}
                 renderItem={(widget) => (
                   <EditorWidgetCard
                     widget={widget}

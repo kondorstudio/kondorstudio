@@ -6,6 +6,12 @@ import { PIE_DEFAULTS } from "@/components/reportsV2/widgets/pieUtils.js";
 
 const LEGEND_WIDGETS = new Set(["timeseries", "bar", "pie", "donut"]);
 
+function normalizeTopN(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return PIE_DEFAULTS.topN;
+  return Math.max(3, Math.min(20, Math.round(numeric)));
+}
+
 export default function StylePanel({
   widget,
   formatOptions,
@@ -16,7 +22,52 @@ export default function StylePanel({
   onVariantChange,
   onPieOptionsChange,
 }) {
+  const [titleDraft, setTitleDraft] = React.useState("");
+  const [textDraft, setTextDraft] = React.useState("");
+  const [topNDraft, setTopNDraft] = React.useState(String(PIE_DEFAULTS.topN));
+  const [othersLabelDraft, setOthersLabelDraft] = React.useState(PIE_DEFAULTS.othersLabel);
+
+  React.useEffect(() => {
+    if (!widget) return;
+    setTitleDraft(String(widget.title || ""));
+    setTextDraft(String(widget?.content?.text || ""));
+    setTopNDraft(
+      Number.isFinite(Number(widget?.viz?.options?.topN))
+        ? String(widget.viz.options.topN)
+        : String(PIE_DEFAULTS.topN)
+    );
+    setOthersLabelDraft(
+      String(widget?.viz?.options?.othersLabel || "").trim() || PIE_DEFAULTS.othersLabel
+    );
+  }, [
+    widget?.id,
+    widget?.title,
+    widget?.content?.text,
+    widget?.viz?.options?.topN,
+    widget?.viz?.options?.othersLabel,
+  ]);
+
   if (!widget) return null;
+
+  const commitTitle = () => {
+    if (titleDraft === String(widget.title || "")) return;
+    onTitleChange(titleDraft);
+  };
+
+  const commitText = () => {
+    if (textDraft === String(widget?.content?.text || "")) return;
+    onTextContentChange(textDraft);
+  };
+
+  const formatValue = formatOptions.some(
+    (option) => option.value === widget?.viz?.format
+  )
+    ? widget.viz.format
+    : "auto";
+  const isPieLike = widget.type === "pie" || widget.type === "donut";
+  const variantValue =
+    widget?.viz?.variant === "donut" || widget.type === "donut" ? "donut" : "pie";
+  const showOthers = widget?.viz?.options?.showOthers !== false;
 
   if (widget.type === "text") {
     return (
@@ -26,8 +77,9 @@ export default function StylePanel({
             Titulo do bloco
           </label>
           <Input
-            value={widget.title || ""}
-            onChange={(event) => onTitleChange(event.target.value)}
+            value={titleDraft}
+            onChange={(event) => setTitleDraft(event.target.value)}
+            onBlur={commitTitle}
             placeholder="Titulo opcional"
           />
         </div>
@@ -41,8 +93,9 @@ export default function StylePanel({
           <textarea
             id={`widget-text-content-${widget.id}`}
             className="min-h-[140px] w-full rounded-[12px] border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
-            value={String(widget?.content?.text || "")}
-            onChange={(event) => onTextContentChange(event.target.value)}
+            value={textDraft}
+            onChange={(event) => setTextDraft(event.target.value)}
+            onBlur={commitText}
             placeholder="Digite seu texto..."
           />
         </div>
@@ -53,21 +106,6 @@ export default function StylePanel({
     );
   }
 
-  const formatValue = formatOptions.some(
-    (option) => option.value === widget?.viz?.format
-  )
-    ? widget.viz.format
-    : "auto";
-  const isPieLike = widget.type === "pie" || widget.type === "donut";
-  const variantValue =
-    widget?.viz?.variant === "donut" || widget.type === "donut" ? "donut" : "pie";
-  const topNValue = Number.isFinite(Number(widget?.viz?.options?.topN))
-    ? String(widget.viz.options.topN)
-    : String(PIE_DEFAULTS.topN);
-  const showOthers = widget?.viz?.options?.showOthers !== false;
-  const othersLabel =
-    String(widget?.viz?.options?.othersLabel || "").trim() || PIE_DEFAULTS.othersLabel;
-
   return (
     <div className="space-y-4">
       <div>
@@ -75,8 +113,9 @@ export default function StylePanel({
           Titulo do widget
         </label>
         <Input
-          value={widget.title || ""}
-          onChange={(event) => onTitleChange(event.target.value)}
+          value={titleDraft}
+          onChange={(event) => setTitleDraft(event.target.value)}
+          onBlur={commitTitle}
           placeholder="Nome do widget"
         />
       </div>
@@ -127,10 +166,11 @@ export default function StylePanel({
               type="number"
               min={3}
               max={20}
-              value={topNValue}
-              onChange={(event) =>
+              value={topNDraft}
+              onChange={(event) => setTopNDraft(event.target.value)}
+              onBlur={() =>
                 onPieOptionsChange({
-                  topN: event.target.value,
+                  topN: normalizeTopN(topNDraft),
                 })
               }
             />
@@ -164,10 +204,12 @@ export default function StylePanel({
             </label>
             <Input
               id={`widget-others-label-${widget.id}`}
-              value={othersLabel}
-              onChange={(event) =>
+              value={othersLabelDraft}
+              onChange={(event) => setOthersLabelDraft(event.target.value)}
+              onBlur={() =>
                 onPieOptionsChange({
-                  othersLabel: event.target.value,
+                  othersLabel:
+                    String(othersLabelDraft || "").trim() || PIE_DEFAULTS.othersLabel,
                 })
               }
               disabled={!showOthers}
