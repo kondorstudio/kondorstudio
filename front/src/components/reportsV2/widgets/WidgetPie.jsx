@@ -9,6 +9,7 @@ import {
 } from "recharts";
 import WidgetEmptyState from "@/components/reports/widgets/WidgetEmptyState.jsx";
 import { formatNumber } from "@/utils/formatNumber.js";
+import { buildPieSeries, PIE_DEFAULTS } from "./pieUtils.js";
 
 const PIE_COLORS = [
   "var(--primary)",
@@ -106,24 +107,30 @@ export default function WidgetPie({
   format,
   showLegend,
   variant,
+  options,
 }) {
   const pieVariant = variant === "donut" ? "donut" : "pie";
-  const chartData = React.useMemo(() => {
-    const safeRows = Array.isArray(rows) ? rows : [];
-    const raw = safeRows
-      .map((row) => ({
-        name: String(row?.[dimension] ?? "Sem rotulo"),
-        value: Number(row?.[metric] || 0),
-      }))
-      .filter((item) => Number.isFinite(item.value) && item.value > 0);
+  const pieOptions = React.useMemo(
+    () => ({
+      topN: Number.isFinite(Number(options?.topN))
+        ? Number(options.topN)
+        : PIE_DEFAULTS.topN,
+      showOthers: options?.showOthers !== false,
+      othersLabel:
+        String(options?.othersLabel || "").trim() || PIE_DEFAULTS.othersLabel,
+    }),
+    [options?.othersLabel, options?.showOthers, options?.topN]
+  );
 
-    const total = raw.reduce((sum, item) => sum + item.value, 0);
-    return raw.map((item) => ({
+  const chartData = React.useMemo(() => {
+    const { series, total } = buildPieSeries(rows, dimension, metric, pieOptions);
+    if (!series.length || total <= 0) return [];
+    return series.map((item) => ({
       ...item,
       percent: total > 0 ? item.value / total : 0,
       percentLabel: total > 0 ? `${((item.value / total) * 100).toFixed(1)}%` : "0%",
     }));
-  }, [dimension, metric, rows]);
+  }, [dimension, metric, pieOptions, rows]);
 
   if (!chartData.length) {
     return (

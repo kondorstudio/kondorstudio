@@ -563,6 +563,7 @@ export default function WidgetRenderer({
         format={formatOverride}
         showLegend={showLegend}
         variant={variant}
+        options={widget?.viz?.options}
       />
     );
   }

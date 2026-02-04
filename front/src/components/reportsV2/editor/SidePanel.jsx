@@ -24,6 +24,7 @@ export default function SidePanel({
   onFormatChange,
   onTextContentChange,
   onVariantChange,
+  onPieOptionsChange,
 }) {
   return (
     <div className="sticky top-24 rounded-[20px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-sm)]">
@@ -86,6 +87,7 @@ export default function SidePanel({
               onFormatChange={onFormatChange}
               onTextContentChange={onTextContentChange}
               onVariantChange={onVariantChange}
+              onPieOptionsChange={onPieOptionsChange}
             />
           </TabsContent>
         </Tabs>

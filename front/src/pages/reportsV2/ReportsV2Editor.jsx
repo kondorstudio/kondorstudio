@@ -19,6 +19,7 @@ import ThemeProvider from "@/components/reportsV2/ThemeProvider.jsx";
 import SidePanel from "@/components/reportsV2/editor/SidePanel.jsx";
 import AddMenu from "@/components/reportsV2/editor/AddMenu.jsx";
 import WidgetContextMenu from "@/components/reportsV2/editor/WidgetContextMenu.jsx";
+import { PIE_DEFAULTS } from "@/components/reportsV2/widgets/pieUtils.js";
 import {
   normalizeFilterArrayValue,
   normalizeFilterSingleValue,
@@ -930,7 +931,14 @@ export default function ReportsV2Editor() {
         variant: type === "donut" ? "donut" : type === "pie" ? "pie" : "default",
         showLegend: true,
         format: "auto",
-        options: {},
+        options:
+          type === "pie" || type === "donut"
+            ? {
+                topN: PIE_DEFAULTS.topN,
+                showOthers: PIE_DEFAULTS.showOthers,
+                othersLabel: PIE_DEFAULTS.othersLabel,
+              }
+            : {},
       },
     });
   };
@@ -1183,6 +1191,18 @@ export default function ReportsV2Editor() {
       if (!limit) {
         delete nextQuery.limit;
       }
+      const nextVizOptions =
+        nextType === "pie" || nextType === "donut"
+          ? {
+              topN: Number.isFinite(Number(widget?.viz?.options?.topN))
+                ? Math.max(3, Math.min(20, Math.round(Number(widget.viz.options.topN))))
+                : PIE_DEFAULTS.topN,
+              showOthers: widget?.viz?.options?.showOthers !== false,
+              othersLabel:
+                String(widget?.viz?.options?.othersLabel || "").trim() ||
+                PIE_DEFAULTS.othersLabel,
+            }
+          : widget?.viz?.options || {};
       return {
         ...widget,
         type: nextType,
@@ -1195,6 +1215,7 @@ export default function ReportsV2Editor() {
               : nextType === "pie"
               ? "pie"
               : widget?.viz?.variant || "default",
+          options: nextVizOptions,
         },
         content: undefined,
       };
@@ -1374,7 +1395,63 @@ export default function ReportsV2Editor() {
       viz: {
         ...selectedWidget.viz,
         variant,
+        options: {
+          topN: Number.isFinite(Number(selectedWidget?.viz?.options?.topN))
+            ? Math.max(
+                3,
+                Math.min(20, Math.round(Number(selectedWidget.viz.options.topN)))
+              )
+            : PIE_DEFAULTS.topN,
+          showOthers: selectedWidget?.viz?.options?.showOthers !== false,
+          othersLabel:
+            String(selectedWidget?.viz?.options?.othersLabel || "").trim() ||
+            PIE_DEFAULTS.othersLabel,
+        },
       },
+    });
+  };
+
+  const handlePieOptionsChange = (patch) => {
+    if (!selectedWidget) return;
+    if (selectedWidget.type !== "pie" && selectedWidget.type !== "donut") return;
+    updateWidget(selectedWidget.id, (widget) => {
+      const currentOptions = {
+        topN: Number.isFinite(Number(widget?.viz?.options?.topN))
+          ? Math.max(3, Math.min(20, Math.round(Number(widget.viz.options.topN))))
+          : PIE_DEFAULTS.topN,
+        showOthers: widget?.viz?.options?.showOthers !== false,
+        othersLabel:
+          String(widget?.viz?.options?.othersLabel || "").trim() ||
+          PIE_DEFAULTS.othersLabel,
+      };
+      const nextTopN = Object.prototype.hasOwnProperty.call(patch || {}, "topN")
+        ? Math.max(3, Math.min(20, Math.round(Number(patch.topN) || PIE_DEFAULTS.topN)))
+        : currentOptions.topN;
+      const nextShowOthers = Object.prototype.hasOwnProperty.call(
+        patch || {},
+        "showOthers"
+      )
+        ? Boolean(patch.showOthers)
+        : currentOptions.showOthers;
+      const nextOthersLabel = Object.prototype.hasOwnProperty.call(
+        patch || {},
+        "othersLabel"
+      )
+        ? String(patch.othersLabel || "").trim() || PIE_DEFAULTS.othersLabel
+        : currentOptions.othersLabel;
+
+      return {
+        ...widget,
+        viz: {
+          ...widget.viz,
+          options: {
+            ...widget?.viz?.options,
+            topN: nextTopN,
+            showOthers: nextShowOthers,
+            othersLabel: nextOthersLabel,
+          },
+        },
+      };
     });
   };
 
@@ -1758,6 +1835,7 @@ export default function ReportsV2Editor() {
             onFormatChange={handleFormatChange}
             onTextContentChange={handleTextContentChange}
             onVariantChange={handleVariantChange}
+            onPieOptionsChange={handlePieOptionsChange}
           />
 
           <div className="mt-4 rounded-[20px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-sm)]">
