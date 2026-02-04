@@ -75,6 +75,28 @@ test('reportLayoutSchema accepts valid layout with pages', () => {
   assert.equal(result.success, true);
 });
 
+test('reportLayoutSchema accepts query sort and limit', () => {
+  const base = buildBaseLayout({
+    widgets: [
+      {
+        id: '55555555-5555-4555-8555-555555555555',
+        type: 'table',
+        title: 'Tabela',
+        layout: { x: 0, y: 0, w: 12, h: 6, minW: 4, minH: 3 },
+        query: {
+          dimensions: ['campaign_id'],
+          metrics: ['spend'],
+          filters: [],
+          sort: { field: 'spend', direction: 'desc' },
+          limit: 100,
+        },
+      },
+    ],
+  });
+  const result = reportLayoutSchema.safeParse(base);
+  assert.equal(result.success, true);
+});
+
 test('normalizeLayout wraps legacy widgets into a page', () => {
   const base = buildBaseLayout();
   const parsed = reportLayoutSchema.parse(base);

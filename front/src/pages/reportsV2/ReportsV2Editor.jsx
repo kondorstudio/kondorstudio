@@ -11,13 +11,13 @@ import {
   Pencil,
   Save,
   CheckCircle2,
-  AlertTriangle,
   History,
 } from "lucide-react";
 import DashboardCanvas from "@/components/reports/widgets/DashboardCanvas.jsx";
 import DashboardRenderer from "@/components/reportsV2/DashboardRenderer.jsx";
 import GlobalFiltersBar from "@/components/reportsV2/GlobalFiltersBar.jsx";
 import ThemeProvider from "@/components/reportsV2/ThemeProvider.jsx";
+import SidePanel from "@/components/reportsV2/editor/SidePanel.jsx";
 import {
   useDebouncedValue,
   stableStringify,
@@ -29,8 +29,6 @@ import {
 } from "@/components/reportsV2/utils.js";
 import { Button } from "@/components/ui/button.jsx";
 import { Input } from "@/components/ui/input.jsx";
-import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select.jsx";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs.jsx";
 import { Checkbox } from "@/components/ui/checkbox.jsx";
 import {
   Dialog,
@@ -92,22 +90,10 @@ const DIMENSION_OPTIONS = [
   { value: "campaign_id", label: "Campanha" },
 ];
 
-const FILTER_FIELDS = [
-  { value: "platform", label: "Plataforma" },
-  { value: "account_id", label: "Conta" },
-  { value: "campaign_id", label: "Campanha" },
-];
-
-const FILTER_OPERATORS = [
-  { value: "eq", label: "Igual" },
-  { value: "in", label: "Contem" },
-];
-
 const FORMAT_OPTIONS = [
   { value: "auto", label: "Auto" },
-  { value: "currency", label: "Moeda" },
-  { value: "percent", label: "Percentual" },
   { value: "compact", label: "Compacto" },
+  { value: "full", label: "Completo" },
 ];
 
 const HEX_COLOR_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
@@ -131,7 +117,12 @@ const WIDGET_PRESETS = {
   table: {
     title: "Tabela",
     layout: { w: 12, h: 6, minW: 4, minH: 3 },
-    query: { metrics: ["spend"], dimensions: ["campaign_id"] },
+    query: {
+      metrics: ["spend"],
+      dimensions: ["campaign_id"],
+      limit: 25,
+      sort: { field: "spend", direction: "desc" },
+    },
   },
   pie: {
     title: "Pie",
@@ -234,6 +225,13 @@ function sanitizeLayoutForSave(layout) {
           };
         })
       : [];
+    const sortField = String(widget?.query?.sort?.field || "").trim();
+    const sortDirection = widget?.query?.sort?.direction === "desc" ? "desc" : "asc";
+    const sort = sortField ? { field: sortField, direction: sortDirection } : null;
+    const limitValue = Number(widget?.query?.limit);
+    const limit = Number.isFinite(limitValue)
+      ? Math.max(1, Math.min(500, Math.round(limitValue)))
+      : null;
 
     const layoutValue = widget.layout || {};
     const w = normalizeLayoutValue(layoutValue.w, 4) || 4;
@@ -258,6 +256,8 @@ function sanitizeLayoutForSave(layout) {
         dimensions,
         filters,
         ...(requiredPlatforms.length ? { requiredPlatforms } : {}),
+        ...(sort ? { sort } : {}),
+        ...(limit ? { limit } : {}),
       },
       viz: {
         variant: widget?.viz?.variant || "default",
@@ -285,6 +285,7 @@ function sanitizeLayoutForSave(layout) {
 function validateLayout(layout) {
   const issues = [];
   const widgetIssues = {};
+  const allowedFilterFields = new Set(["platform", "account_id", "campaign_id"]);
 
   const pages = Array.isArray(layout?.pages)
     ? layout.pages
@@ -349,6 +350,9 @@ function validateLayout(layout) {
         errors.push("Filtro incompleto");
         return;
       }
+      if (!allowedFilterFields.has(filter.field)) {
+        errors.push("Campo de filtro invalido");
+      }
       const value = filter.value;
       if (filter.op === "in") {
         const values = Array.isArray(value) ? value : [];
@@ -360,6 +364,24 @@ function validateLayout(layout) {
       }
     });
 
+    const sort = widget?.query?.sort;
+    if (sort) {
+      const sortableFields = new Set([...dimensions, ...metrics]);
+      if (!sort.field || !sortableFields.has(sort.field)) {
+        errors.push("Ordenacao deve usar dimensao ou metrica selecionada");
+      }
+      if (!["asc", "desc"].includes(sort.direction)) {
+        errors.push("Direcao de ordenacao invalida");
+      }
+    }
+
+    if (widget?.query?.limit !== undefined && widget?.query?.limit !== null) {
+      const limit = Number(widget.query.limit);
+      if (!Number.isInteger(limit) || limit < 1 || limit > 500) {
+        errors.push("Limite deve ser um inteiro entre 1 e 500");
+      }
+    }
+
     if (errors.length) {
       widgetIssues[widget.id] = errors;
       errors.forEach((message) =>
@@ -370,13 +392,6 @@ function validateLayout(layout) {
   });
 
   return { issues, widgetIssues };
-}
-
-function formatFilterValue(filter) {
-  if (Array.isArray(filter?.value)) {
-    return filter.value.join(", ");
-  }
-  return filter?.value ? String(filter.value) : "";
 }
 
 function buildWidgetSummary(widget) {
@@ -813,6 +828,8 @@ export default function ReportsV2Editor() {
         metrics: preset.query.metrics,
         dimensions: preset.query.dimensions,
         filters: [],
+        ...(preset.query.sort ? { sort: preset.query.sort } : {}),
+        ...(preset.query.limit ? { limit: preset.query.limit } : {}),
       },
       viz: {
         variant: "default",
@@ -972,6 +989,8 @@ export default function ReportsV2Editor() {
         ? widget.query.metrics
         : WIDGET_PRESETS[nextType]?.query?.metrics || ["spend"];
       let dimensions = widget.query?.dimensions || [];
+      let sort = widget.query?.sort;
+      let limit = widget.query?.limit;
       if (nextType === "timeseries") {
         dimensions = ["date"];
       }
@@ -986,6 +1005,19 @@ export default function ReportsV2Editor() {
           dimensions = [];
         }
       }
+      if (nextType === "table") {
+        if (!limit) {
+          limit = 25;
+        }
+        if (!sort?.field) {
+          const fallbackSortField = dimensions[0] || metrics[0];
+          sort = fallbackSortField
+            ? { field: fallbackSortField, direction: "desc" }
+            : undefined;
+        }
+      } else {
+        sort = undefined;
+      }
       return {
         ...widget,
         type: nextType,
@@ -993,6 +1025,8 @@ export default function ReportsV2Editor() {
           ...widget.query,
           metrics,
           dimensions,
+          ...(sort ? { sort } : {}),
+          ...(limit ? { limit } : {}),
         },
       };
     });
@@ -1037,83 +1071,79 @@ export default function ReportsV2Editor() {
     }));
   };
 
-  const handleFilterChange = (index, patch) => {
+  const handleFiltersChange = (nextFilters) => {
     if (!selectedWidget) return;
     updateWidget(selectedWidget.id, (widget) => {
-      const filters = Array.isArray(widget.query?.filters)
-        ? [...widget.query.filters]
-        : [];
-      const next = { ...filters[index], ...patch };
-      if (next.op === "in") {
-        const raw = formatFilterValue({ value: next.value });
-        next.value = raw
-          .split(",")
-          .map((entry) => entry.trim())
-          .filter(Boolean);
+      return {
+        ...widget,
+        query: {
+          ...widget.query,
+          filters: Array.isArray(nextFilters) ? nextFilters : [],
+        },
+      };
+    });
+  };
+
+  const handleSortChange = (sort) => {
+    if (!selectedWidget) return;
+    updateWidget(selectedWidget.id, (widget) => {
+      const current = { ...(widget.query || {}) };
+      if (!sort?.field) {
+        delete current.sort;
+      } else {
+        current.sort = {
+          field: String(sort.field),
+          direction: sort.direction === "desc" ? "desc" : "asc",
+        };
       }
-      filters[index] = next;
       return {
         ...widget,
-        query: {
-          ...widget.query,
-          filters,
-        },
+        query: current,
       };
     });
   };
 
-  const handleFilterValue = (index, rawValue) => {
+  const handleLimitChange = (rawValue) => {
     if (!selectedWidget) return;
+    const parsed = Number(rawValue);
     updateWidget(selectedWidget.id, (widget) => {
-      const filters = Array.isArray(widget.query?.filters)
-        ? [...widget.query.filters]
-        : [];
-      const filter = filters[index] || { field: "platform", op: "eq", value: "" };
-      const value =
-        filter.op === "in"
-          ? rawValue
-              .split(",")
-              .map((entry) => entry.trim())
-              .filter(Boolean)
-          : rawValue;
-      filters[index] = { ...filter, value };
+      const current = { ...(widget.query || {}) };
+      if (!Number.isFinite(parsed) || rawValue === "") {
+        delete current.limit;
+      } else {
+        current.limit = Math.max(1, Math.min(500, Math.round(parsed)));
+      }
       return {
         ...widget,
-        query: {
-          ...widget.query,
-          filters,
-        },
+        query: current,
       };
     });
   };
 
-  const handleAddFilter = () => {
+  const handleTitleChange = (title) => {
     if (!selectedWidget) return;
-    updateWidget(selectedWidget.id, (widget) => ({
-      ...widget,
-      query: {
-        ...widget.query,
-        filters: [
-          ...(Array.isArray(widget.query?.filters) ? widget.query.filters : []),
-          { field: "platform", op: "in", value: [] },
-        ],
+    updateWidget(selectedWidget.id, {
+      title,
+    });
+  };
+
+  const handleShowLegendChange = (checked) => {
+    if (!selectedWidget) return;
+    updateWidget(selectedWidget.id, {
+      viz: {
+        ...selectedWidget.viz,
+        showLegend: Boolean(checked),
       },
-    }));
+    });
   };
 
-  const handleRemoveFilter = (index) => {
+  const handleFormatChange = (value) => {
     if (!selectedWidget) return;
-    updateWidget(selectedWidget.id, (widget) => {
-      const filters = Array.isArray(widget.query?.filters)
-        ? widget.query.filters.filter((_, idx) => idx !== index)
-        : [];
-      return {
-        ...widget,
-        query: {
-          ...widget.query,
-          filters,
-        },
-      };
+    updateWidget(selectedWidget.id, {
+      viz: {
+        ...selectedWidget.viz,
+        format: value,
+      },
     });
   };
 
@@ -1481,393 +1511,139 @@ export default function ReportsV2Editor() {
         </main>
 
         <aside className="w-full max-w-[360px]">
-          <div className="sticky top-24 rounded-[20px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-sm)]">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold text-[var(--text)]">
-                  Configuracoes
-                </p>
-                <p className="text-xs text-[var(--text-muted)]">
-                  Ajuste dados e estilo do widget.
-                </p>
-              </div>
-              <div className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-[var(--surface-muted)] text-[var(--primary)]">
-                <AlertTriangle className="h-5 w-5" />
-              </div>
+          <SidePanel
+            selectedWidget={selectedWidget}
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            validationSummary={validationSummary}
+            widgetTypes={WIDGET_TYPES}
+            metricOptions={METRIC_OPTIONS}
+            dimensionOptions={DIMENSION_OPTIONS}
+            formatOptions={FORMAT_OPTIONS}
+            onWidgetTypeChange={handleChangeWidgetType}
+            onToggleMetric={handleToggleMetric}
+            onDimensionChange={handleDimensionChange}
+            onFiltersChange={handleFiltersChange}
+            onSortChange={handleSortChange}
+            onLimitChange={handleLimitChange}
+            onTitleChange={handleTitleChange}
+            onShowLegendChange={handleShowLegendChange}
+            onFormatChange={handleFormatChange}
+          />
+
+          <div className="mt-4 rounded-[20px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-sm)]">
+            <div className="mb-3">
+              <p className="text-sm font-semibold text-[var(--text)]">
+                Tema do dashboard
+              </p>
+              <p className="text-xs text-[var(--muted)]">
+                Ajuste as cores e o raio para viewer e preview.
+              </p>
             </div>
 
-            {validationSummary.length ? (
-              <div className="mb-4 rounded-[12px] border border-rose-200 bg-rose-50 px-3 py-3 text-xs text-rose-700">
-                <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em]">
-                  Erros do layout
-                </p>
-                <ul className="space-y-1">
-                  {validationSummary.map((issue) => (
-                    <li key={issue.key}>
-                      <span className="font-semibold">{issue.widgetTitle}</span>:{" "}
-                      {issue.message}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-
-            {selectedWidget ? (
-              <Tabs value={activeTab} onValueChange={setActiveTab}>
-                <TabsList className="w-full justify-between">
-                  <TabsTrigger value="data">Dados</TabsTrigger>
-                  <TabsTrigger value="style">Estilo</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="data" className="mt-4 space-y-4">
-                  <div>
-                    <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
-                      Tipo do grafico
-                    </label>
-                    <Select
-                      value={selectedWidget.type}
-                      onValueChange={handleChangeWidgetType}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {WIDGET_TYPES.map((type) => (
-                          <SelectItem key={type.value} value={type.value}>
-                            {type.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
-                      Metricas
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {METRIC_OPTIONS.map((metric) => {
-                        const active = selectedWidget.query?.metrics?.includes(
-                          metric.value
-                        );
-                        return (
-                          <button
-                            key={metric.value}
-                            type="button"
-                            onClick={() => handleToggleMetric(metric.value)}
-                            className={cn(
-                              "rounded-full border px-3 py-1 text-xs font-semibold transition",
-                              active
-                                ? "border-[var(--primary)] bg-[var(--primary-light)] text-[var(--primary)]"
-                                : "border-[var(--border)] bg-white text-[var(--text-muted)] hover:border-slate-300"
-                            )}
-                          >
-                            {metric.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
-                      Dimensao
-                    </label>
-                    <Select
-                      value={selectedWidget.query?.dimensions?.[0] || "none"}
-                      onValueChange={handleDimensionChange}
-                      disabled={selectedWidget.type === "timeseries"}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {DIMENSION_OPTIONS.map((dimension) => (
-                          <SelectItem key={dimension.value} value={dimension.value}>
-                            {dimension.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {selectedWidget.type === "timeseries" ? (
-                      <p className="mt-2 text-xs text-[var(--text-muted)]">
-                        Time series sempre usa dimensao date.
-                      </p>
-                    ) : null}
-                  </div>
-
-                  <div>
-                    <div className="mb-2 flex items-center justify-between">
-                      <label className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
-                        Filtros do widget
-                      </label>
-                      <button
-                        type="button"
-                        onClick={handleAddFilter}
-                        className="text-xs font-semibold text-[var(--primary)]"
-                      >
-                        + Adicionar
-                      </button>
-                    </div>
-
-                    <div className="space-y-3">
-                      {(selectedWidget.query?.filters || []).map((filter, index) => (
-                        <div
-                          key={`${filter.field}-${index}`}
-                          className="rounded-[12px] border border-[var(--border)] bg-[var(--surface-muted)] p-3"
-                        >
-                          <div className="grid gap-2">
-                            <Select
-                              value={filter.field || "platform"}
-                              onValueChange={(value) =>
-                                handleFilterChange(index, { field: value })
-                              }
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Campo" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {FILTER_FIELDS.map((field) => (
-                                  <SelectItem key={field.value} value={field.value}>
-                                    {field.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-
-                            <Select
-                              value={filter.op || "eq"}
-                              onValueChange={(value) =>
-                                handleFilterChange(index, { op: value })
-                              }
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Operacao" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {FILTER_OPERATORS.map((op) => (
-                                  <SelectItem key={op.value} value={op.value}>
-                                    {op.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-
-                            <Input
-                              value={formatFilterValue(filter)}
-                              placeholder="Valor ou lista"
-                              onChange={(event) =>
-                                handleFilterValue(index, event.target.value)
-                              }
-                            />
-                          </div>
-                          <div className="mt-2 flex justify-end">
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveFilter(index)}
-                              className="text-xs font-semibold text-rose-500"
-                            >
-                              Remover
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                      {!selectedWidget.query?.filters?.length ? (
-                        <p className="text-xs text-[var(--text-muted)]">
-                          Nenhum filtro configurado.
-                        </p>
-                      ) : null}
-                    </div>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="style" className="mt-4 space-y-4">
-                  <div>
-                    <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
-                      Titulo
-                    </label>
-                    <Input
-                      value={selectedWidget.title || ""}
-                      onChange={(event) =>
-                        updateWidget(selectedWidget.id, {
-                          title: event.target.value,
-                        })
-                      }
-                      placeholder="Nome do widget"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between rounded-[12px] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2">
-                    <div>
-                      <p className="text-sm font-semibold text-[var(--text)]">
-                        Mostrar legenda
-                      </p>
-                      <p className="text-xs text-[var(--text-muted)]">
-                        Aplica em graficos com series
-                      </p>
-                    </div>
-                    <Checkbox
-                      checked={selectedWidget.viz?.showLegend !== false}
-                      onCheckedChange={(checked) =>
-                        updateWidget(selectedWidget.id, {
-                          viz: {
-                            ...selectedWidget.viz,
-                            showLegend: Boolean(checked),
-                          },
-                        })
-                      }
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
-                      Formatacao
-                    </label>
-                    <Select
-                      value={selectedWidget.viz?.format || "auto"}
-                      onValueChange={(value) =>
-                        updateWidget(selectedWidget.id, {
-                          viz: {
-                            ...selectedWidget.viz,
-                            format: value,
-                          },
-                        })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Auto" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {FORMAT_OPTIONS.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </TabsContent>
-              </Tabs>
-            ) : (
-              <div className="rounded-[12px] border border-dashed border-[var(--border)] bg-[var(--surface-muted)] px-4 py-6 text-center text-sm text-[var(--text-muted)]">
-                Selecione um widget para editar.
-              </div>
-            )}
-
-            <div className="mt-4 border-t border-[var(--border)] pt-4">
-              <div className="mb-3">
-                <p className="text-sm font-semibold text-[var(--text)]">
-                  Tema do dashboard
-                </p>
-                <p className="text-xs text-[var(--muted)]">
-                  Ajuste as cores e o raio para viewer e preview.
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                <div>
-                  <label
-                    htmlFor="dashboard-theme-brand"
-                    className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]"
-                  >
-                    Brand color
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      aria-label="Cor principal do dashboard"
-                      value={HEX_COLOR_RE.test(themeDraft.brandColor) ? themeDraft.brandColor : "#F59E0B"}
-                      onChange={(event) => {
-                        setThemeDraft((prev) => ({
-                          ...prev,
-                          brandColor: event.target.value,
-                        }));
-                        setThemeFormError("");
-                      }}
-                      className="h-10 w-12 cursor-pointer rounded-[10px] border border-[var(--border)] bg-[var(--card)] p-1"
-                    />
-                    <Input
-                      id="dashboard-theme-brand"
-                      value={themeDraft.brandColor}
-                      onChange={(event) => {
-                        setThemeDraft((prev) => ({
-                          ...prev,
-                          brandColor: event.target.value,
-                        }));
-                        setThemeFormError("");
-                      }}
-                      placeholder="#F59E0B"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="dashboard-theme-accent"
-                    className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]"
-                  >
-                    Accent color
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      aria-label="Cor de destaque do dashboard"
-                      value={HEX_COLOR_RE.test(themeDraft.accentColor) ? themeDraft.accentColor : "#22C55E"}
-                      onChange={(event) => {
-                        setThemeDraft((prev) => ({
-                          ...prev,
-                          accentColor: event.target.value,
-                        }));
-                        setThemeFormError("");
-                      }}
-                      className="h-10 w-12 cursor-pointer rounded-[10px] border border-[var(--border)] bg-[var(--card)] p-1"
-                    />
-                    <Input
-                      id="dashboard-theme-accent"
-                      value={themeDraft.accentColor}
-                      onChange={(event) => {
-                        setThemeDraft((prev) => ({
-                          ...prev,
-                          accentColor: event.target.value,
-                        }));
-                        setThemeFormError("");
-                      }}
-                      placeholder="#22C55E"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="dashboard-theme-radius"
-                    className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]"
-                  >
-                    Radius (0-32)
-                  </label>
-                  <Input
-                    id="dashboard-theme-radius"
-                    type="number"
-                    min={0}
-                    max={32}
-                    value={themeDraft.radius}
+            <div className="space-y-3">
+              <div>
+                <label
+                  htmlFor="dashboard-theme-brand"
+                  className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]"
+                >
+                  Brand color
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    aria-label="Cor principal do dashboard"
+                    value={HEX_COLOR_RE.test(themeDraft.brandColor) ? themeDraft.brandColor : "#F59E0B"}
                     onChange={(event) => {
                       setThemeDraft((prev) => ({
                         ...prev,
-                        radius: event.target.value,
+                        brandColor: event.target.value,
                       }));
+                      setThemeFormError("");
                     }}
+                    className="h-10 w-12 cursor-pointer rounded-[10px] border border-[var(--border)] bg-[var(--card)] p-1"
+                  />
+                  <Input
+                    id="dashboard-theme-brand"
+                    value={themeDraft.brandColor}
+                    onChange={(event) => {
+                      setThemeDraft((prev) => ({
+                        ...prev,
+                        brandColor: event.target.value,
+                      }));
+                      setThemeFormError("");
+                    }}
+                    placeholder="#F59E0B"
                   />
                 </div>
               </div>
 
-              {themeFormError ? (
-                <p className="mt-3 text-xs text-rose-600">{themeFormError}</p>
-              ) : null}
+              <div>
+                <label
+                  htmlFor="dashboard-theme-accent"
+                  className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]"
+                >
+                  Accent color
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    aria-label="Cor de destaque do dashboard"
+                    value={HEX_COLOR_RE.test(themeDraft.accentColor) ? themeDraft.accentColor : "#22C55E"}
+                    onChange={(event) => {
+                      setThemeDraft((prev) => ({
+                        ...prev,
+                        accentColor: event.target.value,
+                      }));
+                      setThemeFormError("");
+                    }}
+                    className="h-10 w-12 cursor-pointer rounded-[10px] border border-[var(--border)] bg-[var(--card)] p-1"
+                  />
+                  <Input
+                    id="dashboard-theme-accent"
+                    value={themeDraft.accentColor}
+                    onChange={(event) => {
+                      setThemeDraft((prev) => ({
+                        ...prev,
+                        accentColor: event.target.value,
+                      }));
+                      setThemeFormError("");
+                    }}
+                    placeholder="#22C55E"
+                  />
+                </div>
+              </div>
 
-              <Button className="mt-4 w-full" onClick={handleApplyDashboardTheme}>
-                Aplicar tema
-              </Button>
+              <div>
+                <label
+                  htmlFor="dashboard-theme-radius"
+                  className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]"
+                >
+                  Radius (0-32)
+                </label>
+                <Input
+                  id="dashboard-theme-radius"
+                  type="number"
+                  min={0}
+                  max={32}
+                  value={themeDraft.radius}
+                  onChange={(event) => {
+                    setThemeDraft((prev) => ({
+                      ...prev,
+                      radius: event.target.value,
+                    }));
+                  }}
+                />
+              </div>
             </div>
+
+            {themeFormError ? (
+              <p className="mt-3 text-xs text-rose-600">{themeFormError}</p>
+            ) : null}
+
+            <Button className="mt-4 w-full" onClick={handleApplyDashboardTheme}>
+              Aplicar tema
+            </Button>
           </div>
         </aside>
       </div>

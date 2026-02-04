@@ -73,6 +73,12 @@ function formatMetricValue(metricKey, value, meta, formatOverride = "auto") {
     if (formatOverride === "compact") {
       return formatNumber(number, { compact: true });
     }
+    if (formatOverride === "full") {
+      if (CURRENCY_METRICS.has(metricKey) && meta?.currency) {
+        return formatNumber(number, { currency: meta.currency, compact: false });
+      }
+      return formatNumber(number, { compact: false });
+    }
   }
 
   if (PERCENT_METRICS.has(metricKey)) {
@@ -168,8 +174,15 @@ export default function WidgetRenderer({
   const isTable = widgetType === "table";
   const showGrid = vizOptions.showGrid !== false;
   const legendProps = resolveLegendProps(vizOptions.legendPosition);
+  const widgetLimitRaw = Number(widget?.query?.limit);
+  const widgetLimit = Number.isFinite(widgetLimitRaw)
+    ? Math.max(1, Math.min(500, Math.round(widgetLimitRaw)))
+    : null;
+  const sortField = String(widget?.query?.sort?.field || "").trim();
+  const sortDirection = widget?.query?.sort?.direction === "desc" ? "desc" : "asc";
+  const sort = sortField ? { field: sortField, direction: sortDirection } : undefined;
 
-  const [pageSize, setPageSize] = React.useState(25);
+  const [pageSize, setPageSize] = React.useState(widgetLimit || 25);
   const [pageIndex, setPageIndex] = React.useState(0);
 
   const dateRange = resolveDateRange(globalFilters?.dateRange || {});
@@ -189,10 +202,21 @@ export default function WidgetRenderer({
     setPageIndex(0);
   }, [isTable, pageSize, tableResetKey]);
 
+  React.useEffect(() => {
+    if (!isTable) return;
+    setPageSize(widgetLimit || 25);
+    setPageIndex(0);
+  }, [isTable, widget?.id, widgetLimit]);
+
   const pagination = isTable
     ? {
         limit: pageSize,
         offset: pageIndex * pageSize,
+      }
+    : widgetLimit
+    ? {
+        limit: widgetLimit,
+        offset: 0,
       }
     : undefined;
 
@@ -205,6 +229,7 @@ export default function WidgetRenderer({
     requiredPlatforms: widget?.query?.requiredPlatforms,
     compareTo,
     pagination,
+    sort,
   };
 
   const queryKey = buildWidgetQueryKey({
@@ -382,7 +407,9 @@ export default function WidgetRenderer({
 
   if (widgetType === "table") {
     const columns = [...dimensions, ...metrics];
-    const pageOptions = [25, 50, 100, 200];
+    const pageOptions = Array.from(new Set([25, 50, 100, 200, widgetLimit || 25])).sort(
+      (a, b) => a - b
+    );
     const currentPage = Math.floor((pageInfo.offset || 0) / pageSize) + 1;
     const showTotals = vizOptions.showTotals !== false;
     return (

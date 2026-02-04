@@ -100,6 +100,14 @@ const querySchema = z
     metrics: z.array(z.string().min(1)).min(1),
     filters: z.array(filterSchema).default([]),
     requiredPlatforms: z.array(platformEnum).optional(),
+    sort: z
+      .object({
+        field: z.string().min(1),
+        direction: z.enum(['asc', 'desc']).default('asc'),
+      })
+      .strict()
+      .optional(),
+    limit: z.number().int().min(1).max(500).optional(),
   })
   .strict();
 
