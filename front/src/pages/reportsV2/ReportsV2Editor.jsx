@@ -573,6 +573,14 @@ export default function ReportsV2Editor() {
   const layoutJson = history.state;
   const setLayoutJson = history.setState;
   const { undo, redo, canUndo, canRedo, resetState } = history;
+  const commitLayoutChange = React.useCallback(
+    (updater) => setLayoutJson(updater),
+    [setLayoutJson]
+  );
+  const stageLayoutChange = React.useCallback(
+    (updater) => setLayoutJson(updater, { snapshot: false }),
+    [setLayoutJson]
+  );
   const [activePageId, setActivePageId] = React.useState(null);
   const [selectedWidgetId, setSelectedWidgetId] = React.useState(null);
   const [activeTab, setActiveTab] = React.useState("data");
@@ -668,7 +676,9 @@ export default function ReportsV2Editor() {
     };
 
     const onKeyDown = (event) => {
-      if (isEditableField(document.activeElement)) return;
+      if (event.defaultPrevented || event.isComposing) return;
+      const target = event.target;
+      if (isEditableField(target) || isEditableField(document.activeElement)) return;
 
       const key = String(event.key || "").toLowerCase();
       const withModifier = event.metaKey || event.ctrlKey;
@@ -829,7 +839,9 @@ export default function ReportsV2Editor() {
 
   const updateWidget = React.useCallback(
     (widgetId, updater, options = {}) => {
-      setLayoutJson((prev) => {
+      const applyMutation =
+        options?.snapshot === false ? stageLayoutChange : commitLayoutChange;
+      applyMutation((prev) => {
         const pages = prev.pages.map((page) => {
           if (page.id !== activePageId) return page;
           const nextWidgets = (page.widgets || []).map((widget) => {
@@ -840,9 +852,9 @@ export default function ReportsV2Editor() {
           return { ...page, widgets: nextWidgets };
         });
         return { ...prev, pages };
-      }, options);
+      });
     },
-    [activePageId, setLayoutJson]
+    [activePageId, commitLayoutChange, stageLayoutChange]
   );
 
   const applyGridLayout = React.useCallback(
@@ -875,18 +887,18 @@ export default function ReportsV2Editor() {
 
   const handleLayoutChange = React.useCallback(
     (nextLayout) => {
-      setLayoutJson((prev) => applyGridLayout(prev, nextLayout), { snapshot: false });
+      stageLayoutChange((prev) => applyGridLayout(prev, nextLayout));
     },
-    [applyGridLayout, setLayoutJson]
+    [applyGridLayout, stageLayoutChange]
   );
 
   const handleLayoutCommit = React.useCallback(
     (nextLayout) => {
-      setLayoutJson((prev) => {
+      commitLayoutChange((prev) => {
         return applyGridLayout(prev, nextLayout);
       });
     },
-    [applyGridLayout, setLayoutJson]
+    [applyGridLayout, commitLayoutChange]
   );
 
   React.useEffect(() => {
@@ -925,7 +937,7 @@ export default function ReportsV2Editor() {
   const addWidgetToActivePage = React.useCallback(
     (widget) => {
       if (!activePageId || !widget) return;
-      setLayoutJson((prev) => {
+      commitLayoutChange((prev) => {
         const nextPages = prev.pages.map((page) => {
           if (page.id !== activePageId) return page;
           return {
@@ -937,7 +949,7 @@ export default function ReportsV2Editor() {
       });
       setSelectedWidgetId(widget.id);
     },
-    [activePageId]
+    [activePageId, commitLayoutChange]
   );
 
   const handleAddWidget = (type) => {
@@ -1013,7 +1025,7 @@ export default function ReportsV2Editor() {
   const handleRemoveWidget = (widgetId) => {
     const ok = window.confirm("Tem certeza que deseja deletar este widget?");
     if (!ok) return;
-    setLayoutJson((prev) => {
+    commitLayoutChange((prev) => {
       const pages = prev.pages.map((page) => {
         if (page.id !== activePageId) return page;
         return {
@@ -1030,7 +1042,7 @@ export default function ReportsV2Editor() {
 
   const handleEnableControl = (controlKey) => {
     if (!controlKey) return;
-    setLayoutJson((prev) => ({
+    commitLayoutChange((prev) => ({
       ...prev,
       globalFilters: {
         ...(prev.globalFilters || {}),
@@ -1045,7 +1057,7 @@ export default function ReportsV2Editor() {
 
   const handleToggleControl = (controlKey, checked) => {
     const enabled = Boolean(checked);
-    setLayoutJson((prev) => {
+    commitLayoutChange((prev) => {
       const currentGlobal = prev.globalFilters || {};
       const nextGlobal = {
         ...currentGlobal,
@@ -1088,7 +1100,7 @@ export default function ReportsV2Editor() {
       name: `Pagina ${nextIndex}`,
       widgets: [],
     };
-    setLayoutJson((prev) => ({
+    commitLayoutChange((prev) => ({
       ...prev,
       pages: [...prev.pages, newPage],
     }));
@@ -1105,7 +1117,7 @@ export default function ReportsV2Editor() {
   const handleConfirmRename = () => {
     const nextName = String(pageNameDraft || "").trim().slice(0, 60);
     if (!nextName || !activePageId) return;
-    setLayoutJson((prev) => ({
+    commitLayoutChange((prev) => ({
       ...prev,
       pages: prev.pages.map((page) =>
         page.id === activePageId ? { ...page, name: nextName } : page
@@ -1120,7 +1132,7 @@ export default function ReportsV2Editor() {
       "Tem certeza que deseja remover esta pagina? Os widgets dela serao removidos."
     );
     if (!ok) return;
-    setLayoutJson((prev) => {
+    commitLayoutChange((prev) => {
       const nextPages = prev.pages.filter((page) => page.id !== activePageId);
       return { ...prev, pages: nextPages.length ? nextPages : prev.pages };
     });
@@ -1152,7 +1164,7 @@ export default function ReportsV2Editor() {
       radius,
     });
 
-    setLayoutJson((prev) => ({
+    commitLayoutChange((prev) => ({
       ...prev,
       theme: normalizedTheme,
     }));
