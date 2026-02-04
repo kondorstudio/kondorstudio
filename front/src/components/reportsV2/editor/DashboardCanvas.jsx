@@ -14,8 +14,10 @@ export default function DashboardCanvas({
   rowHeight = 32,
   margin = [16, 16],
   onDragStart,
+  onDrag,
   onDragStop,
   onResizeStart,
+  onResize,
   onResizeStop,
 }) {
   const safeLayout = Array.isArray(layout) ? layout : [];
@@ -45,8 +47,10 @@ export default function DashboardCanvas({
         isResizable={isEditable}
         onLayoutChange={onLayoutChange}
         onDragStart={onDragStart}
+        onDrag={onDrag}
         onDragStop={onDragStop}
         onResizeStart={onResizeStart}
+        onResize={onResize}
         onResizeStop={onResizeStop}
       >
         {safeItems.map((item, index) => {

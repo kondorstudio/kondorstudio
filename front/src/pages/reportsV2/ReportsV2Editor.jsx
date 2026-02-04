@@ -14,7 +14,7 @@ import {
   Undo2,
   Redo2,
 } from "lucide-react";
-import DashboardCanvas from "@/components/reports/widgets/DashboardCanvas.jsx";
+import DashboardCanvas from "@/components/reportsV2/editor/DashboardCanvas.jsx";
 import DashboardRenderer from "@/components/reportsV2/DashboardRenderer.jsx";
 import GlobalFiltersBar from "@/components/reportsV2/GlobalFiltersBar.jsx";
 import ThemeProvider from "@/components/reportsV2/ThemeProvider.jsx";
