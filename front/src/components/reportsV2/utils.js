@@ -106,6 +106,102 @@ export function generateUuid() {
   )}-${hex.slice(20)}`;
 }
 
+function normalizeWidgetRect(layout, gridCols = 12) {
+  const safeCols = Math.max(1, Number(gridCols) || 12);
+  const w = Math.max(1, Number(layout?.w || 1));
+  const h = Math.max(1, Number(layout?.h || 1));
+  const maxX = Math.max(0, safeCols - w);
+  const x = Math.max(0, Math.min(Number(layout?.x || 0), maxX));
+  const y = Math.max(0, Number(layout?.y || 0));
+  return { x, y, w, h };
+}
+
+function isRectCollision(a, b) {
+  return (
+    a.x < b.x + b.w &&
+    a.x + a.w > b.x &&
+    a.y < b.y + b.h &&
+    a.y + a.h > b.y
+  );
+}
+
+function isLayoutColliding(candidateRect, widgets = [], ignoreWidgetId) {
+  return widgets.some((widget) => {
+    if (!widget || widget.id === ignoreWidgetId) return false;
+    const rect = normalizeWidgetRect(widget.layout);
+    return isRectCollision(candidateRect, rect);
+  });
+}
+
+function pickNonCollidingPosition(baseRect, widgets = [], ignoreWidgetId, gridCols = 12) {
+  const offsets = [
+    { x: 1, y: 1 },
+    { x: 2, y: 2 },
+    { x: 0, y: 2 },
+  ];
+  const safeCols = Math.max(1, Number(gridCols) || 12);
+
+  for (const offset of offsets) {
+    const candidateRect = normalizeWidgetRect(
+      {
+        ...baseRect,
+        x: Number(baseRect.x || 0) + offset.x,
+        y: Number(baseRect.y || 0) + offset.y,
+      },
+      safeCols
+    );
+    if (!isLayoutColliding(candidateRect, widgets, ignoreWidgetId)) {
+      return { x: candidateRect.x, y: candidateRect.y };
+    }
+  }
+
+  const fallback = normalizeWidgetRect(
+    {
+      ...baseRect,
+      x: Number(baseRect.x || 0),
+      y: Number(baseRect.y || 0) + 2,
+    },
+    safeCols
+  );
+  return { x: fallback.x, y: fallback.y };
+}
+
+export function duplicateWidget(widget, existingWidgets = [], gridCols = 12) {
+  if (!widget || typeof widget !== "object") return null;
+
+  const existingIds = new Set(
+    (Array.isArray(existingWidgets) ? existingWidgets : [])
+      .map((item) => item?.id)
+      .filter(Boolean)
+  );
+
+  let nextId = generateUuid();
+  while (existingIds.has(nextId)) {
+    nextId = generateUuid();
+  }
+
+  const cloned = JSON.parse(JSON.stringify(widget));
+  const baseRect = normalizeWidgetRect(cloned.layout, gridCols);
+  const nextPosition = pickNonCollidingPosition(
+    baseRect,
+    existingWidgets,
+    widget.id,
+    gridCols
+  );
+
+  cloned.id = nextId;
+  cloned.title = `${widget.title || "Widget"} (copia)`;
+  cloned.layout = {
+    ...cloned.layout,
+    x: nextPosition.x,
+    y: nextPosition.y,
+    w: baseRect.w,
+    h: baseRect.h,
+  };
+
+  return cloned;
+}
+
 export function normalizeLayoutFront(layout) {
   if (!layout || typeof layout !== "object") return null;
   const theme = normalizeThemeFront(layout.theme || {});
@@ -187,9 +283,18 @@ export function mergeWidgetFilters(widgetFilters = [], globalFilters = {}) {
   const accountIds = Array.from(
     new Set(
       accounts
-        .map((account) =>
-          typeof account === "string" ? account : account?.external_account_id
-        )
+        .map((account) => {
+          if (typeof account === "string") return account.trim();
+          if (!account || typeof account !== "object") return "";
+          return String(
+            account.external_account_id ||
+              account.externalAccountId ||
+              account.account_id ||
+              account.id ||
+              account.value ||
+              ""
+          ).trim();
+        })
         .filter(Boolean)
     )
   );

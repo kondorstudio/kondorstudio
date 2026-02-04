@@ -29,6 +29,7 @@ import {
   normalizeLayoutFront,
   getActivePage,
   generateUuid,
+  duplicateWidget as duplicateWidgetItem,
   normalizeThemeFront,
   DEFAULT_REPORT_THEME,
   DEFAULT_FILTER_CONTROLS,
@@ -920,21 +921,8 @@ export default function ReportsV2Editor() {
   const handleDuplicateWidget = (widgetId) => {
     const widget = activeWidgets.find((item) => item.id === widgetId);
     if (!widget) return;
-    const width = Math.max(1, Number(widget.layout?.w || 4));
-    const originalX = Math.max(0, Number(widget.layout?.x || 0));
-    const originalY = Math.max(0, Number(widget.layout?.y || 0));
-    const nextX = Math.max(0, Math.min(originalX + 1, 12 - width));
-    const nextY = originalY + 1;
-    const clone = {
-      ...widget,
-      id: generateUuid(),
-      title: `${widget.title || "Widget"} (copia)`,
-      layout: {
-        ...widget.layout,
-        x: nextX,
-        y: nextY,
-      },
-    };
+    const clone = duplicateWidgetItem(widget, activeWidgets, 12);
+    if (!clone) return;
     addWidgetToActivePage(clone);
   };
 
