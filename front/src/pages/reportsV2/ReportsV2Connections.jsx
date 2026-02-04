@@ -82,10 +82,16 @@ export default function ReportsV2Connections() {
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const [brandId, setBrandId] = React.useState("");
+  const requestedPlatform = React.useMemo(
+    () => String(searchParams.get("platform") || "").toUpperCase(),
+    [searchParams]
+  );
   const [selectedPlatform, setSelectedPlatform] = React.useState(null);
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [selectedAccountId, setSelectedAccountId] = React.useState("");
   const [nameOverride, setNameOverride] = React.useState("");
+  const [highlightPlatform, setHighlightPlatform] = React.useState("");
+  const platformRefs = React.useRef({});
 
   const { data: clients = [] } = useQuery({
     queryKey: ["reportsV2-clients"],
@@ -100,6 +106,32 @@ export default function ReportsV2Connections() {
       : null;
     setBrandId(match ? match.id : clients[0].id);
   }, [brandId, clients, searchParams]);
+
+  React.useEffect(() => {
+    if (!brandId || !requestedPlatform) return;
+    const isKnownPlatform = PLATFORMS.some((item) => item.value === requestedPlatform);
+    if (!isKnownPlatform) return;
+    setSelectedPlatform(requestedPlatform);
+    setHighlightPlatform(requestedPlatform);
+
+    const handle = window.setTimeout(() => {
+      const target = platformRefs.current[requestedPlatform];
+      if (target && typeof target.scrollIntoView === "function") {
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 120);
+
+    const clearHandle = window.setTimeout(() => {
+      setHighlightPlatform((current) =>
+        current === requestedPlatform ? "" : current
+      );
+    }, 4000);
+
+    return () => {
+      window.clearTimeout(handle);
+      window.clearTimeout(clearHandle);
+    };
+  }, [brandId, requestedPlatform]);
 
   const { data: connectionsData, isLoading: connectionsLoading } = useQuery({
     queryKey: ["reportsV2-connections", brandId],
@@ -201,7 +233,14 @@ export default function ReportsV2Connections() {
             return (
               <Card
                 key={platform.value}
-                className={cn(!isBrandSelected && "pointer-events-none opacity-60")}
+                ref={(element) => {
+                  if (element) platformRefs.current[platform.value] = element;
+                }}
+                className={cn(
+                  !isBrandSelected && "pointer-events-none opacity-60",
+                  highlightPlatform === platform.value &&
+                    "ring-2 ring-amber-300 ring-offset-2 ring-offset-white"
+                )}
               >
                 <CardContent className="space-y-3">
                   <div className="flex items-center justify-between">

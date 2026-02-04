@@ -169,6 +169,7 @@ export default function WidgetRenderer({
   pageId,
   globalFilters,
   onStatusChange,
+  healthIssue,
 }) {
   const navigate = useNavigate();
   const isPublic = Boolean(publicToken);
@@ -265,6 +266,7 @@ export default function WidgetRenderer({
         : base44.reportsV2.queryMetrics(payload),
     enabled: Boolean(
       widgetType !== "text" &&
+        !(healthIssue?.reason === "MISSING_CONNECTION" || healthIssue?.reason === "INVALID_QUERY") &&
         (isPublic ? publicToken : brandId) &&
         dateRange.start &&
         dateRange.end &&
@@ -283,6 +285,63 @@ export default function WidgetRenderer({
           onStatusChange={onStatusChange}
         />
         <WidgetText widget={widget} />
+      </>
+    );
+  }
+
+  if (healthIssue?.reason === "MISSING_CONNECTION") {
+    const platformLabel = formatPlatformList([healthIssue.platform]);
+    return (
+      <>
+        <WidgetStatusReporter
+          widgetId={widget?.id}
+          status="invalid"
+          reason="MISSING_CONNECTIONS"
+          onStatusChange={onStatusChange}
+        />
+        <WidgetEmptyState
+          title="Conexao pendente"
+          description={`Conecte uma conta de ${platformLabel} para habilitar este grafico.`}
+          variant="connection"
+          actionLabel={isPublic ? undefined : "Conectar agora"}
+          onAction={
+            isPublic
+              ? undefined
+              : () => {
+                  const params = new URLSearchParams();
+                  if (brandId) params.set("brandId", brandId);
+                  if (healthIssue.platform) params.set("platform", healthIssue.platform);
+                  const query = params.toString();
+                  navigate(`/relatorios/v2/conexoes${query ? `?${query}` : ""}`);
+                }
+          }
+          className="border-0 bg-transparent p-0"
+        />
+      </>
+    );
+  }
+
+  if (healthIssue?.reason === "INVALID_QUERY") {
+    return (
+      <>
+        <WidgetStatusReporter
+          widgetId={widget?.id}
+          status="invalid"
+          reason="INVALID_QUERY"
+          onStatusChange={onStatusChange}
+        />
+        <WidgetEmptyState
+          title="Configuracao invalida"
+          description="Configuracao invalida neste widget. Abra no Editor para corrigir."
+          variant="metrics"
+          actionLabel={isPublic ? undefined : "Abrir no editor"}
+          onAction={
+            isPublic
+              ? undefined
+              : () => navigate(`/relatorios/v2/${dashboardId}/edit`)
+          }
+          className="border-0 bg-transparent p-0"
+        />
       </>
     );
   }

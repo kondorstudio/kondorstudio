@@ -700,6 +700,11 @@ const ReportsV2 = {
     return jsonFetch(`/reports/dashboards/${id}`, { method: "GET" });
   },
 
+  async getDashboardHealth(id) {
+    if (!id) throw new Error("dashboardId obrigatorio");
+    return jsonFetch(`/reports/dashboards/${id}/health`, { method: "GET" });
+  },
+
   async listTemplates() {
     return jsonFetch("/reports/templates", { method: "GET" });
   },

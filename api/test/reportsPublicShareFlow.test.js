@@ -116,6 +116,9 @@ function createFakePrisma() {
     reportDashboardExport: {
       findFirst: async () => null,
     },
+    brandSourceConnection: {
+      findMany: async () => [],
+    },
     $transaction: async (fn) => fn(prisma),
   };
 

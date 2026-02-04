@@ -18,6 +18,9 @@ function resetModule(path) {
 function buildExportServiceHarness(options = {}) {
   const createCalls = [];
   const updateCalls = [];
+  const activeConnections = Array.isArray(options.activeConnections)
+    ? options.activeConnections
+    : [];
   const defaultLayout = {
     theme: {
       mode: 'light',
@@ -88,6 +91,17 @@ function buildExportServiceHarness(options = {}) {
           };
         },
       },
+      brandSourceConnection: {
+        findMany: async ({ where }) =>
+          activeConnections
+            .filter((item) => {
+              if (item.tenantId !== where.tenantId) return false;
+              if (item.brandId !== where.brandId) return false;
+              if (item.status !== where.status) return false;
+              return true;
+            })
+            .map((item) => ({ platform: item.platform })),
+      },
       upload: {
         create: async () => ({ id: 'upload-1' }),
       },
@@ -122,6 +136,7 @@ function buildExportServiceHarness(options = {}) {
     },
   };
 
+  resetModule('../src/modules/reports/dashboardHealth.service');
   resetModule('../src/modules/reports/exports.service');
   const service = require('../src/modules/reports/exports.service');
 
@@ -131,6 +146,7 @@ function buildExportServiceHarness(options = {}) {
     } else {
       delete require.cache[playwrightResolved];
     }
+    resetModule('../src/modules/reports/dashboardHealth.service');
     resetModule('../src/modules/reports/exports.service');
   }
 
@@ -334,21 +350,50 @@ test('exportDashboardPdf invalidates temporary token when generation fails', asy
   }
 });
 
-test('exportDashboardPdf rejects when published layout is invalid', async () => {
-  const invalidDashboard = {
+test('exportDashboardPdf blocks when health status is BLOCKED', async () => {
+  const blockedDashboard = {
     id: 'dashboard-1',
     tenantId: 'tenant-1',
     brandId: 'brand-1',
-    name: 'Dashboard Invalido',
+    name: 'Dashboard Bloqueado',
     status: 'PUBLISHED',
     publishedVersionId: 'version-1',
     publishedVersion: {
       id: 'version-1',
-      layoutJson: { theme: {}, globalFilters: {} },
+      layoutJson: {
+        theme: {},
+        globalFilters: {
+          dateRange: { preset: 'last_7_days' },
+          platforms: [],
+          accounts: [],
+          compareTo: null,
+          autoRefreshSec: 0,
+        },
+        pages: [
+          {
+            id: '74d19647-13f3-4c6f-b0d4-fe1779f7043c',
+            name: 'Pagina 1',
+            widgets: [
+              {
+                id: '190f521b-98da-4f72-9499-92b41235f6d2',
+                type: 'bar',
+                title: 'Meta Ads',
+                layout: { x: 0, y: 0, w: 6, h: 4, minW: 2, minH: 2 },
+                query: {
+                  dimensions: ['platform'],
+                  metrics: ['spend'],
+                  filters: [{ field: 'platform', op: 'eq', value: 'META_ADS' }],
+                },
+                viz: {},
+              },
+            ],
+          },
+        ],
+      },
     },
   };
   const { service, createCalls, restore } = buildExportServiceHarness({
-    dashboard: invalidDashboard,
+    dashboard: blockedDashboard,
   });
   try {
     await assert.rejects(
@@ -360,6 +405,7 @@ test('exportDashboardPdf rejects when published layout is invalid', async () => 
       (error) => {
         assert.equal(error?.code, 'DASHBOARD_INVALID');
         assert.equal(error?.status, 422);
+        assert.equal(error?.details?.status, 'BLOCKED');
         return true;
       },
     );

@@ -11,6 +11,7 @@ const allowEditor = requireReportingRole('editor');
 router.get('/', allowViewer, dashboardsController.list);
 router.post('/', allowEditor, dashboardsController.create);
 router.get('/:id', allowViewer, dashboardsController.get);
+router.get('/:id/health', allowViewer, dashboardsController.getHealth);
 router.put('/:id', allowEditor, dashboardsController.update);
 router.post('/:id/clone', allowEditor, dashboardsController.clone);
 router.post('/:id/exports', allowEditor, exportsController.create);

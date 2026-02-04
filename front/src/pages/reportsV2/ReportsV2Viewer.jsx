@@ -55,6 +55,39 @@ function formatDateTime(value) {
   }).format(date);
 }
 
+const PLATFORM_LABELS = {
+  META_ADS: "Meta Ads",
+  GOOGLE_ADS: "Google Ads",
+  TIKTOK_ADS: "TikTok Ads",
+  LINKEDIN_ADS: "LinkedIn Ads",
+  GA4: "GA4",
+  GMB: "Google Meu Negocio",
+  FB_IG: "Facebook/Instagram",
+};
+
+function formatPlatform(platform) {
+  return PLATFORM_LABELS[platform] || platform;
+}
+
+function buildConnectionsPath(brandId, platform) {
+  const params = new URLSearchParams();
+  if (brandId) params.set("brandId", brandId);
+  if (platform) params.set("platform", platform);
+  const query = params.toString();
+  return `/relatorios/v2/conexoes${query ? `?${query}` : ""}`;
+}
+
+function describeIssue(issue) {
+  if (!issue) return "Widget com pendencia.";
+  if (issue.reason === "MISSING_CONNECTION") {
+    return `Conexao pendente: ${formatPlatform(issue.platform || "plataforma desconhecida")}.`;
+  }
+  if (issue.reason === "INVALID_QUERY") {
+    return "Configuracao de widget invalida.";
+  }
+  return "Widget com pendencia.";
+}
+
 export default function ReportsV2Viewer() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -62,6 +95,7 @@ export default function ReportsV2Viewer() {
   const { toast, showToast } = useToast();
   const [shareOpen, setShareOpen] = React.useState(false);
   const [shareUrl, setShareUrl] = React.useState("");
+  const [blockedAction, setBlockedAction] = React.useState(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["reportsV2-dashboard", id],
@@ -77,7 +111,6 @@ export default function ReportsV2Viewer() {
   const pages = normalizedLayout?.pages || [];
   const globalFilterControls = normalizedLayout?.globalFilters?.controls;
   const [activePageId, setActivePageId] = React.useState(pages[0]?.id || null);
-  const [widgetStatusById, setWidgetStatusById] = React.useState({});
   const shareStatusQuery = useQuery({
     queryKey: ["reportsV2-public-share", id],
     queryFn: () => base44.reportsV2.getPublicShareStatus(id),
@@ -87,6 +120,21 @@ export default function ReportsV2Viewer() {
   const shareStatus = shareStatusQuery.data || null;
   const shareEnabled =
     shareStatus?.status === "ACTIVE" || Boolean(dashboard?.sharedEnabled);
+  const healthQuery = useQuery({
+    queryKey: ["reportsV2-dashboard-health", id],
+    queryFn: () => base44.reportsV2.getDashboardHealth(id),
+    enabled: Boolean(id && dashboard?.status === "PUBLISHED"),
+  });
+  const health = healthQuery.data || null;
+  const healthStatus = health?.status || null;
+  const missingPlatforms = Array.isArray(health?.missingPlatforms)
+    ? health.missingPlatforms
+    : [];
+  const invalidWidgets = Array.isArray(health?.invalidWidgets)
+    ? health.invalidWidgets
+    : [];
+  const isHealthBlocked = healthStatus === "BLOCKED";
+  const isHealthWarn = healthStatus === "WARN";
 
   const [filters, setFilters] = React.useState(() =>
     buildInitialFilters(normalizedLayout)
@@ -108,67 +156,30 @@ export default function ReportsV2Viewer() {
       return pages[0].id;
     });
   }, [pages]);
-
-  const activePageWidgets = React.useMemo(() => {
-    if (!pages.length) return [];
-    const activePage =
-      pages.find((page) => page.id === activePageId) || pages[0] || null;
-    return Array.isArray(activePage?.widgets) ? activePage.widgets : [];
-  }, [activePageId, pages]);
-
-  const activeWidgetIds = React.useMemo(
-    () => new Set(activePageWidgets.map((widget) => widget.id)),
-    [activePageWidgets]
-  );
-
-  React.useEffect(() => {
-    if (!activeWidgetIds.size) {
-      setWidgetStatusById({});
-      return;
-    }
-    setWidgetStatusById((previous) => {
-      const next = {};
-      for (const widgetId of Object.keys(previous)) {
-        if (activeWidgetIds.has(widgetId)) {
-          next[widgetId] = previous[widgetId];
-        }
-      }
-      if (
-        Object.keys(next).length === Object.keys(previous).length &&
-        Object.keys(next).every((key) => next[key] === previous[key])
-      ) {
-        return previous;
-      }
-      return next;
+  const widgetTitleById = React.useMemo(() => {
+    const map = new Map();
+    pages.forEach((page) => {
+      (page.widgets || []).forEach((widget) => {
+        map.set(widget.id, widget.title || "Widget");
+      });
     });
-  }, [activeWidgetIds]);
-
-  const handleWidgetStatusChange = React.useCallback((widgetId, payload) => {
-    if (!widgetId) return;
-    setWidgetStatusById((previous) => {
-      const nextPayload = payload || { status: "ok", reason: null };
-      const current = previous[widgetId];
-      if (
-        current?.status === nextPayload.status &&
-        current?.reason === nextPayload.reason
-      ) {
-        return previous;
+    return map;
+  }, [pages]);
+  const healthIssuesByWidgetId = React.useMemo(() => {
+    const map = {};
+    invalidWidgets.forEach((issue) => {
+      if (!issue?.widgetId) return;
+      const current = map[issue.widgetId];
+      if (!current) {
+        map[issue.widgetId] = issue;
+        return;
       }
-      return {
-        ...previous,
-        [widgetId]: nextPayload,
-      };
+      if (current.reason !== "MISSING_CONNECTION" && issue.reason === "MISSING_CONNECTION") {
+        map[issue.widgetId] = issue;
+      }
     });
-  }, []);
-
-  const hasInvalidWidgets = React.useMemo(() => {
-    for (const widgetId of activeWidgetIds) {
-      const status = widgetStatusById[widgetId];
-      if (!status) continue;
-      if (status.status === "error" || status.status === "invalid") return true;
-    }
-    return false;
-  }, [activeWidgetIds, widgetStatusById]);
+    return map;
+  }, [invalidWidgets]);
 
   React.useEffect(() => {
     const refreshSec = Number(filters?.autoRefreshSec || 0);
@@ -187,6 +198,7 @@ export default function ReportsV2Viewer() {
       }
       queryClient.invalidateQueries({ queryKey: ["reportsV2-dashboard", id] });
       queryClient.invalidateQueries({ queryKey: ["reportsV2-public-share", id] });
+      queryClient.invalidateQueries({ queryKey: ["reportsV2-dashboard-health", id] });
       if (payload?.publicUrl) {
         showToast("Link publico gerado com sucesso.", "success");
       } else {
@@ -210,6 +222,7 @@ export default function ReportsV2Viewer() {
       }
       queryClient.invalidateQueries({ queryKey: ["reportsV2-dashboard", id] });
       queryClient.invalidateQueries({ queryKey: ["reportsV2-public-share", id] });
+      queryClient.invalidateQueries({ queryKey: ["reportsV2-dashboard-health", id] });
       showToast("Link rotacionado com sucesso.", "success");
     },
     onError: (err) => {
@@ -227,9 +240,14 @@ export default function ReportsV2Viewer() {
       setShareUrl("");
       queryClient.invalidateQueries({ queryKey: ["reportsV2-dashboard", id] });
       queryClient.invalidateQueries({ queryKey: ["reportsV2-public-share", id] });
+      queryClient.invalidateQueries({ queryKey: ["reportsV2-dashboard-health", id] });
       showToast("Compartilhamento desativado.", "success");
     },
     onError: (err) => {
+      if (err?.data?.error?.code === "DASHBOARD_INVALID") {
+        setBlockedAction("export");
+        return;
+      }
       const message =
         err?.data?.error?.message ||
         err?.message ||
@@ -281,11 +299,19 @@ export default function ReportsV2Viewer() {
 
   const handleGenerateShare = () => {
     if (!ensurePublished()) return;
+    if (isHealthBlocked) {
+      setBlockedAction("share");
+      return;
+    }
     createShareMutation.mutate();
   };
 
   const handleRotateShare = () => {
     if (!ensurePublished()) return;
+    if (isHealthBlocked) {
+      setBlockedAction("share");
+      return;
+    }
     const confirmed = window.confirm(
       "Rotacionar invalida o link atual e cria um novo. Deseja continuar?"
     );
@@ -303,10 +329,8 @@ export default function ReportsV2Viewer() {
 
   const handleExport = () => {
     if (!ensurePublished()) return;
-    if (hasInvalidWidgets) {
-      window.alert(
-        "Nao e possivel exportar este relatorio pois existem widgets com dados invalidos ou conexoes pendentes."
-      );
+    if (isHealthBlocked) {
+      setBlockedAction("export");
       return;
     }
     exportMutation.mutate();
@@ -362,13 +386,8 @@ export default function ReportsV2Viewer() {
             <h1 className="text-2xl font-semibold text-[var(--text)]">
               {dashboard.name}
             </h1>
-            <p className="flex items-center gap-2 text-sm text-[var(--muted)]">
-              <span>{dashboard.status === "PUBLISHED" ? "Publicado" : "Rascunho"}</span>
-              {hasInvalidWidgets ? (
-                <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
-                  Dados invalidos
-                </span>
-              ) : null}
+            <p className="text-sm text-[var(--muted)]">
+              {dashboard.status === "PUBLISHED" ? "Publicado" : "Rascunho"}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -396,6 +415,73 @@ export default function ReportsV2Viewer() {
             </Button>
           </div>
         </div>
+
+        {dashboard.status === "PUBLISHED" && (isHealthBlocked || isHealthWarn) ? (
+          <div
+            className={
+              isHealthBlocked
+                ? "mt-5 rounded-[16px] border border-amber-200 bg-amber-50 px-5 py-4"
+                : "mt-5 rounded-[16px] border border-slate-200 bg-slate-50 px-5 py-4"
+            }
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-[var(--text)]">
+                  {isHealthBlocked
+                    ? "Conexoes pendentes"
+                    : "Alguns widgets podem estar indisponiveis"}
+                </p>
+                <p className="mt-1 text-sm text-[var(--muted)]">
+                  {isHealthBlocked
+                    ? "Conecte as fontes para habilitar todos os graficos e exportar/compartilhar."
+                    : "Revise a configuracao de widgets para garantir a visualizacao completa."}
+                </p>
+              </div>
+              <Button
+                variant="secondary"
+                onClick={() =>
+                  navigate(buildConnectionsPath(dashboard.brandId, missingPlatforms[0]))
+                }
+              >
+                Gerenciar conexoes
+              </Button>
+            </div>
+
+            {missingPlatforms.length ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {missingPlatforms.map((platform) => (
+                  <span
+                    key={platform}
+                    className="rounded-full border border-amber-300 bg-white px-2.5 py-1 text-xs font-semibold text-amber-700"
+                  >
+                    {formatPlatform(platform)}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+
+            {invalidWidgets.length ? (
+              <details className="mt-3 rounded-[12px] border border-[var(--border)] bg-white px-3 py-2">
+                <summary className="cursor-pointer text-sm font-medium text-[var(--text)]">
+                  Ver detalhes
+                </summary>
+                <ul className="mt-2 space-y-2 text-sm text-[var(--muted)]">
+                  {invalidWidgets.map((issue, index) => (
+                    <li key={`${issue.widgetId || index}-${issue.reason}-${issue.platform || ""}`}>
+                      <span className="font-semibold text-[var(--text)]">
+                        {widgetTitleById.get(issue.widgetId) ||
+                          issue.widgetTitle ||
+                          "Widget"}
+                      </span>
+                      {" - "}
+                      {describeIssue(issue)}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="mt-6">
           <GlobalFiltersBar
@@ -438,7 +524,7 @@ export default function ReportsV2Viewer() {
               brandId={dashboard.brandId}
               globalFilters={debouncedFilters}
               activePageId={activePageId}
-              onWidgetStatusChange={handleWidgetStatusChange}
+              healthIssuesByWidgetId={healthIssuesByWidgetId}
             />
             </>
           ) : (
@@ -507,7 +593,8 @@ export default function ReportsV2Viewer() {
                   onClick={handleGenerateShare}
                   disabled={
                     createShareMutation.isPending ||
-                    dashboard?.status !== "PUBLISHED"
+                    dashboard?.status !== "PUBLISHED" ||
+                    isHealthBlocked
                   }
                 >
                   {createShareMutation.isPending ? "Gerando..." : "Gerar link"}
@@ -515,7 +602,7 @@ export default function ReportsV2Viewer() {
                 <Button
                   variant="secondary"
                   onClick={handleRotateShare}
-                  disabled={!shareEnabled || rotateShareMutation.isPending}
+                  disabled={!shareEnabled || rotateShareMutation.isPending || isHealthBlocked}
                   leftIcon={RefreshCw}
                 >
                   {rotateShareMutation.isPending ? "Rotacionando..." : "Rotacionar link"}
@@ -524,6 +611,11 @@ export default function ReportsV2Viewer() {
               {shareEnabled && !shareUrl ? (
                 <p className="mt-2 text-xs text-[var(--muted)]">
                   Link ativo. Para copiar um novo link, clique em "Rotacionar link".
+                </p>
+              ) : null}
+              {isHealthBlocked ? (
+                <p className="mt-2 text-xs text-amber-700">
+                  Compartilhamento bloqueado ate resolver as conexoes pendentes.
                 </p>
               ) : null}
             </div>
@@ -545,6 +637,50 @@ export default function ReportsV2Viewer() {
                   : "Desativar compartilhamento"}
               </Button>
             ) : null}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(blockedAction)} onOpenChange={(open) => !open && setBlockedAction(null)}>
+        <DialogContent className="max-w-[540px]">
+          <DialogHeader>
+            <DialogTitle>
+              {blockedAction === "share"
+                ? "Compartilhamento bloqueado"
+                : "Exportacao bloqueada"}
+            </DialogTitle>
+            <DialogDescription>
+              Nao e possivel {blockedAction === "share" ? "compartilhar" : "exportar"} este
+              relatorio enquanto houver conexoes pendentes.
+            </DialogDescription>
+          </DialogHeader>
+
+          {missingPlatforms.length ? (
+            <div className="flex flex-wrap gap-2">
+              {missingPlatforms.map((platform) => (
+                <span
+                  key={`blocked-${platform}`}
+                  className="rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700"
+                >
+                  {formatPlatform(platform)}
+                </span>
+              ))}
+            </div>
+          ) : null}
+
+          <DialogFooter className="flex flex-wrap justify-end gap-2">
+            <Button variant="secondary" onClick={() => setBlockedAction(null)}>
+              Fechar
+            </Button>
+            <Button
+              onClick={() => {
+                const firstPlatform = missingPlatforms[0] || null;
+                setBlockedAction(null);
+                navigate(buildConnectionsPath(dashboard?.brandId, firstPlatform));
+              }}
+            >
+              Gerenciar conexoes
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

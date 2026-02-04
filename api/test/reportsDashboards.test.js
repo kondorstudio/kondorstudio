@@ -47,6 +47,7 @@ function createFakePrisma() {
     clients: [],
     brandGroups: [],
     publicShares: [],
+    brandSourceConnections: [],
   };
   const prisma = {
     client: {
@@ -204,6 +205,21 @@ function createFakePrisma() {
           };
         });
         return { count };
+      },
+    },
+    brandSourceConnection: {
+      findMany: async ({ where, select }) => {
+        let items = state.brandSourceConnections.filter((item) => {
+          if (where.tenantId && item.tenantId !== where.tenantId) return false;
+          if (where.brandId && item.brandId !== where.brandId) return false;
+          if (where.status && item.status !== where.status) return false;
+          if (where.platform?.in && !where.platform.in.includes(item.platform)) return false;
+          return true;
+        });
+        if (select?.platform) {
+          items = items.map((item) => ({ platform: item.platform }));
+        }
+        return items.map((item) => ({ ...item }));
       },
     },
     $transaction: async (fn) => fn(prisma),
@@ -528,4 +544,62 @@ test('dashboard not published cannot create public share', async () => {
 
   assert.equal(shareRes.statusCode, 400);
   assert.equal(shareRes.body.error.code, 'DASHBOARD_NOT_PUBLISHED');
+});
+
+test('public share is blocked when dashboard health is BLOCKED', async () => {
+  const { app, state } = buildApp();
+  const brandId = randomUUID();
+  state.clients.push({ id: brandId, tenantId: 'tenant-1' });
+
+  const createRes = await request(app)
+    .post('/api/reports/dashboards')
+    .set('x-role', 'MEMBER')
+    .send({ name: 'Bloqueado', brandId });
+
+  const blockedLayout = {
+    ...buildLayout(),
+    pages: [
+      {
+        id: randomUUID(),
+        name: 'Pagina 1',
+        widgets: [
+          {
+            id: randomUUID(),
+            type: 'bar',
+            title: 'Meta Ads',
+            layout: { x: 0, y: 0, w: 6, h: 4, minW: 2, minH: 2 },
+            query: {
+              dimensions: ['platform'],
+              metrics: ['spend'],
+              filters: [{ field: 'platform', op: 'eq', value: 'META_ADS' }],
+            },
+            viz: {},
+          },
+        ],
+      },
+    ],
+    widgets: undefined,
+  };
+
+  await request(app)
+    .post(`/api/reports/dashboards/${createRes.body.id}/versions`)
+    .set('x-role', 'MEMBER')
+    .send({ layoutJson: blockedLayout });
+
+  const versionsRes = await request(app)
+    .get(`/api/reports/dashboards/${createRes.body.id}/versions`)
+    .set('x-role', 'MEMBER');
+  const blockedVersionId = versionsRes.body.items[0].id;
+
+  await request(app)
+    .post(`/api/reports/dashboards/${createRes.body.id}/publish`)
+    .set('x-role', 'MEMBER')
+    .send({ versionId: blockedVersionId });
+
+  const shareRes = await request(app)
+    .post(`/api/reports/dashboards/${createRes.body.id}/public-share`)
+    .set('x-role', 'MEMBER');
+
+  assert.equal(shareRes.statusCode, 422);
+  assert.equal(shareRes.body?.error?.code, 'DASHBOARD_BLOCKED');
 });

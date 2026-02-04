@@ -284,6 +284,20 @@ async function getPublicShare(req, res) {
   }
 }
 
+async function getHealth(req, res) {
+  try {
+    const health = await dashboardsService.getDashboardHealth(req.tenantId, req.params.id);
+    if (!health) {
+      return res.status(404).json({
+        error: { code: 'DASHBOARD_NOT_FOUND', message: 'Dashboard não encontrado', details: null },
+      });
+    }
+    return res.json(health);
+  } catch (err) {
+    return handleError(res, err);
+  }
+}
+
 async function createPublicShare(req, res) {
   try {
     const share = await dashboardsService.createPublicShare(
@@ -360,6 +374,7 @@ module.exports = {
   rollback,
   clone,
   getPublicShare,
+  getHealth,
   createPublicShare,
   rotatePublicShare,
   revokePublicShare,

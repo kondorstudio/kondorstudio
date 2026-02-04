@@ -4,6 +4,7 @@ const {
   reportLayoutSchema,
   normalizeLayout,
 } = require('../../shared/validators/reportLayout');
+const { computeDashboardHealth } = require('./dashboardHealth.service');
 
 const DEFAULT_LAYOUT = {
   theme: {
@@ -468,13 +469,34 @@ async function getPublicShareStatus(tenantId, dashboardId) {
   };
 }
 
+async function getDashboardHealth(tenantId, dashboardId) {
+  const dashboard = await prisma.reportDashboard.findFirst({
+    where: { id: dashboardId, tenantId },
+    include: { publishedVersion: true },
+  });
+  if (!dashboard) return null;
+  return computeDashboardHealth(dashboard);
+}
+
 async function createPublicShare(tenantId, userId, dashboardId) {
   const dashboard = await prisma.reportDashboard.findFirst({
     where: { id: dashboardId, tenantId },
+    include: { publishedVersion: true },
   });
   if (!dashboard) return null;
 
   await ensureDashboardPublished(dashboard);
+
+  const health = await computeDashboardHealth(dashboard);
+  if (health?.status === 'BLOCKED') {
+    const err = new Error(
+      'Nao e possivel compartilhar este relatorio enquanto houver conexoes pendentes.',
+    );
+    err.code = 'DASHBOARD_BLOCKED';
+    err.status = 422;
+    err.details = health;
+    throw err;
+  }
 
   const existing = await getActiveShare(tenantId, dashboard.id);
   if (existing) {
@@ -543,10 +565,22 @@ async function createPublicShare(tenantId, userId, dashboardId) {
 async function rotatePublicShare(tenantId, userId, dashboardId) {
   const dashboard = await prisma.reportDashboard.findFirst({
     where: { id: dashboardId, tenantId },
+    include: { publishedVersion: true },
   });
   if (!dashboard) return null;
 
   await ensureDashboardPublished(dashboard);
+
+  const health = await computeDashboardHealth(dashboard);
+  if (health?.status === 'BLOCKED') {
+    const err = new Error(
+      'Nao e possivel compartilhar este relatorio enquanto houver conexoes pendentes.',
+    );
+    err.code = 'DASHBOARD_BLOCKED';
+    err.status = 422;
+    err.details = health;
+    throw err;
+  }
 
   const token = generateShareToken();
   const tokenHash = hashShareToken(token);
@@ -657,6 +691,7 @@ module.exports = {
   rollbackDashboard,
   cloneDashboard,
   getPublicShareStatus,
+  getDashboardHealth,
   createPublicShare,
   rotatePublicShare,
   revokePublicShare,

@@ -24,7 +24,7 @@ export default function DashboardRenderer({
   publicToken,
   activePageId,
   globalFilters,
-  onWidgetStatusChange,
+  healthIssuesByWidgetId,
 }) {
   const normalized = normalizeLayoutFront(layout);
   const activePage = getActivePage(normalized, activePageId);
@@ -83,7 +83,7 @@ export default function DashboardRenderer({
                 publicToken={publicToken}
                 pageId={activePage?.id}
                 globalFilters={globalFilters}
-                onStatusChange={onWidgetStatusChange}
+                healthIssue={healthIssuesByWidgetId?.[widget.id] || null}
               />
             </div>
           </div>

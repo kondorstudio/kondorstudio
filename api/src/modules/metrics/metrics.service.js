@@ -696,7 +696,6 @@ async function queryMetrics(tenantId, payload = {}) {
 
 module.exports = {
   queryMetrics,
-  ensureBrandConnections,
   buildCompareRange,
   buildMetricsPlan,
   buildWhereClause,
