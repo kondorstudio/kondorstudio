@@ -21,6 +21,7 @@ import { formatNumber } from "@/utils/formatNumber.js";
 import WidgetSkeleton from "@/components/reports/widgets/WidgetSkeleton.jsx";
 import WidgetEmptyState from "@/components/reports/widgets/WidgetEmptyState.jsx";
 import WidgetErrorState from "@/components/reports/widgets/WidgetErrorState.jsx";
+import WidgetText from "@/components/reportsV2/widgets/WidgetText.jsx";
 import {
   buildWidgetQueryKey,
   mergeWidgetFilters,
@@ -255,13 +256,18 @@ export default function WidgetRenderer({
         ? base44.publicReports.queryMetrics(payload)
         : base44.reportsV2.queryMetrics(payload),
     enabled: Boolean(
-      (isPublic ? publicToken : brandId) &&
+      widgetType !== "text" &&
+        (isPublic ? publicToken : brandId) &&
         dateRange.start &&
         dateRange.end &&
         metrics.length
     ),
     keepPreviousData: true,
   });
+
+  if (widgetType === "text") {
+    return <WidgetText widget={widget} />;
+  }
 
   if (!metrics.length) {
     return (

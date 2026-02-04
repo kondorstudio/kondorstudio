@@ -11,8 +11,44 @@ export default function StylePanel({
   onTitleChange,
   onShowLegendChange,
   onFormatChange,
+  onTextContentChange,
 }) {
   if (!widget) return null;
+
+  if (widget.type === "text") {
+    return (
+      <div className="space-y-4">
+        <div>
+          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
+            Titulo do bloco
+          </label>
+          <Input
+            value={widget.title || ""}
+            onChange={(event) => onTitleChange(event.target.value)}
+            placeholder="Titulo opcional"
+          />
+        </div>
+        <div>
+          <label
+            htmlFor={`widget-text-content-${widget.id}`}
+            className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]"
+          >
+            Conteudo
+          </label>
+          <textarea
+            id={`widget-text-content-${widget.id}`}
+            className="min-h-[140px] w-full rounded-[12px] border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+            value={String(widget?.content?.text || "")}
+            onChange={(event) => onTextContentChange(event.target.value)}
+            placeholder="Digite seu texto..."
+          />
+        </div>
+        <div className="rounded-[12px] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-xs text-[var(--text-muted)]">
+          Blocos de texto usam formato plain neste momento.
+        </div>
+      </div>
+    );
+  }
 
   const formatValue = formatOptions.some(
     (option) => option.value === widget?.viz?.format

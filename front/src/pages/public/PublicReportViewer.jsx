@@ -9,6 +9,7 @@ import { base44 } from "@/apiClient/base44Client";
 import {
   useDebouncedValue,
   normalizeLayoutFront,
+  DEFAULT_FILTER_CONTROLS,
 } from "@/components/reportsV2/utils.js";
 
 function buildInitialFilters(layout) {
@@ -18,6 +19,7 @@ function buildInitialFilters(layout) {
     accounts: [],
     compareTo: null,
     autoRefreshSec: 0,
+    controls: DEFAULT_FILTER_CONTROLS,
   };
   if (!layout?.globalFilters) return base;
   return {
@@ -45,6 +47,7 @@ export default function PublicReportViewer() {
   const layout = data?.layoutJson || null;
   const normalizedLayout = normalizeLayoutFront(layout);
   const pages = normalizedLayout?.pages || [];
+  const globalFilterControls = normalizedLayout?.globalFilters?.controls;
   const [activePageId, setActivePageId] = React.useState(pages[0]?.id || null);
   const [filters, setFilters] = React.useState(() =>
     buildInitialFilters(normalizedLayout)
@@ -116,7 +119,11 @@ export default function PublicReportViewer() {
 
         {!isPdf ? (
           <div className="mb-6">
-            <GlobalFiltersBar filters={filters} onChange={setFilters} />
+            <GlobalFiltersBar
+              filters={filters}
+              controls={globalFilterControls}
+              onChange={setFilters}
+            />
           </div>
         ) : null}
 

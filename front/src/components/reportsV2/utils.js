@@ -14,6 +14,12 @@ export const DEFAULT_REPORT_THEME = Object.freeze({
   radius: 16,
 });
 
+export const DEFAULT_FILTER_CONTROLS = Object.freeze({
+  showDateRange: true,
+  showPlatforms: true,
+  showAccounts: true,
+});
+
 function normalizeHexColor(value, fallback) {
   if (typeof value !== "string") return fallback;
   const trimmed = value.trim();
@@ -103,7 +109,14 @@ export function generateUuid() {
 export function normalizeLayoutFront(layout) {
   if (!layout || typeof layout !== "object") return null;
   const theme = normalizeThemeFront(layout.theme || {});
-  const globalFilters = layout.globalFilters || {};
+  const rawGlobalFilters = layout.globalFilters || {};
+  const globalFilters = {
+    ...rawGlobalFilters,
+    controls: {
+      ...DEFAULT_FILTER_CONTROLS,
+      ...(rawGlobalFilters?.controls || {}),
+    },
+  };
 
   const normalizePage = (page, index) => ({
     id: page?.id || generateUuid(),
@@ -163,9 +176,25 @@ export function mergeWidgetFilters(widgetFilters = [], globalFilters = {}) {
   const platforms = Array.isArray(globalFilters?.platforms)
     ? globalFilters.platforms
     : [];
+  const accounts = Array.isArray(globalFilters?.accounts)
+    ? globalFilters.accounts
+    : [];
 
   if (platforms.length) {
     merged.push({ field: "platform", op: "in", value: platforms });
+  }
+
+  const accountIds = Array.from(
+    new Set(
+      accounts
+        .map((account) =>
+          typeof account === "string" ? account : account?.external_account_id
+        )
+        .filter(Boolean)
+    )
+  );
+  if (accountIds.length) {
+    merged.push({ field: "account_id", op: "in", value: accountIds });
   }
 
   return merged;

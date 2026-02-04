@@ -16,6 +16,12 @@ const DEFAULT_REPORT_THEME = Object.freeze({
   radius: 16,
 });
 
+const DEFAULT_FILTER_CONTROLS = Object.freeze({
+  showDateRange: true,
+  showPlatforms: true,
+  showAccounts: true,
+});
+
 const themeSchema = z
   .object({
     mode: z.enum(['light']).default('light'),
@@ -79,6 +85,14 @@ const globalFiltersSchema = z
       z.literal(60),
       z.literal(300),
     ]),
+    controls: z
+      .object({
+        showDateRange: z.boolean().optional(),
+        showPlatforms: z.boolean().optional(),
+        showAccounts: z.boolean().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -146,17 +160,45 @@ const vizSchema = z
   .strict()
   .optional();
 
+const textContentSchema = z
+  .object({
+    text: z.string().min(1),
+    format: z.enum(['plain', 'markdown']).default('plain'),
+  })
+  .strict();
+
 const widgetSchema = z
   .object({
     id: z.string().uuid(),
-    type: z.enum(['kpi', 'timeseries', 'bar', 'table', 'pie']),
+    type: z.enum(['kpi', 'timeseries', 'bar', 'table', 'pie', 'text']),
     title: z.string().min(1),
     layout: layoutSchema,
-    query: querySchema,
+    query: querySchema.optional(),
+    content: textContentSchema.optional(),
     viz: vizSchema,
   })
   .strict()
   .superRefine((value, ctx) => {
+    if (value.type === 'text') {
+      if (!value.content) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Widget text exige content',
+          path: ['content'],
+        });
+      }
+      return;
+    }
+
+    if (!value.query) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Widget exige query',
+        path: ['query'],
+      });
+      return;
+    }
+
     const dimensions = Array.isArray(value.query?.dimensions)
       ? value.query.dimensions
       : [];
@@ -309,11 +351,18 @@ function generateUuid() {
 function normalizeLayout(parsedLayout) {
   const parsedTheme = themeSchema.safeParse(parsedLayout?.theme || {});
   const theme = parsedTheme.success ? parsedTheme.data : DEFAULT_REPORT_THEME;
+  const globalFilters = {
+    ...parsedLayout.globalFilters,
+    controls: {
+      ...DEFAULT_FILTER_CONTROLS,
+      ...(parsedLayout.globalFilters?.controls || {}),
+    },
+  };
 
   if (Array.isArray(parsedLayout.pages) && parsedLayout.pages.length) {
     return {
       theme,
-      globalFilters: parsedLayout.globalFilters,
+      globalFilters,
       pages: parsedLayout.pages.map((page) => ({
         id: page.id,
         name: page.name,
@@ -325,7 +374,7 @@ function normalizeLayout(parsedLayout) {
   const widgets = Array.isArray(parsedLayout.widgets) ? parsedLayout.widgets : [];
   return {
     theme,
-    globalFilters: parsedLayout.globalFilters,
+    globalFilters,
     pages: [
       {
         id: generateUuid(),
@@ -342,6 +391,7 @@ function validateReportLayout(payload) {
 
 module.exports = {
   DEFAULT_REPORT_THEME,
+  DEFAULT_FILTER_CONTROLS,
   reportLayoutSchema,
   validateReportLayout,
   normalizeLayout,

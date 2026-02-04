@@ -6,7 +6,6 @@ import {
   ArrowLeft,
   Plus,
   Copy,
-  Trash2,
   Eye,
   Pencil,
   Save,
@@ -18,6 +17,8 @@ import DashboardRenderer from "@/components/reportsV2/DashboardRenderer.jsx";
 import GlobalFiltersBar from "@/components/reportsV2/GlobalFiltersBar.jsx";
 import ThemeProvider from "@/components/reportsV2/ThemeProvider.jsx";
 import SidePanel from "@/components/reportsV2/editor/SidePanel.jsx";
+import AddMenu from "@/components/reportsV2/editor/AddMenu.jsx";
+import WidgetContextMenu from "@/components/reportsV2/editor/WidgetContextMenu.jsx";
 import {
   normalizeFilterArrayValue,
   normalizeFilterSingleValue,
@@ -30,6 +31,7 @@ import {
   generateUuid,
   normalizeThemeFront,
   DEFAULT_REPORT_THEME,
+  DEFAULT_FILTER_CONTROLS,
 } from "@/components/reportsV2/utils.js";
 import { Button } from "@/components/ui/button.jsx";
 import { Input } from "@/components/ui/input.jsx";
@@ -53,6 +55,7 @@ const DEFAULT_LAYOUT = {
     accounts: [],
     compareTo: null,
     autoRefreshSec: 0,
+    controls: DEFAULT_FILTER_CONTROLS,
   },
   pages: [
     {
@@ -69,6 +72,7 @@ const WIDGET_TYPES = [
   { value: "bar", label: "Bar" },
   { value: "table", label: "Table" },
   { value: "pie", label: "Pie" },
+  { value: "text", label: "Texto" },
 ];
 
 const METRIC_OPTIONS = [
@@ -133,6 +137,10 @@ const WIDGET_PRESETS = {
     layout: { w: 4, h: 4, minW: 3, minH: 3 },
     query: { metrics: ["spend"], dimensions: ["platform"] },
   },
+  text: {
+    title: "Bloco de texto",
+    layout: { w: 6, h: 4, minW: 3, minH: 2 },
+  },
 };
 
 function mergeLayoutDefaults(layout) {
@@ -149,6 +157,10 @@ function mergeLayoutDefaults(layout) {
         ...DEFAULT_LAYOUT.globalFilters.dateRange,
         ...(normalized.globalFilters?.dateRange || {}),
       },
+      controls: {
+        ...DEFAULT_FILTER_CONTROLS,
+        ...(normalized.globalFilters?.controls || {}),
+      },
     },
     pages:
       Array.isArray(normalized.pages) && normalized.pages.length
@@ -164,6 +176,7 @@ function buildInitialFilters(layout) {
     accounts: [],
     compareTo: null,
     autoRefreshSec: 0,
+    controls: DEFAULT_FILTER_CONTROLS,
   };
   const globalFilters = layout?.globalFilters || {};
   return {
@@ -173,6 +186,18 @@ function buildInitialFilters(layout) {
       ...base.dateRange,
       ...(globalFilters.dateRange || {}),
     },
+    controls: {
+      ...DEFAULT_FILTER_CONTROLS,
+      ...(globalFilters.controls || {}),
+    },
+  };
+}
+
+function normalizeControlFlags(rawControls) {
+  return {
+    showDateRange: rawControls?.showDateRange !== false,
+    showPlatforms: rawControls?.showPlatforms !== false,
+    showAccounts: rawControls?.showAccounts !== false,
   };
 }
 
@@ -204,7 +229,43 @@ function sanitizeSortForFields(sort, fields) {
 
 function sanitizeLayoutForSave(layout) {
   const merged = mergeLayoutDefaults(layout);
+  const controls = normalizeControlFlags(merged.globalFilters?.controls);
   const sanitizeWidget = (widget) => {
+    const layoutValue = widget.layout || {};
+    const w = normalizeLayoutValue(layoutValue.w, 4) || 4;
+    const h = normalizeLayoutValue(layoutValue.h, 3) || 3;
+    const minW = Math.max(1, normalizeLayoutValue(layoutValue.minW, 2));
+    const minH = Math.max(1, normalizeLayoutValue(layoutValue.minH, 2));
+    const baseWidget = {
+      id: widget.id,
+      type: widget.type || "kpi",
+      title: String(widget.title || "Widget"),
+      layout: {
+        x: normalizeLayoutValue(layoutValue.x, 0),
+        y: normalizeLayoutValue(layoutValue.y, 0),
+        w,
+        h,
+        minW: Math.min(minW, w),
+        minH: Math.min(minH, h),
+      },
+      viz: {
+        variant: widget?.viz?.variant || "default",
+        showLegend: widget?.viz?.showLegend !== false,
+        format: widget?.viz?.format || "auto",
+        options: widget?.viz?.options || {},
+      },
+    };
+
+    if (baseWidget.type === "text") {
+      return {
+        ...baseWidget,
+        content: {
+          text: String(widget?.content?.text || "Digite seu texto..."),
+          format: widget?.content?.format === "markdown" ? "markdown" : "plain",
+        },
+      };
+    }
+
     const metrics = Array.isArray(widget?.query?.metrics)
       ? widget.query.metrics.filter(Boolean)
       : [];
@@ -238,24 +299,8 @@ function sanitizeLayoutForSave(layout) {
       ? Math.max(1, Math.min(500, Math.round(limitValue)))
       : null;
 
-    const layoutValue = widget.layout || {};
-    const w = normalizeLayoutValue(layoutValue.w, 4) || 4;
-    const h = normalizeLayoutValue(layoutValue.h, 3) || 3;
-    const minW = Math.max(1, normalizeLayoutValue(layoutValue.minW, 2));
-    const minH = Math.max(1, normalizeLayoutValue(layoutValue.minH, 2));
-
     return {
-      id: widget.id,
-      type: widget.type || "kpi",
-      title: String(widget.title || "Widget"),
-      layout: {
-        x: normalizeLayoutValue(layoutValue.x, 0),
-        y: normalizeLayoutValue(layoutValue.y, 0),
-        w,
-        h,
-        minW: Math.min(minW, w),
-        minH: Math.min(minH, h),
-      },
+      ...baseWidget,
       query: {
         metrics,
         dimensions,
@@ -264,18 +309,15 @@ function sanitizeLayoutForSave(layout) {
         ...(sort ? { sort } : {}),
         ...(limit ? { limit } : {}),
       },
-      viz: {
-        variant: widget?.viz?.variant || "default",
-        showLegend: widget?.viz?.showLegend !== false,
-        format: widget?.viz?.format || "auto",
-        options: widget?.viz?.options || {},
-      },
     };
   };
 
   return {
     theme: merged.theme,
-    globalFilters: merged.globalFilters,
+    globalFilters: {
+      ...merged.globalFilters,
+      controls,
+    },
     pages: merged.pages.map((page, index) => ({
       id: page.id || generateUuid(),
       name:
@@ -313,16 +355,17 @@ function validateLayout(layout) {
     const dimensions = Array.isArray(widget?.query?.dimensions)
       ? widget.query.dimensions.filter(Boolean)
       : [];
+    const isTextWidget = widget?.type === "text";
 
     if (!widget?.title || !String(widget.title).trim()) {
       errors.push("Titulo obrigatorio");
     }
 
-    if (!metrics.length) {
+    if (!isTextWidget && !metrics.length) {
       errors.push("Selecione pelo menos uma metrica");
     }
 
-    if (widget?.type === "kpi" && metrics.length > 1) {
+    if (!isTextWidget && widget?.type === "kpi" && metrics.length > 1) {
       errors.push("KPI aceita apenas 1 metrica");
     }
 
@@ -347,43 +390,52 @@ function validateLayout(layout) {
       }
     }
 
-    const filters = Array.isArray(widget?.query?.filters)
-      ? widget.query.filters
-      : [];
-    filters.forEach((filter) => {
-      if (!filter?.field || !filter?.op) {
-        errors.push("Filtro incompleto");
-        return;
-      }
-      if (!allowedFilterFields.has(filter.field)) {
-        errors.push("Campo de filtro invalido");
-      }
-      const value = filter.value;
-      if (filter.op === "in") {
-        const values = Array.isArray(value) ? value : [];
-        if (!values.length) {
-          errors.push("Filtro IN exige valores");
+    if (!isTextWidget) {
+      const filters = Array.isArray(widget?.query?.filters)
+        ? widget.query.filters
+        : [];
+      filters.forEach((filter) => {
+        if (!filter?.field || !filter?.op) {
+          errors.push("Filtro incompleto");
+          return;
         }
-      } else if (!value || !String(value).trim()) {
-        errors.push("Filtro EQ exige valor");
-      }
-    });
+        if (!allowedFilterFields.has(filter.field)) {
+          errors.push("Campo de filtro invalido");
+        }
+        const value = filter.value;
+        if (filter.op === "in") {
+          const values = Array.isArray(value) ? value : [];
+          if (!values.length) {
+            errors.push("Filtro IN exige valores");
+          }
+        } else if (!value || !String(value).trim()) {
+          errors.push("Filtro EQ exige valor");
+        }
+      });
 
-    const sort = widget?.query?.sort;
-    if (sort) {
-      const sortableFields = new Set([...dimensions, ...metrics]);
-      if (!sort.field || !sortableFields.has(sort.field)) {
-        errors.push("Ordenacao deve usar dimensao ou metrica selecionada");
+      const sort = widget?.query?.sort;
+      if (sort) {
+        const sortableFields = new Set([...dimensions, ...metrics]);
+        if (!sort.field || !sortableFields.has(sort.field)) {
+          errors.push("Ordenacao deve usar dimensao ou metrica selecionada");
+        }
+        if (!["asc", "desc"].includes(sort.direction)) {
+          errors.push("Direcao de ordenacao invalida");
+        }
       }
-      if (!["asc", "desc"].includes(sort.direction)) {
-        errors.push("Direcao de ordenacao invalida");
-      }
-    }
 
-    if (widget?.query?.limit !== undefined && widget?.query?.limit !== null) {
-      const limit = Number(widget.query.limit);
-      if (!Number.isInteger(limit) || limit < 1 || limit > 500) {
-        errors.push("Limite deve ser um inteiro entre 1 e 500");
+      if (widget?.query?.limit !== undefined && widget?.query?.limit !== null) {
+        const limit = Number(widget.query.limit);
+        if (!Number.isInteger(limit) || limit < 1 || limit > 500) {
+          errors.push("Limite deve ser um inteiro entre 1 e 500");
+        }
+      }
+    } else {
+      if (
+        widget?.content?.text !== undefined &&
+        !String(widget.content.text).trim()
+      ) {
+        errors.push("Texto do bloco nao pode ficar vazio");
       }
     }
 
@@ -400,6 +452,11 @@ function validateLayout(layout) {
 }
 
 function buildWidgetSummary(widget) {
+  if (widget?.type === "text") {
+    const text = String(widget?.content?.text || "").trim();
+    if (!text) return "Bloco de texto vazio";
+    return text.length > 64 ? `${text.slice(0, 61)}...` : text;
+  }
   const metrics = Array.isArray(widget?.query?.metrics)
     ? widget.query.metrics
     : [];
@@ -433,6 +490,7 @@ function EditorWidgetCard({
 }) {
   return (
     <div
+      data-editor-widget-card="true"
       role="button"
       tabIndex={0}
       onClick={() => onSelect(widget.id)}
@@ -461,27 +519,12 @@ function EditorWidgetCard({
             {errorCount || 1} erro{errorCount === 1 ? "" : "s"}
           </span>
         ) : null}
-        <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              onDuplicate(widget.id);
-            }}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-[var(--border)] text-[var(--text-muted)] transition hover:border-slate-300 hover:text-[var(--text)]"
-          >
-            <Copy className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              onRemove(widget.id);
-            }}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-rose-200 text-rose-500 transition hover:border-rose-300"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
+        <div className="opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
+          <WidgetContextMenu
+            onDuplicate={() => onDuplicate(widget.id)}
+            onDelete={() => onRemove(widget.id)}
+            deleteLabel="Deletar"
+          />
         </div>
       </div>
       <div className="mt-3 text-xs text-[var(--text-muted)]">
@@ -505,7 +548,6 @@ export default function ReportsV2Editor() {
   const [selectedWidgetId, setSelectedWidgetId] = React.useState(null);
   const [activeTab, setActiveTab] = React.useState("data");
   const [previewMode, setPreviewMode] = React.useState(false);
-  const [showAddMenu, setShowAddMenu] = React.useState(false);
   const [previewFilters, setPreviewFilters] = React.useState(
     buildInitialFilters(DEFAULT_LAYOUT)
   );
@@ -525,7 +567,6 @@ export default function ReportsV2Editor() {
   const [themeFormError, setThemeFormError] = React.useState("");
   const [lastSavedKey, setLastSavedKey] = React.useState("");
   const [hasHydrated, setHasHydrated] = React.useState(false);
-  const addMenuRef = React.useRef(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["reportsV2-dashboard", id],
@@ -567,17 +608,6 @@ export default function ReportsV2Editor() {
     setLastSavedKey(stableStringify(initialPayload));
     setHasHydrated(true);
   }, [layoutFromApi]);
-
-  React.useEffect(() => {
-    if (!showAddMenu) return;
-    const handleClick = (event) => {
-      if (addMenuRef.current && !addMenuRef.current.contains(event.target)) {
-        setShowAddMenu(false);
-      }
-    };
-    window.addEventListener("mousedown", handleClick);
-    return () => window.removeEventListener("mousedown", handleClick);
-  }, [showAddMenu]);
 
   React.useEffect(() => {
     const pages = Array.isArray(layoutJson.pages) ? layoutJson.pages : [];
@@ -697,6 +727,7 @@ export default function ReportsV2Editor() {
   const versions = Array.isArray(versionsQuery.data?.items)
     ? versionsQuery.data.items
     : [];
+  const controlFlags = normalizeControlFlags(layoutJson?.globalFilters?.controls);
 
   const validationSummary = React.useMemo(() => {
     if (!validation.issues.length) return [];
@@ -813,14 +844,32 @@ export default function ReportsV2Editor() {
     saveMutation.isPending,
   ]);
 
+  const addWidgetToActivePage = React.useCallback(
+    (widget) => {
+      if (!activePageId || !widget) return;
+      setLayoutJson((prev) => {
+        const nextPages = prev.pages.map((page) => {
+          if (page.id !== activePageId) return page;
+          return {
+            ...page,
+            widgets: [...(page.widgets || []), widget],
+          };
+        });
+        return { ...prev, pages: nextPages };
+      });
+      setSelectedWidgetId(widget.id);
+    },
+    [activePageId]
+  );
+
   const handleAddWidget = (type) => {
-    const preset = WIDGET_PRESETS[type] || WIDGET_PRESETS.kpi;
     if (!activePageId) return;
+    const preset = WIDGET_PRESETS[type] || WIDGET_PRESETS.kpi;
     const position = getNextWidgetPosition(activeWidgets);
-    const newWidget = {
+    const baseWidget = {
       id: generateUuid(),
       type,
-      title: preset.title,
+      title: preset.title || "Widget",
       layout: {
         x: position.x,
         y: position.y,
@@ -829,6 +878,25 @@ export default function ReportsV2Editor() {
         minW: preset.layout.minW,
         minH: preset.layout.minH,
       },
+    };
+    if (type === "text") {
+      addWidgetToActivePage({
+        ...baseWidget,
+        content: {
+          text: "Digite seu texto...",
+          format: "plain",
+        },
+        viz: {
+          variant: "default",
+          showLegend: false,
+          format: "auto",
+          options: {},
+        },
+      });
+      return;
+    }
+    addWidgetToActivePage({
+      ...baseWidget,
       query: {
         metrics: preset.query.metrics,
         dimensions: preset.query.dimensions,
@@ -842,49 +910,37 @@ export default function ReportsV2Editor() {
         format: "auto",
         options: {},
       },
-    };
-    setLayoutJson((prev) => {
-      const pages = prev.pages.map((page) => {
-        if (page.id !== activePageId) return page;
-        return {
-          ...page,
-          widgets: [...(page.widgets || []), newWidget],
-        };
-      });
-      return { ...prev, pages };
     });
-    setSelectedWidgetId(newWidget.id);
-    setShowAddMenu(false);
+  };
+
+  const handleAddTextWidget = () => {
+    handleAddWidget("text");
   };
 
   const handleDuplicateWidget = (widgetId) => {
     const widget = activeWidgets.find((item) => item.id === widgetId);
     if (!widget) return;
-    const position = getNextWidgetPosition(activeWidgets);
+    const width = Math.max(1, Number(widget.layout?.w || 4));
+    const originalX = Math.max(0, Number(widget.layout?.x || 0));
+    const originalY = Math.max(0, Number(widget.layout?.y || 0));
+    const nextX = Math.max(0, Math.min(originalX + 1, 12 - width));
+    const nextY = originalY + 1;
     const clone = {
       ...widget,
       id: generateUuid(),
       title: `${widget.title || "Widget"} (copia)`,
       layout: {
         ...widget.layout,
-        x: position.x,
-        y: position.y,
+        x: nextX,
+        y: nextY,
       },
     };
-    setLayoutJson((prev) => {
-      const pages = prev.pages.map((page) => {
-        if (page.id !== activePageId) return page;
-        return {
-          ...page,
-          widgets: [...(page.widgets || []), clone],
-        };
-      });
-      return { ...prev, pages };
-    });
-    setSelectedWidgetId(clone.id);
+    addWidgetToActivePage(clone);
   };
 
   const handleRemoveWidget = (widgetId) => {
+    const ok = window.confirm("Tem certeza que deseja deletar este widget?");
+    if (!ok) return;
     setLayoutJson((prev) => {
       const pages = prev.pages.map((page) => {
         if (page.id !== activePageId) return page;
@@ -898,6 +954,59 @@ export default function ReportsV2Editor() {
     if (selectedWidgetId === widgetId) {
       setSelectedWidgetId(null);
     }
+  };
+
+  const handleEnableControl = (controlKey) => {
+    if (!controlKey) return;
+    setLayoutJson((prev) => ({
+      ...prev,
+      globalFilters: {
+        ...(prev.globalFilters || {}),
+        controls: {
+          ...DEFAULT_FILTER_CONTROLS,
+          ...(prev.globalFilters?.controls || {}),
+          [controlKey]: true,
+        },
+      },
+    }));
+  };
+
+  const handleToggleControl = (controlKey, checked) => {
+    const enabled = Boolean(checked);
+    setLayoutJson((prev) => {
+      const currentGlobal = prev.globalFilters || {};
+      const nextGlobal = {
+        ...currentGlobal,
+        controls: {
+          ...DEFAULT_FILTER_CONTROLS,
+          ...(currentGlobal.controls || {}),
+          [controlKey]: enabled,
+        },
+      };
+      if (!enabled) {
+        if (controlKey === "showPlatforms") nextGlobal.platforms = [];
+        if (controlKey === "showAccounts") nextGlobal.accounts = [];
+      }
+      return {
+        ...prev,
+        globalFilters: nextGlobal,
+      };
+    });
+    setPreviewFilters((prev) => {
+      const next = {
+        ...prev,
+        controls: {
+          ...DEFAULT_FILTER_CONTROLS,
+          ...(prev?.controls || {}),
+          [controlKey]: enabled,
+        },
+      };
+      if (!enabled) {
+        if (controlKey === "showPlatforms") next.platforms = [];
+        if (controlKey === "showAccounts") next.accounts = [];
+      }
+      return next;
+    });
   };
 
   const handleAddPage = () => {
@@ -990,6 +1099,22 @@ export default function ReportsV2Editor() {
   const handleChangeWidgetType = (nextType) => {
     if (!selectedWidget) return;
     updateWidget(selectedWidget.id, (widget) => {
+      if (nextType === "text") {
+        return {
+          ...widget,
+          type: "text",
+          content: {
+            text: String(widget?.content?.text || "Digite seu texto..."),
+            format: widget?.content?.format === "markdown" ? "markdown" : "plain",
+          },
+          viz: {
+            ...widget.viz,
+            showLegend: false,
+          },
+          query: undefined,
+        };
+      }
+
       const metrics = widget.query?.metrics?.length
         ? widget.query.metrics
         : WIDGET_PRESETS[nextType]?.query?.metrics || ["spend"];
@@ -1042,12 +1167,14 @@ export default function ReportsV2Editor() {
         ...widget,
         type: nextType,
         query: nextQuery,
+        content: undefined,
       };
     });
   };
 
   const handleToggleMetric = (metric) => {
     if (!selectedWidget) return;
+    if (selectedWidget.type === "text") return;
     updateWidget(selectedWidget.id, (widget) => {
       const current = Array.isArray(widget.query?.metrics)
         ? widget.query.metrics
@@ -1100,6 +1227,7 @@ export default function ReportsV2Editor() {
 
   const handleDimensionChange = (value) => {
     if (!selectedWidget) return;
+    if (selectedWidget.type === "text") return;
     updateWidget(selectedWidget.id, (widget) => {
       const nextDimensions = value === "none" ? [] : [value];
       const metrics = Array.isArray(widget.query?.metrics) ? widget.query.metrics : [];
@@ -1125,6 +1253,7 @@ export default function ReportsV2Editor() {
 
   const handleFiltersChange = (nextFilters) => {
     if (!selectedWidget) return;
+    if (selectedWidget.type === "text") return;
     updateWidget(selectedWidget.id, (widget) => {
       return {
         ...widget,
@@ -1138,6 +1267,7 @@ export default function ReportsV2Editor() {
 
   const handleSortChange = (sort) => {
     if (!selectedWidget) return;
+    if (selectedWidget.type === "text") return;
     updateWidget(selectedWidget.id, (widget) => {
       const current = { ...(widget.query || {}) };
       if (!sort?.field) {
@@ -1157,6 +1287,7 @@ export default function ReportsV2Editor() {
 
   const handleLimitChange = (rawValue) => {
     if (!selectedWidget) return;
+    if (selectedWidget.type === "text") return;
     const parsed = Number(rawValue);
     updateWidget(selectedWidget.id, (widget) => {
       const current = { ...(widget.query || {}) };
@@ -1181,6 +1312,7 @@ export default function ReportsV2Editor() {
 
   const handleShowLegendChange = (checked) => {
     if (!selectedWidget) return;
+    if (selectedWidget.type === "text") return;
     updateWidget(selectedWidget.id, {
       viz: {
         ...selectedWidget.viz,
@@ -1195,6 +1327,16 @@ export default function ReportsV2Editor() {
       viz: {
         ...selectedWidget.viz,
         format: value,
+      },
+    });
+  };
+
+  const handleTextContentChange = (value) => {
+    if (!selectedWidget || selectedWidget.type !== "text") return;
+    updateWidget(selectedWidget.id, {
+      content: {
+        text: value,
+        format: "plain",
       },
     });
   };
@@ -1455,31 +1597,12 @@ export default function ReportsV2Editor() {
                 Arraste, redimensione e configure os widgets.
               </p>
             </div>
-            <div className="relative" ref={addMenuRef}>
-              <Button
-                onClick={() => setShowAddMenu((prev) => !prev)}
-                leftIcon={Plus}
-              >
-                Adicionar
-              </Button>
-              {showAddMenu ? (
-                <div className="absolute right-0 mt-2 w-48 rounded-[14px] border border-[var(--border)] bg-white p-2 shadow-[var(--shadow-md)]">
-                  {WIDGET_TYPES.map((type) => (
-                    <button
-                      key={type.value}
-                      type="button"
-                      onClick={() => handleAddWidget(type.value)}
-                      className="flex w-full items-center justify-between rounded-[10px] px-3 py-2 text-sm text-[var(--text)] transition hover:bg-[var(--surface-muted)]"
-                    >
-                      {type.label}
-                      <span className="text-xs text-[var(--text-muted)]">
-                        {type.value.toUpperCase()}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
+            <AddMenu
+              controls={controlFlags}
+              onAddChart={handleAddWidget}
+              onAddText={handleAddTextWidget}
+              onEnableControl={handleEnableControl}
+            />
           </div>
 
           {showValidation && hasValidationErrors ? (
@@ -1509,12 +1632,17 @@ export default function ReportsV2Editor() {
                 "linear-gradient(to right, rgba(148,163,184,0.12) 1px, transparent 1px), linear-gradient(to bottom, rgba(148,163,184,0.12) 1px, transparent 1px)",
               backgroundSize: "40px 40px",
             }}
+            onMouseDown={(event) => {
+              if (event.target.closest("[data-editor-widget-card='true']")) return;
+              setSelectedWidgetId(null);
+            }}
           >
             {previewMode ? (
               <div>
                 <div className="mb-4">
                   <GlobalFiltersBar
                     filters={previewFilters}
+                    controls={controlFlags}
                     onChange={setPreviewFilters}
                   />
                 </div>
@@ -1581,6 +1709,7 @@ export default function ReportsV2Editor() {
             onTitleChange={handleTitleChange}
             onShowLegendChange={handleShowLegendChange}
             onFormatChange={handleFormatChange}
+            onTextContentChange={handleTextContentChange}
           />
 
           <div className="mt-4 rounded-[20px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-sm)]">
@@ -1696,6 +1825,49 @@ export default function ReportsV2Editor() {
             <Button className="mt-4 w-full" onClick={handleApplyDashboardTheme}>
               Aplicar tema
             </Button>
+          </div>
+
+          <div className="mt-4 rounded-[20px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-sm)]">
+            <div className="mb-3">
+              <p className="text-sm font-semibold text-[var(--text)]">
+                Controles globais
+              </p>
+              <p className="text-xs text-[var(--muted)]">
+                Defina quais filtros aparecem no viewer.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="flex items-center justify-between rounded-[12px] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-sm">
+                <span className="font-medium text-[var(--text)]">Date range</span>
+                <Checkbox
+                  checked={controlFlags.showDateRange}
+                  onCheckedChange={(checked) =>
+                    handleToggleControl("showDateRange", checked)
+                  }
+                />
+              </label>
+
+              <label className="flex items-center justify-between rounded-[12px] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-sm">
+                <span className="font-medium text-[var(--text)]">Plataformas</span>
+                <Checkbox
+                  checked={controlFlags.showPlatforms}
+                  onCheckedChange={(checked) =>
+                    handleToggleControl("showPlatforms", checked)
+                  }
+                />
+              </label>
+
+              <label className="flex items-center justify-between rounded-[12px] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-sm">
+                <span className="font-medium text-[var(--text)]">Contas</span>
+                <Checkbox
+                  checked={controlFlags.showAccounts}
+                  onCheckedChange={(checked) =>
+                    handleToggleControl("showAccounts", checked)
+                  }
+                />
+              </label>
+            </div>
           </div>
         </aside>
       </div>

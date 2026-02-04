@@ -30,6 +30,7 @@ export default function DataPanel({
   const dimensions = Array.isArray(widget.query?.dimensions)
     ? widget.query.dimensions
     : [];
+  const isTextWidget = widget.type === "text";
   const sortOptions = buildSortOptions(widget);
   const sortField = sortOptions.includes(widget.query?.sort?.field)
     ? widget.query.sort.field
@@ -63,26 +64,32 @@ export default function DataPanel({
         <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
           Metricas
         </label>
-        <div className="flex flex-wrap gap-2">
-          {metricOptions.map((metric) => {
-            const active = metrics.includes(metric.value);
-            return (
-              <button
-                key={metric.value}
-                type="button"
-                onClick={() => onToggleMetric(metric.value)}
-                className={cn(
-                  "rounded-full border px-3 py-1 text-xs font-semibold transition",
-                  active
-                    ? "border-[var(--primary)] bg-[var(--primary-light)] text-[var(--primary)]"
-                    : "border-[var(--border)] bg-white text-[var(--text-muted)] hover:border-slate-300"
-                )}
-              >
-                {metric.label}
-              </button>
-            );
-          })}
-        </div>
+        {isTextWidget ? (
+          <div className="rounded-[12px] border border-dashed border-[var(--border)] bg-[var(--surface-muted)] px-3 py-3 text-xs text-[var(--text-muted)]">
+            Blocos de texto nao usam metricas.
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {metricOptions.map((metric) => {
+              const active = metrics.includes(metric.value);
+              return (
+                <button
+                  key={metric.value}
+                  type="button"
+                  onClick={() => onToggleMetric(metric.value)}
+                  className={cn(
+                    "rounded-full border px-3 py-1 text-xs font-semibold transition",
+                    active
+                      ? "border-[var(--primary)] bg-[var(--primary-light)] text-[var(--primary)]"
+                      : "border-[var(--border)] bg-white text-[var(--text-muted)] hover:border-slate-300"
+                  )}
+                >
+                  {metric.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div>
@@ -92,7 +99,7 @@ export default function DataPanel({
         <Select
           value={dimensions[0] || "none"}
           onValueChange={onDimensionChange}
-          disabled={widget.type === "timeseries"}
+          disabled={widget.type === "timeseries" || isTextWidget}
         >
           <SelectTrigger>
             <SelectValue placeholder="Selecione" />
@@ -112,81 +119,85 @@ export default function DataPanel({
         ) : null}
       </div>
 
-      <FilterBuilder
-        filters={widget.query?.filters || []}
-        onChange={onFiltersChange}
-      />
-
-      <div className="rounded-[12px] border border-[var(--border)] bg-[var(--surface-muted)] p-3">
-        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
-          Sort e limite
-        </p>
-        <div className="grid gap-2">
-          <label className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
-            Ordenar por
-          </label>
-          <Select
-            value={sortField}
-            onValueChange={(value) =>
-              onSortChange(
-                value === "none"
-                  ? null
-                  : {
-                      field: value,
-                      direction: sortDirection,
-                    }
-              )
-            }
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Sem ordenacao" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">Sem ordenacao</SelectItem>
-              {sortOptions.map((field) => (
-                <SelectItem key={field} value={field}>
-                  {field}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <label className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
-            Direcao
-          </label>
-          <Select
-            value={sortDirection}
-            onValueChange={(value) => {
-              if (sortField === "none") return;
-              onSortChange({
-                field: sortField,
-                direction: value,
-              });
-            }}
-            disabled={sortField === "none"}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="asc" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="asc">asc</SelectItem>
-              <SelectItem value="desc">desc</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <label className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
-            Limite de linhas (1-500)
-          </label>
-          <Input
-            type="number"
-            min={1}
-            max={500}
-            value={limitValue}
-            onChange={(event) => onLimitChange(event.target.value)}
-            aria-label="Limite de linhas"
+      {!isTextWidget ? (
+        <>
+          <FilterBuilder
+            filters={widget.query?.filters || []}
+            onChange={onFiltersChange}
           />
-        </div>
-      </div>
+
+          <div className="rounded-[12px] border border-[var(--border)] bg-[var(--surface-muted)] p-3">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
+              Sort e limite
+            </p>
+            <div className="grid gap-2">
+              <label className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
+                Ordenar por
+              </label>
+              <Select
+                value={sortField}
+                onValueChange={(value) =>
+                  onSortChange(
+                    value === "none"
+                      ? null
+                      : {
+                          field: value,
+                          direction: sortDirection,
+                        }
+                  )
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Sem ordenacao" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sem ordenacao</SelectItem>
+                  {sortOptions.map((field) => (
+                    <SelectItem key={field} value={field}>
+                      {field}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <label className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
+                Direcao
+              </label>
+              <Select
+                value={sortDirection}
+                onValueChange={(value) => {
+                  if (sortField === "none") return;
+                  onSortChange({
+                    field: sortField,
+                    direction: value,
+                  });
+                }}
+                disabled={sortField === "none"}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="asc" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="asc">asc</SelectItem>
+                  <SelectItem value="desc">desc</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <label className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
+                Limite de linhas (1-500)
+              </label>
+              <Input
+                type="number"
+                min={1}
+                max={500}
+                value={limitValue}
+                onChange={(event) => onLimitChange(event.target.value)}
+                aria-label="Limite de linhas"
+              />
+            </div>
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }

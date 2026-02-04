@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 
 const {
   DEFAULT_REPORT_THEME,
+  DEFAULT_FILTER_CONTROLS,
   reportLayoutSchema,
   normalizeLayout,
 } = require('../src/shared/validators/reportLayout.js');
@@ -97,6 +98,52 @@ test('reportLayoutSchema accepts query sort and limit', () => {
   assert.equal(result.success, true);
 });
 
+test('reportLayoutSchema accepts text widget and controls flags', () => {
+  const base = buildBaseLayout({
+    globalFilters: {
+      dateRange: { preset: 'last_7_days' },
+      platforms: [],
+      accounts: [],
+      compareTo: null,
+      autoRefreshSec: 0,
+      controls: {
+        showDateRange: false,
+        showPlatforms: true,
+        showAccounts: false,
+      },
+    },
+    widgets: [
+      {
+        id: '66666666-6666-4666-8666-666666666666',
+        type: 'text',
+        title: 'Notas',
+        layout: { x: 0, y: 0, w: 6, h: 4, minW: 3, minH: 2 },
+        content: {
+          text: 'Resumo do dashboard',
+          format: 'plain',
+        },
+      },
+    ],
+  });
+  const result = reportLayoutSchema.safeParse(base);
+  assert.equal(result.success, true);
+});
+
+test('reportLayoutSchema rejects text widget without content', () => {
+  const base = buildBaseLayout({
+    widgets: [
+      {
+        id: '77777777-7777-4777-8777-777777777777',
+        type: 'text',
+        title: 'Notas',
+        layout: { x: 0, y: 0, w: 6, h: 4, minW: 3, minH: 2 },
+      },
+    ],
+  });
+  const result = reportLayoutSchema.safeParse(base);
+  assert.equal(result.success, false);
+});
+
 test('normalizeLayout wraps legacy widgets into a page', () => {
   const base = buildBaseLayout();
   const parsed = reportLayoutSchema.parse(base);
@@ -105,6 +152,7 @@ test('normalizeLayout wraps legacy widgets into a page', () => {
   assert.equal(normalized.pages.length, 1);
   assert.equal(normalized.pages[0].name, 'Pagina 1');
   assert.equal(normalized.pages[0].widgets.length, 1);
+  assert.deepEqual(normalized.globalFilters.controls, DEFAULT_FILTER_CONTROLS);
 });
 
 test('reportLayoutSchema applies default theme when theme is missing', () => {

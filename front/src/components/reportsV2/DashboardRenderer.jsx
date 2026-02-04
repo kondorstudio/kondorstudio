@@ -47,34 +47,46 @@ export default function DashboardRenderer({
         gridAutoRows: "28px",
       }}
     >
-      {widgets.map((widget) => (
-        <div
-          key={widget.id}
-          className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--card)] p-4 shadow-[var(--shadow-sm)]"
-          style={buildGridStyle(widget.layout)}
-        >
-          <div className="mb-3 flex items-center justify-between">
-            <div>
-              <p className="text-sm font-semibold text-[var(--text)]">
-                {widget.title}
-              </p>
-              <p className="text-xs text-[var(--muted)]">
-                {String(widget.type || "").toUpperCase()}
-              </p>
+      {widgets.map((widget) => {
+        const hasTitle = Boolean(String(widget?.title || "").trim());
+        const showHeader = widget?.type !== "text" || hasTitle;
+        return (
+          <div
+            key={widget.id}
+            className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--card)] p-4 shadow-[var(--shadow-sm)]"
+            style={buildGridStyle(widget.layout)}
+          >
+            {showHeader ? (
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-[var(--text)]">
+                    {widget.title || "Widget"}
+                  </p>
+                  <p className="text-xs text-[var(--muted)]">
+                    {String(widget.type || "").toUpperCase()}
+                  </p>
+                </div>
+              </div>
+            ) : null}
+            <div
+              className={
+                showHeader
+                  ? "h-[calc(100%-48px)] min-h-[120px]"
+                  : "h-full min-h-[120px]"
+              }
+            >
+              <WidgetRenderer
+                widget={widget}
+                dashboardId={dashboardId}
+                brandId={brandId}
+                publicToken={publicToken}
+                pageId={activePage?.id}
+                globalFilters={globalFilters}
+              />
             </div>
           </div>
-          <div className="h-[calc(100%-48px)] min-h-[120px]">
-            <WidgetRenderer
-              widget={widget}
-              dashboardId={dashboardId}
-              brandId={brandId}
-              publicToken={publicToken}
-              pageId={activePage?.id}
-              globalFilters={globalFilters}
-            />
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
