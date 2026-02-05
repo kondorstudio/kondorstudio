@@ -69,11 +69,11 @@ export default function DataPanel({
 
       <div>
         <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
-          Metricas
+          Métricas
         </label>
         {isTextWidget ? (
           <div className="rounded-[12px] border border-dashed border-[var(--border)] bg-[var(--surface-muted)] px-3 py-3 text-xs text-[var(--text-muted)]">
-            Blocos de texto nao usam metricas.
+            Blocos de texto não usam métricas.
           </div>
         ) : (
           <div className="grid grid-cols-3 gap-2">
@@ -101,14 +101,14 @@ export default function DataPanel({
         )}
         {isPieLike ? (
           <p className="mt-2 text-xs text-[var(--text-muted)]">
-            Pie/Donut usa exatamente 1 metrica.
+            Pie/Donut usa exatamente 1 métrica.
           </p>
         ) : null}
       </div>
 
       <div>
         <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
-          Dimensao
+          Dimensão
         </label>
         <Select
           value={dimensions[0] || (isPieLike ? "platform" : "none")}
@@ -128,11 +128,11 @@ export default function DataPanel({
         </Select>
         {widget.type === "timeseries" ? (
           <p className="mt-2 text-xs text-[var(--text-muted)]">
-            Time series sempre usa dimensao date.
+            Time series sempre usa dimensão date.
           </p>
         ) : isPieLike ? (
           <p className="mt-2 text-xs text-[var(--text-muted)]">
-            Pie/Donut exige 1 dimensao e nao aceita date.
+            Pie/Donut exige 1 dimensão e não aceita date.
           </p>
         ) : null}
       </div>

@@ -12,7 +12,7 @@ router.get('/preferences', async (req, res) => {
   try {
     const userId = req.user?.id;
     if (!userId) {
-      return res.status(401).json({ error: 'Usuario nao autenticado' });
+      return res.status(401).json({ error: 'Usuário não autenticado' });
     }
 
     const preferences = await preferencesService.getPreferences(req.tenantId, userId);
@@ -27,7 +27,7 @@ router.patch('/preferences', async (req, res) => {
   try {
     const userId = req.user?.id;
     if (!userId) {
-      return res.status(401).json({ error: 'Usuario nao autenticado' });
+      return res.status(401).json({ error: 'Usuário não autenticado' });
     }
 
     const preferences = await preferencesService.updatePreferences(

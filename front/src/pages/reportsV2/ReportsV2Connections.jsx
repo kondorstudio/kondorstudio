@@ -12,28 +12,11 @@ import { Input } from "@/components/ui/input.jsx";
 import { cn } from "@/utils/classnames.js";
 import { base44 } from "@/apiClient/base44Client";
 
-const themeStyle = {
-  "--background": "#FFFFFF",
-  "--surface": "#FFFFFF",
-  "--surface-muted": "#F8FAFC",
-  "--border": "#E2E8F0",
-  "--text": "#0F172A",
-  "--text-muted": "#64748B",
-  "--primary": "#B050F0",
-  "--primary-dark": "#9515EA",
-  "--accent": "#22C55E",
-  "--shadow-sm": "0 2px 6px rgba(15, 23, 42, 0.08)",
-  "--shadow-md": "0 18px 32px rgba(15, 23, 42, 0.12)",
-  "--radius-card": "16px",
-  "--radius-button": "16px",
-  "--radius-input": "12px",
-};
-
 const PLATFORMS = [
   {
     value: "META_ADS",
     label: "Meta Ads",
-    description: "Contas de anuncios do Meta Ads.",
+    description: "Contas de anúncios do Meta Ads.",
   },
   {
     value: "GOOGLE_ADS",
@@ -43,7 +26,7 @@ const PLATFORMS = [
   {
     value: "TIKTOK_ADS",
     label: "TikTok Ads",
-    description: "Contas de anuncios do TikTok Ads.",
+    description: "Contas de anúncios do TikTok Ads.",
   },
   {
     value: "LINKEDIN_ADS",
@@ -57,13 +40,13 @@ const PLATFORMS = [
   },
   {
     value: "GMB",
-    label: "Google Meu Negocio",
+    label: "Google Meu Negócio",
     description: "Perfis do Google Business.",
   },
   {
     value: "FB_IG",
     label: "Facebook/Instagram",
-    description: "Conexoes sociais do Meta.",
+    description: "Conexões sociais do Meta.",
   },
 ];
 
@@ -183,11 +166,11 @@ export default function ReportsV2Connections() {
   const isBrandSelected = Boolean(brandId);
 
   return (
-    <div className="min-h-screen bg-white" style={themeStyle}>
+    <div className="min-h-screen bg-[var(--background)]">
       <PageShell>
         <PageHeader
-          kicker="Relatorios"
-          title="Conexoes por marca"
+          kicker="Relatórios"
+          title="Conexões por marca"
           subtitle="Associe contas de dados para liberar widgets e plataformas."
           actions={
             <Button variant="secondary" onClick={() => navigate("/relatorios/v2")}
@@ -220,7 +203,7 @@ export default function ReportsV2Connections() {
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {!isBrandSelected ? (
             <div className="col-span-full rounded-[16px] border border-purple-200 bg-purple-50 px-6 py-4 text-sm text-purple-700">
-              Selecione uma marca para habilitar as conexoes.
+              Selecione uma marca para habilitar as conexões.
             </div>
           ) : null}
           {PLATFORMS.map((platform) => {
@@ -299,12 +282,9 @@ export default function ReportsV2Connections() {
                   >
                     Associar conta
                   </Button>
-                  <button
-                    type="button"
-                    className="text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text)]"
-                  >
-                    Resumo da fonte
-                  </button>
+                  <Button variant="ghost" size="sm" disabled className="text-xs">
+                    Resumo da fonte (em breve)
+                  </Button>
                 </CardFooter>
               </Card>
             );
@@ -335,7 +315,7 @@ export default function ReportsV2Connections() {
               </div>
             ) : availableError ? (
               <div className="rounded-[12px] border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
-                Falha ao carregar contas disponiveis.
+                Falha ao carregar contas disponíveis.
               </div>
             ) : availableAccounts.length ? (
               availableAccounts.map((account) => (
@@ -367,7 +347,7 @@ export default function ReportsV2Connections() {
               ))
             ) : (
               <div className="rounded-[12px] border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-xs text-[var(--text-muted)]">
-                Nenhuma conta disponivel para esta plataforma.
+                Nenhuma conta disponível para esta plataforma.
               </div>
             )}
           </div>

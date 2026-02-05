@@ -13,7 +13,7 @@ const PLATFORM_OPTIONS = [
   { value: "TIKTOK_ADS", label: "TikTok Ads" },
   { value: "LINKEDIN_ADS", label: "LinkedIn Ads" },
   { value: "GA4", label: "GA4" },
-  { value: "GMB", label: "GMB" },
+  { value: "GMB", label: "Google Meu Negócio" },
   { value: "FB_IG", label: "FB/IG" },
 ];
 
@@ -139,6 +139,23 @@ export default function GlobalFiltersBar({
     onChange({ ...filters, accounts: Array.from(next.values()) });
   };
 
+  const handleSelectAllAccounts = () => {
+    if (!availableAccounts.length) return;
+    const next = new Map();
+    availableAccounts.forEach((account) => {
+      const accountId = account.externalAccountId || account.external_account_id;
+      if (!accountId) return;
+      const platform = account.platform || primaryPlatform;
+      const key = `${platform}:${accountId}`;
+      next.set(key, { platform, external_account_id: accountId });
+    });
+    onChange({ ...filters, accounts: Array.from(next.values()) });
+  };
+
+  const handleClearAccounts = () => {
+    onChange({ ...filters, accounts: [] });
+  };
+
   return (
     <FilterBar className={cn("gap-4 bg-[var(--card)]", className)}>
       <div className="flex w-full items-center justify-between gap-3">
@@ -164,7 +181,7 @@ export default function GlobalFiltersBar({
           <>
             <div className="min-w-[180px]">
               <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-                Periodo
+                Período
               </label>
               <Select
                 value={preset}
@@ -184,8 +201,8 @@ export default function GlobalFiltersBar({
                   <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="last_7_days">Ultimos 7 dias</SelectItem>
-                  <SelectItem value="last_30_days">Ultimos 30 dias</SelectItem>
+                  <SelectItem value="last_7_days">Últimos 7 dias</SelectItem>
+                  <SelectItem value="last_30_days">Últimos 30 dias</SelectItem>
                   <SelectItem value="custom">Customizado</SelectItem>
                 </SelectContent>
               </Select>
@@ -230,10 +247,10 @@ export default function GlobalFiltersBar({
 
         {effectiveControls.showPlatforms !== false ? (
           <div className="min-w-[200px]">
-            <label className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-              <Calendar className="h-3.5 w-3.5" />
-              Plataformas
-            </label>
+              <label className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+                <Calendar className="h-3.5 w-3.5" />
+                Plataformas
+              </label>
             <div className="flex flex-wrap gap-2">
               {PLATFORM_OPTIONS.map((platform) => {
                 const active = platforms.includes(platform.value);
@@ -259,13 +276,13 @@ export default function GlobalFiltersBar({
 
         {effectiveControls.showAccounts !== false ? (
           <div className="min-w-[220px]">
-            <label
-              htmlFor="global-filter-accounts"
-              className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]"
-            >
-              <UserRound className="h-3.5 w-3.5" />
-              Contas
-            </label>
+              <label
+                htmlFor="global-filter-accounts"
+                className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]"
+              >
+                <UserRound className="h-3.5 w-3.5" />
+                Contas
+              </label>
             <Input
               id="global-filter-accounts"
               value={accountInputValue}
@@ -274,39 +291,58 @@ export default function GlobalFiltersBar({
               aria-label="Filtro de contas"
             />
             {availableAccounts.length ? (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {availableAccounts.map((account) => {
-                  const accountId =
-                    account.externalAccountId || account.external_account_id;
-                  const key = `${account.platform || "unknown"}:${accountId}`;
-                  const active = selectedAccountKey.has(key);
-                  return (
-                    <button
-                      type="button"
-                      key={key}
-                      onClick={() => toggleAccount(account)}
-                      className={cn(
-                        "rounded-full border px-2.5 py-1 text-[11px] font-semibold transition",
-                        active
-                          ? "border-[var(--primary)] bg-[var(--primary-light)] text-[var(--primary)]"
-                          : "border-[var(--border)] bg-[var(--card)] text-[var(--muted)] hover:border-slate-300"
-                      )}
-                    >
-                      {account.externalAccountName || accountId}
-                    </button>
-                  );
-                })}
-              </div>
+              <>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {availableAccounts.map((account) => {
+                    const accountId =
+                      account.externalAccountId || account.external_account_id;
+                    const key = `${account.platform || "unknown"}:${accountId}`;
+                    const active = selectedAccountKey.has(key);
+                    return (
+                      <button
+                        type="button"
+                        key={key}
+                        onClick={() => toggleAccount(account)}
+                        className={cn(
+                          "rounded-full border px-2.5 py-1 text-[11px] font-semibold transition",
+                          active
+                            ? "border-[var(--primary)] bg-[var(--primary-light)] text-[var(--primary)]"
+                            : "border-[var(--border)] bg-[var(--card)] text-[var(--muted)] hover:border-slate-300"
+                        )}
+                      >
+                        {account.externalAccountName || accountId}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSelectAllAccounts}
+                    className="text-xs font-semibold text-[var(--primary)] hover:underline"
+                  >
+                    Selecionar todas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleClearAccounts}
+                    className="text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text)]"
+                  >
+                    Limpar seleção
+                  </button>
+                </div>
+              </>
             ) : null}
             <p className="mt-1 text-[11px] text-[var(--muted)]">
-              IDs separados por virgula. Plataforma ativa: {primaryPlatform}
+              Selecione contas abaixo ou informe IDs separados por vírgula. Plataforma ativa:{" "}
+              {primaryPlatform}
             </p>
           </div>
         ) : null}
 
         <div className="min-w-[180px]">
           <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-            Comparacao
+            Comparação
           </label>
           <Select
             value={compareTo}
@@ -318,11 +354,11 @@ export default function GlobalFiltersBar({
             }
           >
             <SelectTrigger>
-              <SelectValue placeholder="Sem comparacao" />
+              <SelectValue placeholder="Sem comparação" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">Sem comparacao</SelectItem>
-              <SelectItem value="previous_period">Periodo anterior</SelectItem>
+              <SelectItem value="none">Sem comparação</SelectItem>
+              <SelectItem value="previous_period">Período anterior</SelectItem>
               <SelectItem value="previous_year">Ano anterior</SelectItem>
             </SelectContent>
           </Select>
@@ -331,7 +367,7 @@ export default function GlobalFiltersBar({
         <div className="min-w-[160px]">
           <label className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
             <RefreshCw className="h-3.5 w-3.5" />
-            Auto refresh
+            Atualização automática
           </label>
           <Select
             value={autoRefreshSec}

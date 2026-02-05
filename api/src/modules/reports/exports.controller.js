@@ -58,14 +58,14 @@ async function download(req, res) {
     );
     if (!record) {
       return res.status(404).json({
-        error: { code: 'EXPORT_NOT_FOUND', message: 'Exportacao nao encontrada', details: null },
+        error: { code: 'EXPORT_NOT_FOUND', message: 'Exportação não encontrada', details: null },
       });
     }
     if (record.status !== 'READY' || !record.file?.url) {
       return res.status(409).json({
         error: {
           code: 'EXPORT_NOT_READY',
-          message: 'Exportacao ainda nao esta pronta',
+          message: 'Exportação ainda não está pronta',
           details: { status: record.status },
         },
       });

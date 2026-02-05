@@ -148,7 +148,7 @@ export default function StylePanel({
               Mostrar legenda
             </p>
             <p className="text-xs text-[var(--text-muted)]">
-              Disponivel para graficos com series.
+              Disponível para gráficos com séries.
             </p>
           </div>
           <Checkbox
@@ -165,7 +165,7 @@ export default function StylePanel({
               Gridlines
             </p>
             <p className="text-xs text-[var(--text-muted)]">
-              Mostra linhas de grade no grafico.
+              Mostra linhas de grade no gráfico.
             </p>
           </div>
           <Checkbox

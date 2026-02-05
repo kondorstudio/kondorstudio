@@ -28,7 +28,7 @@ const DEFAULT_LAYOUT = {
   pages: [
     {
       id: '11111111-1111-4111-8111-111111111111',
-      name: 'Pagina 1',
+      name: 'Página 1',
       widgets: [],
     },
   ],
@@ -502,7 +502,7 @@ async function createPublicShare(tenantId, userId, dashboardId) {
   const health = await computeDashboardHealth(dashboard);
   if (health?.status === 'BLOCKED') {
     const err = new Error(
-      'Nao e possivel compartilhar este relatorio enquanto houver conexoes pendentes.',
+      'Não é possível compartilhar este relatório enquanto houver conexões pendentes.',
     );
     err.code = 'DASHBOARD_BLOCKED';
     err.status = 422;
@@ -586,7 +586,7 @@ async function rotatePublicShare(tenantId, userId, dashboardId) {
   const health = await computeDashboardHealth(dashboard);
   if (health?.status === 'BLOCKED') {
     const err = new Error(
-      'Nao e possivel compartilhar este relatorio enquanto houver conexoes pendentes.',
+      'Não é possível compartilhar este relatório enquanto houver conexões pendentes.',
     );
     err.code = 'DASHBOARD_BLOCKED';
     err.status = 422;

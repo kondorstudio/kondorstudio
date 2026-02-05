@@ -66,7 +66,7 @@ function PieTooltip({ active, payload, metric, meta, formatOverride }) {
   return (
     <div className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-xs shadow-[var(--shadow-sm)]">
       <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-        {String(data.name || "Sem rotulo")}
+        {String(data.name || "Sem rótulo")}
       </p>
       <div className="flex items-center justify-between gap-3 text-[var(--text)]">
         <span className="font-medium">{formatMetricValue(metric, data.value, meta, formatOverride)}</span>
@@ -89,7 +89,7 @@ function PieLegend({ payload }) {
                 className="h-2.5 w-2.5 shrink-0 rounded-full"
                 style={{ backgroundColor: entry.color }}
               />
-              <span className="truncate">{String(entry.value || "Sem rotulo")}</span>
+              <span className="truncate">{String(entry.value || "Sem rótulo")}</span>
             </span>
             <span className="text-[11px] text-[var(--muted)]">{item.percentLabel || ""}</span>
           </li>
@@ -135,7 +135,7 @@ export default function WidgetPie({
   if (!chartData.length) {
     return (
       <WidgetEmptyState
-        title="Sem dados para este periodo"
+        title="Sem dados para este período"
         description="Ajuste os filtros globais para ver distribuicao."
         variant="no-data"
         className="border-0 bg-transparent p-0"

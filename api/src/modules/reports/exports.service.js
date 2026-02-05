@@ -40,7 +40,7 @@ async function generatePdfFromUrl(url) {
   try {
     playwright = require('playwright');
   } catch (err) {
-    const error = new Error('Playwright nao instalado. Rode npm install playwright.');
+    const error = new Error('Playwright não instalado. Rode npm install playwright.');
     error.code = 'PLAYWRIGHT_MISSING';
     throw error;
   }
@@ -79,7 +79,7 @@ async function generatePdfFromUrlWithOptions(url, options = {}) {
   try {
     playwright = require('playwright');
   } catch (err) {
-    const error = new Error('Playwright nao instalado. Rode npm install playwright.');
+    const error = new Error('Playwright não instalado. Rode npm install playwright.');
     error.code = 'PLAYWRIGHT_MISSING';
     throw error;
   }
@@ -122,7 +122,7 @@ async function generatePdfFromUrlWithOptions(url, options = {}) {
       err?.name === 'TimeoutError' || /timeout/i.test(message);
     if (isTimeout) {
       const timeoutError = new Error(
-        'Tempo limite ao preparar o dashboard para exportacao. Tente novamente em instantes.',
+        'Tempo limite ao preparar o dashboard para exportação. Tente novamente em instantes.',
       );
       timeoutError.code = 'EXPORT_RENDER_TIMEOUT';
       timeoutError.status = 504;
@@ -154,7 +154,7 @@ function buildExportQueryString(options = {}) {
 
 function buildPdfFileName(dashboardName) {
   const dateKey = new Date().toISOString().slice(0, 10);
-  return `Relatorio - ${String(dashboardName || 'Dashboard').trim() || 'Dashboard'} - ${dateKey}.pdf`;
+  return `Relatório - ${String(dashboardName || 'Dashboard').trim() || 'Dashboard'} - ${dateKey}.pdf`;
 }
 
 async function exportDashboardPdf(tenantId, userId, dashboardId, options = {}) {
@@ -164,7 +164,7 @@ async function exportDashboardPdf(tenantId, userId, dashboardId, options = {}) {
   });
 
   if (!dashboard) {
-    const err = new Error('Dashboard nao encontrado');
+    const err = new Error('Dashboard não encontrado');
     err.code = 'DASHBOARD_NOT_FOUND';
     err.status = 404;
     throw err;
@@ -180,7 +180,7 @@ async function exportDashboardPdf(tenantId, userId, dashboardId, options = {}) {
   const health = await computeDashboardHealth(dashboard);
   if (health?.status === 'BLOCKED') {
     const err = new Error(
-      'Nao e possivel exportar este relatorio enquanto houver pendencias bloqueantes.',
+      'Não é possível exportar este relatório enquanto houver pendências bloqueantes.',
     );
     err.code = 'DASHBOARD_BLOCKED';
     err.status = 422;
@@ -270,7 +270,7 @@ async function createDashboardExport(tenantId, dashboardId, options = {}) {
   });
 
   if (!dashboard) {
-    const err = new Error('Dashboard nao encontrado');
+    const err = new Error('Dashboard não encontrado');
     err.code = 'DASHBOARD_NOT_FOUND';
     err.status = 404;
     throw err;

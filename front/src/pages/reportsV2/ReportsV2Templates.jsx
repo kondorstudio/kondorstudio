@@ -19,23 +19,6 @@ import {
 import DashboardRenderer from "@/components/reportsV2/DashboardRenderer.jsx";
 import { base44 } from "@/apiClient/base44Client";
 
-const themeStyle = {
-  "--background": "#FFFFFF",
-  "--surface": "#FFFFFF",
-  "--surface-muted": "#F8FAFC",
-  "--border": "#E2E8F0",
-  "--text": "#0F172A",
-  "--text-muted": "#64748B",
-  "--primary": "#B050F0",
-  "--primary-dark": "#9515EA",
-  "--accent": "#22C55E",
-  "--shadow-sm": "0 2px 6px rgba(15, 23, 42, 0.08)",
-  "--shadow-md": "0 18px 32px rgba(15, 23, 42, 0.12)",
-  "--radius-card": "16px",
-  "--radius-button": "16px",
-  "--radius-input": "12px",
-};
-
 const ADS_METRICS = new Set([
   "spend",
   "impressions",
@@ -63,7 +46,7 @@ const PLATFORM_LABELS = {
   TIKTOK_ADS: "TikTok Ads",
   LINKEDIN_ADS: "LinkedIn Ads",
   GA4: "GA4",
-  GMB: "Google Meu Negocio",
+  GMB: "Google Meu Negócio",
   FB_IG: "Facebook/Instagram",
 };
 
@@ -126,7 +109,7 @@ function deriveTemplateRequirements(template) {
 }
 
 function formatPlatformList(list) {
-  if (!Array.isArray(list) || !list.length) return "Conexoes necessarias";
+  if (!Array.isArray(list) || !list.length) return "Conexões necessárias";
   return list.map((platform) => PLATFORM_LABELS[platform] || platform).join(", ");
 }
 
@@ -289,7 +272,7 @@ export default function ReportsV2Templates() {
   });
 
   return (
-    <div className="min-h-screen bg-white" style={themeStyle}>
+    <div className="min-h-screen bg-[var(--background)]">
       <PageShell>
         <PageHeader
           kicker="Templates"
@@ -359,7 +342,7 @@ export default function ReportsV2Templates() {
                         Recomendados
                       </p>
                       <p className="text-xs text-[var(--text-muted)]">
-                        Baseado nas conexoes ativas desta marca.
+                        Baseado nas conexões ativas desta marca.
                       </p>
                     </div>
                   </div>
@@ -389,7 +372,7 @@ export default function ReportsV2Templates() {
             </>
           ) : (
             <div className="rounded-[16px] border border-[var(--border)] bg-white px-6 py-6 text-sm text-[var(--text-muted)]">
-              Nenhum template disponivel.
+              Nenhum template disponível.
             </div>
           )}
         </div>

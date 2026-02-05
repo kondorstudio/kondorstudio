@@ -235,7 +235,7 @@ export function normalizeLayoutFront(layout) {
     name:
       page?.name && String(page.name).trim()
         ? String(page.name).trim().slice(0, 60)
-        : `Pagina ${index + 1}`,
+        : `Página ${index + 1}`,
     widgets: Array.isArray(page?.widgets) ? page.widgets : [],
   });
 
@@ -254,7 +254,7 @@ export function normalizeLayoutFront(layout) {
     pages: [
       {
         id: generateUuid(),
-        name: "Pagina 1",
+        name: "Página 1",
         widgets,
       },
     ],

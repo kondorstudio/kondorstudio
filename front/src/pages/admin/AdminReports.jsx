@@ -61,8 +61,8 @@ export default function AdminReports() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
-        <p className="text-sm uppercase tracking-wide text-gray-500">Relatorios</p>
-        <h1 className="text-3xl font-bold text-gray-900">Metricas executivas</h1>
+        <p className="text-sm uppercase tracking-wide text-gray-500">Relatórios</p>
+        <h1 className="text-3xl font-bold text-gray-900">Métricas executivas</h1>
         <p className="text-gray-600">
           Resumo consolidado de usuarios, faturamento e integracoes.
         </p>

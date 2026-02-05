@@ -17,7 +17,7 @@ import { cn } from "@/utils/classnames.js";
 const FEATURE_CARDS = [
   {
     title: "Templates prontos",
-    description: "Crie um relatorio completo em 1 clique.",
+    description: "Crie um relatório completo em 1 clique.",
     icon: Sparkles,
   },
   {
@@ -26,33 +26,16 @@ const FEATURE_CARDS = [
     icon: LayoutGrid,
   },
   {
-    title: "Widgets flexiveis",
-    description: "KPIs, series, barras e tabelas.",
+    title: "Widgets flexíveis",
+    description: "KPIs, séries, barras e tabelas.",
     icon: Boxes,
   },
   {
-    title: "Automacoes",
-    description: "Relatorios recorrentes (em breve).",
+    title: "Automações",
+    description: "Relatórios recorrentes (em breve).",
     icon: Zap,
   },
 ];
-
-const themeStyle = {
-  "--background": "#FFFFFF",
-  "--surface": "#FFFFFF",
-  "--surface-muted": "#F8FAFC",
-  "--border": "#E2E8F0",
-  "--text": "#0F172A",
-  "--text-muted": "#64748B",
-  "--primary": "#B050F0",
-  "--primary-dark": "#9515EA",
-  "--accent": "#22C55E",
-  "--shadow-sm": "0 2px 6px rgba(15, 23, 42, 0.08)",
-  "--shadow-md": "0 18px 32px rgba(15, 23, 42, 0.12)",
-  "--radius-card": "16px",
-  "--radius-button": "16px",
-  "--radius-input": "12px",
-};
 
 export default function ReportsV2Home() {
   const navigate = useNavigate();
@@ -107,7 +90,7 @@ export default function ReportsV2Home() {
       }
     },
     onError: () => {
-      showToast("Nao foi possivel criar o dashboard.", "error");
+      showToast("Não foi possível criar o dashboard.", "error");
     },
   });
 
@@ -115,10 +98,10 @@ export default function ReportsV2Home() {
     mutationFn: async (dashboardId) => base44.reportsV2.deleteDashboard(dashboardId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["reportsV2-dashboards"] });
-      showToast("Dashboard excluido.", "success");
+      showToast("Dashboard excluído.", "success");
     },
     onError: () => {
-      showToast("Nao foi possivel excluir o dashboard.", "error");
+      showToast("Não foi possível excluir o dashboard.", "error");
     },
   });
 
@@ -135,7 +118,7 @@ export default function ReportsV2Home() {
   const handleDeleteDashboard = (dashboard) => {
     if (!dashboard?.id) return;
     const confirmed = window.confirm(
-      `Excluir o dashboard "${dashboard.name}"? Esta acao nao pode ser desfeita.`
+      `Excluir o dashboard "${dashboard.name}"? Esta ação não pode ser desfeita.`
     );
     if (!confirmed) return;
     deleteMutation.mutate(dashboard.id);
@@ -147,25 +130,25 @@ export default function ReportsV2Home() {
       document
         .getElementById("reports-dashboards-list")
         ?.scrollIntoView({ behavior: "smooth", block: "start" }),
-    "Widgets flexiveis": () => setCreateOpen(true),
-    Automacoes: () => showToast("Automacoes em breve.", "info"),
+    "Widgets flexíveis": () => setCreateOpen(true),
+    Automações: () => showToast("Automações em breve.", "info"),
   };
 
   return (
-    <div className="min-h-screen bg-white" style={themeStyle}>
+    <div className="min-h-screen bg-[var(--background)]">
       <div className="border-b border-[var(--border)] bg-[linear-gradient(135deg,rgba(176,80,240,0.08),rgba(34,197,94,0.04))]">
         <PageShell>
           <PageHeader
-            kicker="Relatorios"
-            title="Relatorios inteligentes"
-            subtitle="Construa dashboards vivos com metricas normalizadas e filtros globais."
+            kicker="Relatórios"
+            title="Relatórios inteligentes"
+            subtitle="Construa dashboards vivos com métricas normalizadas e filtros globais."
             actions={
               <div className="flex flex-wrap gap-2">
                 <Button
                   variant="secondary"
                   onClick={() => navigate("/relatorios/v2/conexoes")}
                 >
-                  Conexoes por marca
+                  Conexões por marca
                 </Button>
                 <Button
                   variant="secondary"
@@ -287,7 +270,7 @@ export default function ReportsV2Home() {
                     Status
                   </th>
                   <th className="px-6 py-3 text-xs font-semibold uppercase text-[var(--text-muted)]">
-                    Acoes
+                    Ações
                   </th>
                 </tr>
               </thead>
@@ -406,7 +389,7 @@ export default function ReportsV2Home() {
                 <SelectContent>
                   {!clients.length ? (
                     <SelectItem value="none" disabled>
-                      Nenhuma marca disponivel
+                      Nenhuma marca disponível
                     </SelectItem>
                   ) : null}
                   {clients.map((client) => (

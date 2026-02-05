@@ -68,7 +68,7 @@ test('reportLayoutSchema accepts valid layout with pages', () => {
     pages: [
       {
         id: 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',
-        name: 'Pagina 1',
+        name: 'Página 1',
         widgets: base.widgets,
       },
     ],
@@ -175,7 +175,7 @@ test('normalizeLayout wraps legacy widgets into a page', () => {
   const normalized = normalizeLayout(parsed);
   assert.equal(Array.isArray(normalized.pages), true);
   assert.equal(normalized.pages.length, 1);
-  assert.equal(normalized.pages[0].name, 'Pagina 1');
+  assert.equal(normalized.pages[0].name, 'Página 1');
   assert.equal(normalized.pages[0].widgets.length, 1);
   assert.deepEqual(normalized.globalFilters.controls, DEFAULT_FILTER_CONTROLS);
 });
@@ -217,12 +217,12 @@ test('reportLayoutSchema rejects duplicate widget ids across pages', () => {
     pages: [
       {
         id: 'bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb',
-        name: 'Pagina 1',
+        name: 'Página 1',
         widgets: base.widgets,
       },
       {
         id: 'cccccccc-cccc-4ccc-cccc-cccccccccccc',
-        name: 'Pagina 2',
+        name: 'Página 2',
         widgets: base.widgets,
       },
     ],
@@ -254,12 +254,12 @@ test('reportLayoutSchema rejects duplicate page ids', () => {
     pages: [
       {
         id: 'eeeeeeee-eeee-4eee-eeee-eeeeeeeeeeee',
-        name: 'Pagina 1',
+        name: 'Página 1',
         widgets: base.widgets,
       },
       {
         id: 'eeeeeeee-eeee-4eee-eeee-eeeeeeeeeeee',
-        name: 'Pagina 2',
+        name: 'Página 2',
         widgets: [],
       },
     ],

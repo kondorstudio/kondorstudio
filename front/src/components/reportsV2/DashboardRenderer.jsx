@@ -126,7 +126,7 @@ export default function DashboardRenderer({
     return (
       <WidgetEmptyState
         title="Nenhum widget configurado"
-        description="Este dashboard ainda nao possui widgets."
+        description="Este dashboard ainda não possui widgets."
         variant="no-data"
       />
     );

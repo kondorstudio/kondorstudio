@@ -16,6 +16,16 @@ function resetModule(path) {
   delete require.cache[resolved];
 }
 
+function mockMetricsSyncServices() {
+  mockModule('../src/services/factMetricsSyncService', {
+    ensureFactMetrics: async () => {},
+    syncAfterConnection: async () => {},
+  });
+  mockModule('../src/services/ga4FactMetricsService', {
+    ensureGa4FactMetrics: async () => ({ skipped: true }),
+  });
+}
+
 function buildCatalog(keys) {
   return keys.map((key) => {
     if (['ctr', 'cpc', 'cpm', 'cpa', 'roas'].includes(key)) {
@@ -99,7 +109,8 @@ function buildMetricsApp({
     },
     brandSourceConnection: {
       findMany: async ({ where }) => {
-        const platforms = where?.platform?.in || [];
+        const platforms = where?.platform?.in || null;
+        if (!platforms || !platforms.length) return connections;
         return connections.filter((item) => platforms.includes(item.platform));
       },
     },
@@ -120,6 +131,7 @@ function buildMetricsApp({
     },
   };
 
+  mockMetricsSyncServices();
   mockModule('../src/prisma', { prisma: fakePrisma });
   resetModule('../src/modules/metrics/metrics.service');
   resetModule('../src/modules/metrics/metrics.controller');
@@ -141,6 +153,8 @@ function buildMetricsApp({
     getLastGroupQuery: () => lastGroupQuery,
   };
 }
+
+mockMetricsSyncServices();
 
 test('metrics query computes derived totals from base sums', async () => {
   const rows = [
@@ -434,6 +448,47 @@ test('metrics query does not enforce brand connection checks', async () => {
     });
 
   assert.equal(res.status, 200);
+});
+
+test('metrics query returns 409 when required platforms are missing', async () => {
+  const { app } = buildMetricsApp({ connections: [] });
+  const brandId = randomUUID();
+
+  const res = await request(app)
+    .post('/metrics/query')
+    .set('x-tenant-id', 'tenant-1')
+    .send({
+      brandId,
+      dateRange: { start: '2026-01-01', end: '2026-01-02' },
+      dimensions: [],
+      metrics: ['spend'],
+      filters: [],
+      requiredPlatforms: ['META_ADS'],
+    });
+
+  assert.equal(res.status, 409);
+  assert.equal(res.body?.error?.code, 'MISSING_CONNECTIONS');
+  assert.deepEqual(res.body?.error?.details?.missing, ['META_ADS']);
+});
+
+test('metrics query returns 409 when platform filter requires missing connection', async () => {
+  const { app } = buildMetricsApp({ connections: [] });
+  const brandId = randomUUID();
+
+  const res = await request(app)
+    .post('/metrics/query')
+    .set('x-tenant-id', 'tenant-1')
+    .send({
+      brandId,
+      dateRange: { start: '2026-01-01', end: '2026-01-02' },
+      dimensions: [],
+      metrics: ['spend'],
+      filters: [{ field: 'platform', op: 'eq', value: 'META_ADS' }],
+    });
+
+  assert.equal(res.status, 409);
+  assert.equal(res.body?.error?.code, 'MISSING_CONNECTIONS');
+  assert.deepEqual(res.body?.error?.details?.missing, ['META_ADS']);
 });
 
 test('metrics query allows when GA4 connection exists', async () => {

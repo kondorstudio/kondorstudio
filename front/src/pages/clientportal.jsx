@@ -1281,7 +1281,7 @@ function PlatformTabs({ metrics }) {
             {stats ? (
               <MetricsDashboard stats={stats} />
             ) : (
-              <EmptyState message="Este canal ainda nao retornou metricas. Aguarde a proxima coleta." />
+              <EmptyState message="Este canal ainda não retornou métricas. Aguarde a próxima coleta." />
             )}
           </TabsContent>
         );

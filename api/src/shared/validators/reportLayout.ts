@@ -387,7 +387,7 @@ function normalizeLayout(parsedLayout) {
     pages: [
       {
         id: generateUuid(),
-        name: 'Pagina 1',
+        name: 'Página 1',
         widgets,
       },
     ],

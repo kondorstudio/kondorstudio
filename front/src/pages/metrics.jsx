@@ -38,7 +38,7 @@ const NETWORK_PROVIDER = {
 const SECTIONS = [
   { key: "overview", label: "Resumo geral" },
   { key: "followers", label: "Seguidores" },
-  { key: "demographic", label: "Demografico" },
+  { key: "demographic", label: "Demográfico" },
   { key: "stories", label: "Stories" },
   { key: "reels", label: "Reels" },
   { key: "posts", label: "Posts" },
@@ -46,9 +46,9 @@ const SECTIONS = [
 ];
 
 const PERIOD_PRESETS = [
-  { value: "7d", label: "Ultimos 7 dias", days: 7 },
-  { value: "30d", label: "Ultimos 30 dias", days: 30 },
-  { value: "90d", label: "Ultimos 90 dias", days: 90 },
+  { value: "7d", label: "Últimos 7 dias", days: 7 },
+  { value: "30d", label: "Últimos 30 dias", days: 30 },
+  { value: "90d", label: "Últimos 90 dias", days: 90 },
   { value: "custom", label: "Personalizado", days: null },
 ];
 
@@ -199,12 +199,12 @@ export default function Metrics() {
     { label: "Alcance", value: formatNumber(reach) },
     { label: "Engajamento", value: formatNumber(engagement) },
     { label: "Taxa de engajamento", value: formatPercent(engagementsRate) },
-    { label: "Frequencia", value: frequency.toFixed(2) },
+    { label: "Frequência", value: frequency.toFixed(2) },
   ];
 
   const interactionCards = [
-    { label: "Visualizacoes", value: formatNumber(totals.views || totals.visualizations) },
-    { label: "Interacoes", value: formatNumber(totals.interactions || totals.engagement) },
+    { label: "Visualizações", value: formatNumber(totals.views || totals.visualizations) },
+    { label: "Interações", value: formatNumber(totals.interactions || totals.engagement) },
     { label: "Curtidas", value: formatNumber(totals.likes) },
     { label: "Comentarios", value: formatNumber(totals.comments) },
     { label: "Compartilhamentos", value: formatNumber(totals.shares) },
@@ -258,11 +258,11 @@ export default function Metrics() {
           {metrics.length === 0 && !isLoading ? (
             <SectionCard title="Sem dados" icon={BarChart3}>
               <EmptyState
-                title="Ainda nao ha metricas para este periodo"
-                description="Verifique o periodo, conecte a integracao ou aguarde novas coletas."
+                title="Ainda não há métricas para este período"
+                description="Verifique o período, conecte a integração ou aguarde novas coletas."
                 action={
                   <Button variant="secondary" onClick={() => navigate("/integrations")}>
-                    Conectar integracao
+                    Conectar integração
                   </Button>
                 }
               />
@@ -284,13 +284,13 @@ export default function Metrics() {
     const Icon = iconMap[activeSection] || BarChart3;
 
     return (
-      <SectionCard title={sectionLabel || "Metricas"} icon={Icon}>
+      <SectionCard title={sectionLabel || "Métricas"} icon={Icon}>
         <EmptyState
           title="Sem dados suficientes para este painel"
-          description="Aguardamos novas coletas. Voce pode revisar a integracao agora."
+          description="Aguardamos novas coletas. Você pode revisar a integração agora."
           action={
             <Button variant="secondary" onClick={() => navigate("/integrations")}>
-              Revisar integracao
+              Revisar integração
             </Button>
           }
         />
@@ -332,7 +332,7 @@ export default function Metrics() {
               </div>
               <div className="space-y-1">
                 <Label className="text-[10px] uppercase tracking-[0.3em] text-white/70">
-                  Periodo
+                  Período
                 </Label>
                 <SelectNative
                   selectClassName="h-9 border border-white/30 bg-white/90 text-slate-900 shadow-none"

@@ -5,6 +5,7 @@ import { ArrowLeft, Edit3, Share2, Download, Copy, RefreshCw, Link2Off } from "l
 import PageShell from "@/components/ui/page-shell.jsx";
 import { Button } from "@/components/ui/button.jsx";
 import { Input } from "@/components/ui/input.jsx";
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select.jsx";
 import {
   Dialog,
   DialogContent,
@@ -62,7 +63,7 @@ const PLATFORM_LABELS = {
   TIKTOK_ADS: "TikTok Ads",
   LINKEDIN_ADS: "LinkedIn Ads",
   GA4: "GA4",
-  GMB: "Google Meu Negocio",
+  GMB: "Google Meu Negócio",
   FB_IG: "Facebook/Instagram",
 };
 
@@ -79,14 +80,14 @@ function buildConnectionsPath(brandId, platform) {
 }
 
 function describeIssue(issue) {
-  if (!issue) return "Widget com pendencia.";
+  if (!issue) return "Widget com pendência.";
   if (issue.reasonCode === "MISSING_CONNECTION") {
-    return `Conexao pendente: ${formatPlatform(issue.platform || "plataforma desconhecida")}.`;
+    return `Conexão pendente: ${formatPlatform(issue.platform || "plataforma desconhecida")}.`;
   }
   if (issue.reasonCode === "INVALID_QUERY") {
-    return "Configuracao de widget invalida.";
+    return "Configuração de widget inválida.";
   }
-  return "Widget com pendencia.";
+  return "Widget com pendência.";
 }
 
 export default function ReportsV2Viewer() {
@@ -96,6 +97,9 @@ export default function ReportsV2Viewer() {
   const { toast, showToast } = useToast();
   const [shareOpen, setShareOpen] = React.useState(false);
   const [shareUrl, setShareUrl] = React.useState("");
+  const [exportOpen, setExportOpen] = React.useState(false);
+  const [exportPage, setExportPage] = React.useState("current");
+  const [exportOrientation, setExportOrientation] = React.useState("landscape");
   const [blockedAction, setBlockedAction] = React.useState(null);
   const [widgetStatusesByPage, setWidgetStatusesByPage] = React.useState({});
   const [isAutoRefreshing, setIsAutoRefreshing] = React.useState(false);
@@ -114,6 +118,7 @@ export default function ReportsV2Viewer() {
     null;
   const normalizedLayout = normalizeLayoutFront(layout);
   const pages = normalizedLayout?.pages || [];
+  const canExportAllPages = pages.length > 1;
   const globalFilterControls = normalizedLayout?.globalFilters?.controls;
   const [activePageId, setActivePageId] = React.useState(pages[0]?.id || null);
   const shareStatusQuery = useQuery({
@@ -178,6 +183,13 @@ export default function ReportsV2Viewer() {
       return pages[0].id;
     });
   }, [pages]);
+
+  React.useEffect(() => {
+    if (canExportAllPages) return;
+    if (exportPage === "all") {
+      setExportPage("current");
+    }
+  }, [canExportAllPages, exportPage]);
   const widgetTitleById = React.useMemo(() => {
     const map = new Map();
     pages.forEach((page) => {
@@ -303,9 +315,9 @@ export default function ReportsV2Viewer() {
       queryClient.invalidateQueries({ queryKey: ["reportsV2-public-share", id] });
       queryClient.invalidateQueries({ queryKey: ["reportsV2-dashboard-health", id] });
       if (payload?.publicUrl) {
-        showToast("Link publico gerado com sucesso.", "success");
+        showToast("Link público gerado com sucesso.", "success");
       } else {
-        showToast("Link ja esta ativo. Rotacione para gerar um novo token.", "success");
+        showToast("Link já está ativo. Rotacione para gerar um novo token.", "success");
       }
     },
     onError: (err) => {
@@ -316,7 +328,7 @@ export default function ReportsV2Viewer() {
       const message =
         err?.data?.error?.message ||
         err?.message ||
-        "Nao foi possivel gerar o link publico.";
+        "Não foi possível gerar o link público.";
       showToast(message, "error");
     },
   });
@@ -340,7 +352,7 @@ export default function ReportsV2Viewer() {
       const message =
         err?.data?.error?.message ||
         err?.message ||
-        "Nao foi possivel rotacionar o link.";
+        "Não foi possível rotacionar o link.";
       showToast(message, "error");
     },
   });
@@ -358,7 +370,7 @@ export default function ReportsV2Viewer() {
       const message =
         err?.data?.error?.message ||
         err?.message ||
-        "Nao foi possivel desativar o link.";
+        "Não foi possível desativar o link.";
       showToast(message, "error");
     },
   });
@@ -367,17 +379,17 @@ export default function ReportsV2Viewer() {
     mutationFn: () =>
       base44.reportsV2.exportPdf(id, {
         filters,
-        page: "current",
-        activePageId,
-        orientation: "landscape",
+        page: exportPage,
+        activePageId: exportPage === "current" ? activePageId : null,
+        orientation: exportOrientation,
       }),
     onSuccess: (result) => {
       if (!result?.blob) {
-        showToast("Nao foi possivel gerar o PDF.", "error");
+        showToast("Não foi possível gerar o PDF.", "error");
         return;
       }
       const fallbackDate = new Date().toISOString().slice(0, 10);
-      const fallbackName = `Relatorio - ${dashboard?.name || "Dashboard"} - ${fallbackDate}.pdf`;
+      const fallbackName = `Relatório - ${dashboard?.name || "Dashboard"} - ${fallbackDate}.pdf`;
       const filename = result.filename || fallbackName;
       const objectUrl = window.URL.createObjectURL(result.blob);
       const anchor = document.createElement("a");
@@ -388,6 +400,7 @@ export default function ReportsV2Viewer() {
       anchor.remove();
       window.URL.revokeObjectURL(objectUrl);
       showToast("PDF gerado com sucesso.", "success");
+      setExportOpen(false);
     },
     onError: (err) => {
       if (err?.data?.error?.code === "DASHBOARD_BLOCKED") {
@@ -397,7 +410,7 @@ export default function ReportsV2Viewer() {
       const message =
         err?.data?.error?.message ||
         err?.message ||
-        "Nao foi possivel exportar o PDF.";
+        "Não foi possível exportar o PDF.";
       showToast(message, "error");
     },
   });
@@ -432,7 +445,7 @@ export default function ReportsV2Viewer() {
 
   const handleDisableShare = () => {
     const confirmed = window.confirm(
-      "Desativar compartilhamento vai revogar o link publico atual. Continuar?"
+      "Desativar compartilhamento vai revogar o link público atual. Continuar?"
     );
     if (!confirmed) return;
     revokeShareMutation.mutate();
@@ -448,6 +461,14 @@ export default function ReportsV2Viewer() {
       showToast("Aguarde o carregamento completo dos dados para exportar.", "info");
       return;
     }
+    setExportOpen(true);
+  };
+
+  const handleConfirmExport = () => {
+    if (!isExportReady) {
+      showToast("Aguarde o carregamento completo dos dados para exportar.", "info");
+      return;
+    }
     exportMutation.mutate();
   };
 
@@ -457,7 +478,7 @@ export default function ReportsV2Viewer() {
       await navigator.clipboard.writeText(shareUrl);
       showToast("Link copiado.", "success");
     } catch (err) {
-      showToast("Nao foi possivel copiar o link.", "error");
+      showToast("Não foi possível copiar o link.", "error");
     }
   };
 
@@ -478,7 +499,7 @@ export default function ReportsV2Viewer() {
       <ThemeProvider theme={normalizedLayout?.theme} className="min-h-screen bg-[var(--bg)]">
         <PageShell>
           <div className="rounded-[16px] border border-rose-200 bg-rose-50 px-6 py-5 text-sm text-rose-700">
-            Dashboard nao encontrado.
+            Dashboard não encontrado.
           </div>
         </PageShell>
       </ThemeProvider>
@@ -509,7 +530,7 @@ export default function ReportsV2Viewer() {
             ) : null}
             {isHealthWarn ? (
               <span className="mt-2 inline-flex rounded-full border border-purple-300 bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-700">
-                Dados parcialmente indisponiveis
+                Dados parcialmente indisponíveis
               </span>
             ) : null}
           </div>
@@ -551,13 +572,13 @@ export default function ReportsV2Viewer() {
               <div>
                 <p className="text-sm font-semibold text-[var(--text)]">
                   {isHealthBlocked
-                    ? "Configuracao invalida"
-                    : "Dados parcialmente indisponiveis"}
+                    ? "Configuração inválida"
+                    : "Dados parcialmente indisponíveis"}
                 </p>
                 <p className="mt-1 text-sm text-[var(--muted)]">
                   {isHealthBlocked
-                    ? "Corrija widgets invalidos no editor para habilitar exportacao e compartilhamento."
-                    : "Alguns widgets nao puderam ser carregados por falta de conexao."}
+                    ? "Corrija widgets inválidos no editor para habilitar exportação e compartilhamento."
+                    : "Alguns widgets não puderam ser carregados por falta de conexão."}
                 </p>
               </div>
               {missingPlatforms.length ? (
@@ -567,7 +588,7 @@ export default function ReportsV2Viewer() {
                     navigate(buildConnectionsPath(dashboard.brandId, missingPlatforms[0]))
                   }
                 >
-                  Gerenciar conexoes
+                  Gerenciar conexões
                 </Button>
               ) : (
                 <Button
@@ -630,7 +651,7 @@ export default function ReportsV2Viewer() {
               {pages.length > 1 ? (
                 <div
                   role="tablist"
-                  aria-label="Paginas do dashboard"
+                  aria-label="Páginas do dashboard"
                   className="mb-4 flex flex-wrap gap-2 rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-2"
                 >
                   {pages.map((page) => (
@@ -664,18 +685,71 @@ export default function ReportsV2Viewer() {
             </>
           ) : (
             <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] px-6 py-5 text-sm text-[var(--muted)]">
-              Layout nao encontrado para este dashboard.
+              Layout não encontrado para este dashboard.
             </div>
           )}
         </div>
       </PageShell>
+
+      <Dialog open={exportOpen} onOpenChange={setExportOpen}>
+        <DialogContent className="max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>Exportar PDF</DialogTitle>
+            <DialogDescription>
+              Escolha o formato e o escopo da exportação. Os filtros atuais serão aplicados.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+                Páginas
+              </label>
+              <Select value={exportPage} onValueChange={setExportPage}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="current">Página atual</SelectItem>
+                  {canExportAllPages ? (
+                    <SelectItem value="all">Todas as páginas</SelectItem>
+                  ) : null}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+                Orientação
+              </label>
+              <Select value={exportOrientation} onValueChange={setExportOrientation}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="portrait">Retrato</SelectItem>
+                  <SelectItem value="landscape">Paisagem</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter className="flex flex-wrap justify-end gap-2">
+            <Button variant="secondary" onClick={() => setExportOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleConfirmExport} disabled={exportMutation.isPending}>
+              {exportMutation.isPending ? "Exportando..." : "Exportar PDF"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={shareOpen} onOpenChange={setShareOpen}>
         <DialogContent className="max-w-[560px]">
           <DialogHeader>
             <DialogTitle>Compartilhar dashboard</DialogTitle>
             <DialogDescription>
-              Gere um link publico read-only para este dashboard.
+              Gere um link público read-only para este dashboard.
             </DialogDescription>
           </DialogHeader>
 
@@ -701,14 +775,14 @@ export default function ReportsV2Viewer() {
               </div>
               {shareStatusQuery.error ? (
                 <p className="mt-2 text-rose-600">
-                  Nao foi possivel carregar o status do compartilhamento.
+                  Não foi possível carregar o status do compartilhamento.
                 </p>
               ) : null}
             </div>
 
             <div>
               <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-                Link publico
+                Link público
               </label>
               <Input
                 readOnly
@@ -750,7 +824,7 @@ export default function ReportsV2Viewer() {
               ) : null}
               {isHealthBlocked ? (
                 <p className="mt-2 text-xs text-purple-700">
-                  Compartilhamento bloqueado ate corrigir widgets com configuracao invalida.
+                  Compartilhamento bloqueado até corrigir widgets com configuração inválida.
                 </p>
               ) : null}
             </div>
@@ -782,12 +856,12 @@ export default function ReportsV2Viewer() {
             <DialogTitle>
               {blockedAction === "share"
                 ? "Compartilhamento bloqueado"
-                : "Exportacao bloqueada"}
+                : "Exportação bloqueada"}
             </DialogTitle>
             <DialogDescription>
               {missingPlatforms.length
-                ? `Nao e possivel ${blockedAction === "share" ? "compartilhar" : "exportar"} este relatorio enquanto houver conexoes pendentes.`
-                : `Nao e possivel ${blockedAction === "share" ? "compartilhar" : "exportar"} este relatorio enquanto houver widgets com configuracao invalida.`}
+                ? `Não é possível ${blockedAction === "share" ? "compartilhar" : "exportar"} este relatório enquanto houver conexões pendentes.`
+                : `Não é possível ${blockedAction === "share" ? "compartilhar" : "exportar"} este relatório enquanto houver widgets com configuração inválida.`}
             </DialogDescription>
           </DialogHeader>
 
@@ -819,7 +893,7 @@ export default function ReportsV2Viewer() {
                 navigate(`/relatorios/v2/${dashboard?.id}/edit`);
               }}
             >
-              {missingPlatforms.length ? "Gerenciar conexoes" : "Abrir no editor"}
+              {missingPlatforms.length ? "Gerenciar conexões" : "Abrir no editor"}
             </Button>
           </DialogFooter>
         </DialogContent>

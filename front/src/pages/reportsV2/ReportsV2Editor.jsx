@@ -72,7 +72,7 @@ const DEFAULT_LAYOUT = {
   pages: [
     {
       id: generateUuid(),
-      name: "Pagina 1",
+      name: "Página 1",
       widgets: [],
     },
   ],
@@ -281,7 +281,7 @@ function resolveDropPosition({
 function buildMetricWidget({ metricKey, label, platform, position }) {
   const preset = WIDGET_PRESETS.kpi;
   const metric = String(metricKey || "").trim();
-  const title = String(label || METRIC_LABELS[metric] || metric || "Metrica");
+  const title = String(label || METRIC_LABELS[metric] || metric || "Métrica");
   const normalizedPlatform = normalizePlatformValue(platform);
   const x = Math.max(
     0,
@@ -504,7 +504,7 @@ function sanitizeLayoutForSave(layout) {
       name:
         page.name && String(page.name).trim()
           ? String(page.name).trim().slice(0, 60)
-          : `Pagina ${index + 1}`,
+          : `Página ${index + 1}`,
       widgets: (page.widgets || []).map(sanitizeWidget),
     })),
   };
@@ -521,7 +521,7 @@ function validateLayout(layout) {
     ? [
         {
           id: "legacy",
-        name: "Pagina 1",
+        name: "Página 1",
           widgets: layout.widgets,
         },
       ]
@@ -543,40 +543,40 @@ function validateLayout(layout) {
     }
 
     if (!isTextWidget && !metrics.length) {
-      errors.push("Selecione pelo menos uma metrica");
+      errors.push("Selecione pelo menos uma métrica");
     }
 
     if (!isTextWidget && widget?.type === "kpi" && metrics.length > 1) {
-      errors.push("KPI aceita apenas 1 metrica");
+      errors.push("KPI aceita apenas 1 métrica");
     }
 
     if (widget?.type === "kpi") {
       if (dimensions.length > 1) {
-        errors.push("KPI aceita no maximo 1 dimensao");
+        errors.push("KPI aceita no máximo 1 dimensão");
       }
       if (dimensions.length === 1 && dimensions[0] !== "date") {
-        errors.push("KPI com dimensao deve usar date");
+        errors.push("KPI com dimensão deve usar date");
       }
     }
 
     if (widget?.type === "timeseries") {
       if (dimensions.length !== 1 || dimensions[0] !== "date") {
-        errors.push("Time series exige dimensao date");
+        errors.push("Time series exige dimensão date");
       }
     }
 
     if (widget?.type === "bar") {
       if (dimensions.length !== 1 || dimensions[0] === "date") {
-        errors.push("Grafico exige uma dimensao nao-date");
+        errors.push("Gráfico exige uma dimensão não-date");
       }
     }
 
     if (widget?.type === "pie" || widget?.type === "donut") {
       if (dimensions.length !== 1 || dimensions[0] === "date") {
-        errors.push("Pie/Donut exige exatamente 1 dimensao nao-date");
+        errors.push("Pie/Donut exige exatamente 1 dimensão não-date");
       }
       if (metrics.length !== 1) {
-        errors.push("Pie/Donut exige exatamente 1 metrica");
+        errors.push("Pie/Donut exige exatamente 1 métrica");
       }
     }
 
@@ -607,7 +607,7 @@ function validateLayout(layout) {
       if (sort) {
         const sortableFields = new Set([...dimensions, ...metrics]);
         if (!sort.field || !sortableFields.has(sort.field)) {
-          errors.push("Ordenacao deve usar dimensao ou metrica selecionada");
+          errors.push("Ordenação deve usar dimensão ou métrica selecionada");
         }
         if (!["asc", "desc"].includes(sort.direction)) {
           errors.push("Direcao de ordenacao invalida");
@@ -625,7 +625,7 @@ function validateLayout(layout) {
         widget?.content?.text !== undefined &&
         !String(widget.content.text).trim()
       ) {
-        errors.push("Texto do bloco nao pode ficar vazio");
+        errors.push("Texto do bloco não pode ficar vazio");
       }
     }
 
@@ -654,8 +654,8 @@ function buildWidgetSummary(widget) {
     ? widget.query.dimensions
     : [];
 
-  const metricLabel = metrics.length ? metrics.join(", ") : "Sem metricas";
-  const dimensionLabel = dimensions.length ? dimensions.join(", ") : "Sem dimensao";
+  const metricLabel = metrics.length ? metrics.join(", ") : "Sem métricas";
+  const dimensionLabel = dimensions.length ? dimensions.join(", ") : "Sem dimensão";
   return `${metricLabel} • ${dimensionLabel}`;
 }
 
@@ -995,7 +995,7 @@ export default function ReportsV2Editor() {
     onError: () => {
       setActionMessage({
         type: "error",
-        text: "Nao foi possivel salvar o rascunho.",
+        text: "Não foi possível salvar o rascunho.",
       });
     },
   });
@@ -1018,7 +1018,7 @@ export default function ReportsV2Editor() {
     onError: () => {
       setActionMessage({
         type: "error",
-        text: "Nao foi possivel publicar.",
+        text: "Não foi possível publicar.",
       });
     },
   });
@@ -1037,7 +1037,7 @@ export default function ReportsV2Editor() {
     onError: () => {
       setActionMessage({
         type: "error",
-        text: "Nao foi possivel fazer rollback.",
+        text: "Não foi possível fazer rollback.",
       });
     },
   });
@@ -1052,7 +1052,7 @@ export default function ReportsV2Editor() {
     onError: () => {
       setActionMessage({
         type: "error",
-        text: "Nao foi possivel duplicar o dashboard.",
+        text: "Não foi possível duplicar o dashboard.",
       });
     },
   });
@@ -1714,7 +1714,7 @@ export default function ReportsV2Editor() {
     const nextIndex = pages.length + 1;
     const newPage = {
       id: generateUuid(),
-      name: `Pagina ${nextIndex}`,
+      name: `Página ${nextIndex}`,
       widgets: [],
     };
     commitLayoutChange((prev) => ({
@@ -2237,7 +2237,7 @@ export default function ReportsV2Editor() {
     setShowHistory(false);
     setActionMessage({
       type: "success",
-      text: `Versao ${version.versionNumber} restaurada como rascunho.`,
+      text: `Versão ${version.versionNumber} restaurada como rascunho.`,
     });
   };
 
@@ -2275,7 +2275,7 @@ export default function ReportsV2Editor() {
       >
         <div className="mx-auto max-w-[1200px] px-6 py-10">
           <div className="rounded-[16px] border border-rose-200 bg-rose-50 px-6 py-5 text-sm text-rose-700">
-            Nao foi possivel carregar o dashboard.
+            Não foi possível carregar o dashboard.
           </div>
         </div>
       </ThemeProvider>
@@ -2290,7 +2290,7 @@ export default function ReportsV2Editor() {
       >
         <div className="mx-auto max-w-[1200px] px-6 py-10">
           <div className="rounded-[16px] border border-purple-200 bg-purple-50 px-6 py-5 text-sm text-purple-700">
-            Voce nao tem permissao para editar este dashboard.
+            Você não tem permissão para editar este dashboard.
           </div>
         </div>
       </ThemeProvider>
@@ -2439,11 +2439,11 @@ export default function ReportsV2Editor() {
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
-                Pagina atual
+                Página atual
               </p>
               <div
                 role="tablist"
-                aria-label="Paginas do dashboard"
+                aria-label="Páginas do dashboard"
                 className="mt-2 flex flex-wrap gap-2 rounded-[14px] border border-slate-200 bg-slate-50 p-1.5"
               >
                 {pages.map((page) => (
@@ -2602,7 +2602,7 @@ export default function ReportsV2Editor() {
                       Sem widgets
                     </p>
                     <p className="max-w-[320px] text-xs text-slate-500">
-                      Clique em "Adicionar" ou arraste uma metrica para criar um
+                      Clique em "Adicionar" ou arraste uma métrica para criar um
                       KPI.
                     </p>
                   </div>
@@ -2850,7 +2850,7 @@ export default function ReportsV2Editor() {
           <DialogHeader>
             <DialogTitle>Historico de versoes</DialogTitle>
             <DialogDescription>
-              Escolha uma versao para restaurar como rascunho ou publicar um rollback.
+              Escolha uma versão para restaurar como rascunho ou publicar um rollback.
             </DialogDescription>
           </DialogHeader>
 
@@ -2860,7 +2860,7 @@ export default function ReportsV2Editor() {
             </div>
           ) : versionsQuery.error ? (
             <div className="rounded-[12px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-              Nao foi possivel carregar o historico.
+              Não foi possível carregar o histórico.
             </div>
           ) : versions.length ? (
             <div className="space-y-3">
@@ -2879,7 +2879,7 @@ export default function ReportsV2Editor() {
                   >
                     <div>
                       <p className="text-sm font-semibold text-[var(--text)]">
-                        Versao {version.versionNumber}
+                        Versão {version.versionNumber}
                       </p>
                       <p className="text-xs text-[var(--text-muted)]">
                         {formatVersionDate(version.createdAt)}
@@ -2915,7 +2915,7 @@ export default function ReportsV2Editor() {
             </div>
           ) : (
             <div className="rounded-[12px] border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-6 text-sm text-[var(--text-muted)]">
-              Nenhuma versao encontrada.
+              Nenhuma versão encontrada.
             </div>
           )}
 

@@ -33,8 +33,8 @@ const INTEGRATION_CATALOG = [
   {
     key: "facebook",
     title: "Facebook",
-    subtitle: "Paginas e publicacoes",
-    description: "Conecte paginas para publicar posts automaticamente.",
+    subtitle: "Páginas e publicações",
+    description: "Conecte páginas para publicar posts automaticamente.",
     provider: "META",
     ownerKey: "META_BUSINESS",
     kind: "meta_business",
@@ -42,17 +42,17 @@ const INTEGRATION_CATALOG = [
     accentClass: "from-blue-500 to-indigo-500",
     icon: Facebook,
     dialogDescription:
-      "Informe os dados da pagina do Facebook usada para publicar.",
+      "Informe os dados da página do Facebook usada para publicar.",
     oauth: {
-      title: "Conexao oficial via Meta",
-      subtitle: "Recomendado para paginas e Instagram Business.",
+      title: "Conexão oficial via Meta",
+      subtitle: "Recomendado para páginas e Instagram Business.",
       label: "Conectar via Meta",
       endpoint: "/integrations/meta/connect-url",
     },
     fields: [
       {
         name: "pageId",
-        label: "ID da Pagina do Facebook",
+        label: "ID da Página do Facebook",
         placeholder: "1234567890",
         required: true,
       },
@@ -68,7 +68,7 @@ const INTEGRATION_CATALOG = [
         type: "password",
         placeholder: "EAAB...",
         required: true,
-        helper: "Permissoes: pages_manage_posts, instagram_content_publish.",
+        helper: "Permissões: pages_manage_posts, instagram_content_publish.",
       },
     ],
   },
@@ -86,7 +86,7 @@ const INTEGRATION_CATALOG = [
     dialogDescription:
       "Conecte uma conta Instagram Business para publicar.",
     oauth: {
-      title: "Conexao oficial via Meta",
+      title: "Conexão oficial via Meta",
       subtitle: "Use o login Meta para conectar o Instagram Business.",
       label: "Conectar via Meta",
       endpoint: "/integrations/meta/connect-url",
@@ -100,7 +100,7 @@ const INTEGRATION_CATALOG = [
       },
       {
         name: "pageId",
-        label: "ID da Pagina do Facebook (opcional)",
+        label: "ID da Página do Facebook (opcional)",
         placeholder: "1234567890",
         required: false,
       },
@@ -116,8 +116,8 @@ const INTEGRATION_CATALOG = [
   {
     key: "linkedin",
     title: "LinkedIn",
-    subtitle: "Conteudos profissionais",
-    description: "Publique e acompanhe metricas do LinkedIn.",
+    subtitle: "Conteúdos profissionais",
+    description: "Publique e acompanhe métricas do LinkedIn.",
     provider: "LINKEDIN",
     ownerKey: "LINKEDIN",
     kind: "linkedin",
@@ -129,8 +129,8 @@ const INTEGRATION_CATALOG = [
   {
     key: "tiktok",
     title: "TikTok",
-    subtitle: "Publicacoes automaticas",
-    description: "Publique videos e acompanhe a agenda do cliente.",
+    subtitle: "Publicações automáticas",
+    description: "Publique vídeos e acompanhe a agenda do cliente.",
     provider: "TIKTOK",
     ownerKey: "TIKTOK",
     kind: "tiktok",
@@ -170,7 +170,7 @@ const INTEGRATION_CATALOG = [
   },
   {
     key: "google-business",
-    title: "Google Meu Negocio",
+    title: "Google Meu Negócio",
     subtitle: "Perfil da empresa",
     description: "Gerencie posts e visibilidade no Google.",
     provider: "GOOGLE",
@@ -184,7 +184,7 @@ const INTEGRATION_CATALOG = [
   {
     key: "pinterest",
     title: "Pinterest",
-    subtitle: "Conteudos visuais",
+    subtitle: "Conteúdos visuais",
     description: "Conecte pins e acompanhe performance.",
     provider: "PINTEREST",
     ownerKey: "PINTEREST",
@@ -197,8 +197,8 @@ const INTEGRATION_CATALOG = [
   {
     key: "youtube",
     title: "YouTube",
-    subtitle: "Videos e shorts",
-    description: "Publique videos e acompanhe metricas.",
+    subtitle: "Vídeos e shorts",
+    description: "Publique vídeos e acompanhe métricas.",
     provider: "GOOGLE",
     ownerKey: "YOUTUBE",
     kind: "youtube",
@@ -210,7 +210,7 @@ const INTEGRATION_CATALOG = [
   {
     key: "threads",
     title: "Threads",
-    subtitle: "Conteudos rapidos",
+    subtitle: "Conteúdos rápidos",
     description: "Integre o Threads para posts e insights.",
     provider: "META",
     ownerKey: "THREADS",
@@ -223,8 +223,8 @@ const INTEGRATION_CATALOG = [
   {
     key: "google-analytics",
     title: "Google Analytics 4",
-    subtitle: "GA4 + relatorios",
-    description: "Extraia metricas do site e exporte relatorios automatizados.",
+    subtitle: "GA4 + relatórios",
+    description: "Extraia métricas do site e exporte relatórios automatizados.",
     provider: "GOOGLE",
     ownerKey: "GA4",
     kind: "google_analytics",
@@ -259,7 +259,7 @@ const INTEGRATION_CATALOG = [
   {
     key: "x",
     title: "X",
-    subtitle: "Atualizacoes rapidas",
+    subtitle: "Atualizações rápidas",
     description: "Gerencie posts e acompanhamento no X.",
     provider: "X",
     ownerKey: "X",
@@ -272,7 +272,7 @@ const INTEGRATION_CATALOG = [
   {
     key: "meta-ads",
     title: "Meta Ads",
-    subtitle: "Metricas e relatorios",
+    subtitle: "Métricas e relatórios",
     description: "Importe resultados de campanhas para dashboards.",
     provider: "META",
     ownerKey: "META_ADS",
@@ -281,10 +281,10 @@ const INTEGRATION_CATALOG = [
     accentClass: "from-sky-500 to-cyan-500",
     icon: Megaphone,
     dialogDescription:
-      "Configure a conta de anuncios usada para coletar metricas.",
+      "Configure a conta de anúncios usada para coletar métricas.",
     oauth: {
-      title: "Conexao oficial via Meta Ads",
-      subtitle: "Recomendado para acesso continuo as campanhas.",
+      title: "Conexão oficial via Meta Ads",
+      subtitle: "Recomendado para acesso contínuo às campanhas.",
       label: "Conectar via Meta",
       endpoint: "/integrations/meta/connect-url",
     },
@@ -304,7 +304,7 @@ const INTEGRATION_CATALOG = [
       },
       {
         name: "fields",
-        label: "Metricas (opcional)",
+        label: "Métricas (opcional)",
         placeholder: "impressions,clicks,spend",
         required: false,
       },
@@ -313,8 +313,8 @@ const INTEGRATION_CATALOG = [
   {
     key: "google-ads",
     title: "Google Ads",
-    subtitle: "Metricas e campanhas",
-    description: "Acompanhe campanhas e conversoes.",
+    subtitle: "Métricas e campanhas",
+    description: "Acompanhe campanhas e conversões.",
     provider: "GOOGLE_ADS",
     ownerKey: "GOOGLE_ADS",
     kind: "google_ads",
@@ -327,7 +327,7 @@ const INTEGRATION_CATALOG = [
     key: "linkedin-ads",
     title: "LinkedIn Ads",
     subtitle: "Campanhas B2B",
-    description: "Relatorios e desempenho no LinkedIn.",
+    description: "Relatórios e desempenho no LinkedIn.",
     provider: "LINKEDIN",
     ownerKey: "LINKEDIN_ADS",
     kind: "linkedin_ads",
@@ -339,7 +339,7 @@ const INTEGRATION_CATALOG = [
   {
     key: "tiktok-ads",
     title: "TikTok Ads",
-    subtitle: "Campanhas e anuncios",
+    subtitle: "Campanhas e anúncios",
     description: "Dados de campanhas e criativos.",
     provider: "TIKTOK",
     ownerKey: "TIKTOK_ADS",
@@ -363,7 +363,7 @@ const INTEGRATION_CATALOG = [
     dialogDescription:
       "Preencha os dados do WhatsApp Business Cloud API para envio.",
     oauth: {
-      title: "Conexao oficial via Meta",
+      title: "Conexão oficial via Meta",
       subtitle: "Recomendado para webhooks e envio automatico.",
       label: "Conectar via Meta",
       endpoint: "/integrations/whatsapp/connect-url",
@@ -762,7 +762,7 @@ export default function Integrations() {
                   selectedClient?.name && selectedClientId
                     ? `Cliente: ${selectedClient.name}`
                     : isSoon
-                    ? "Disponivel em breve"
+                    ? "Disponível em breve"
                     : "Selecione um cliente para conectar";
                 const Icon = integration.icon;
                 return (
@@ -833,7 +833,7 @@ export default function Integrations() {
             <div className="space-y-3 text-sm text-[var(--text-muted)]">
               <p>
                 Esta integracao esta em desenvolvimento. Avisaremos quando estiver
-                disponivel para conexao.
+                disponível para conexão.
               </p>
               <Button type="button" onClick={() => setComingSoonDefinition(null)}>
                 Entendi

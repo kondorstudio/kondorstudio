@@ -49,7 +49,7 @@ function normalizeLayoutPages(layoutJson) {
   if (Array.isArray(layoutJson.pages)) {
     return layoutJson.pages.map((page, index) => ({
       id: page?.id || `page-${index + 1}`,
-      name: String(page?.name || `Pagina ${index + 1}`),
+      name: String(page?.name || `Página ${index + 1}`),
       widgets: Array.isArray(page?.widgets) ? page.widgets : [],
     }));
   }
@@ -57,7 +57,7 @@ function normalizeLayoutPages(layoutJson) {
     return [
       {
         id: 'legacy-page',
-        name: 'Pagina 1',
+        name: 'Página 1',
         widgets: layoutJson.widgets,
       },
     ];

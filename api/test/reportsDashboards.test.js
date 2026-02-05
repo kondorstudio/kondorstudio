@@ -602,7 +602,7 @@ test('public share is blocked when dashboard health is BLOCKED by invalid widget
     pages: [
       {
         id: randomUUID(),
-        name: 'Pagina 1',
+        name: 'Página 1',
         widgets: [
           {
             id: randomUUID(),

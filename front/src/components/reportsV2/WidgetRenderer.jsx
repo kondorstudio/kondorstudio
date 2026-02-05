@@ -43,7 +43,7 @@ const PLATFORM_LABELS = {
   TIKTOK_ADS: "TikTok Ads",
   LINKEDIN_ADS: "LinkedIn Ads",
   GA4: "GA4",
-  GMB: "Google Meu Negocio",
+  GMB: "Google Meu Negócio",
   FB_IG: "Facebook/Instagram",
 };
 
@@ -68,7 +68,7 @@ const COMPARISON_LABELS = {
 };
 
 function formatPlatformList(list) {
-  if (!Array.isArray(list) || !list.length) return "conexoes necessarias";
+  if (!Array.isArray(list) || !list.length) return "conexões necessárias";
   return list
     .map((platform) => PLATFORM_LABELS[platform] || platform)
     .join(", ");
@@ -246,8 +246,8 @@ function resolveFriendlyError(error) {
     code.includes("ERR_NETWORK")
   ) {
     return {
-      title: "Sem conexao",
-      description: "Verifique sua conexao com a internet e tente novamente.",
+      title: "Sem conexão",
+      description: "Verifique sua conexão com a internet e tente novamente.",
     };
   }
 
@@ -266,20 +266,20 @@ function resolveFriendlyError(error) {
 
   if (code.includes("INVALID_QUERY")) {
     return {
-      title: "Configuracao invalida",
-      description: "Este widget possui uma configuracao invalida. Ajuste no editor.",
+      title: "Configuração inválida",
+      description: "Este widget possui uma configuração inválida. Ajuste no editor.",
     };
   }
 
   if (status >= 500 || status === 502 || status === 503) {
     return {
-      title: "Servico temporariamente indisponivel",
-      description: "Nao foi possivel carregar agora. Tente novamente em alguns instantes.",
+      title: "Serviço temporariamente indisponível",
+      description: "Não foi possível carregar agora. Tente novamente em alguns instantes.",
     };
   }
 
   return {
-    title: "Nao foi possivel carregar",
+    title: "Não foi possível carregar",
     description: "Ocorreu um erro ao consultar os dados deste widget.",
   };
 }
@@ -501,11 +501,11 @@ export default function WidgetRenderer({
           onStatusChange={onStatusChange}
         />
       <WidgetEmptyState
-        title="Dados parcialmente indisponiveis"
+        title="Dados parcialmente indisponíveis"
         description={
           isPublic
-            ? "Dados indisponiveis. Conecte a plataforma para visualizar."
-            : `Dados indisponiveis. Conecte ${platformLabel} para visualizar este grafico.`
+            ? "Dados indisponíveis. Conecte a plataforma para visualizar."
+            : `Dados indisponíveis. Conecte ${platformLabel} para visualizar este gráfico.`
         }
         variant="connection"
         actionLabel={isPublic ? undefined : "Conectar agora"}
@@ -537,8 +537,8 @@ export default function WidgetRenderer({
           onStatusChange={onStatusChange}
         />
       <WidgetEmptyState
-        title="Configuracao invalida"
-        description="Configuracao invalida neste widget. Abra no Editor para corrigir."
+        title="Configuração inválida"
+        description="Configuração inválida neste widget. Abra no Editor para corrigir."
         variant="metrics"
         actionLabel={isPublic ? undefined : "Abrir no editor"}
         onAction={
@@ -563,8 +563,8 @@ export default function WidgetRenderer({
           onStatusChange={onStatusChange}
         />
       <WidgetEmptyState
-        title="Widget sem metricas"
-        description="Edite este widget para selecionar metricas."
+        title="Widget sem métricas"
+        description="Edite este widget para selecionar métricas."
         variant="metrics"
         compact={isCompact}
         className="border-0 bg-transparent p-0"
@@ -605,10 +605,10 @@ export default function WidgetRenderer({
           onStatusChange={onStatusChange}
         />
       <WidgetEmptyState
-        title="Conexoes pendentes"
+        title="Conexões pendentes"
         description={`Conecte ${formatPlatformList(missing)} para ver este widget.`}
         variant="connection"
-        actionLabel={isPublic ? undefined : "Ir para conexoes"}
+        actionLabel={isPublic ? undefined : "Ir para conexões"}
         onAction={
           isPublic
             ? undefined
@@ -669,7 +669,7 @@ export default function WidgetRenderer({
           onStatusChange={onStatusChange}
         />
       <WidgetEmptyState
-        title="Sem dados para este periodo"
+        title="Sem dados para este período"
         description="Ajuste os filtros globais para ver resultados."
         variant="no-data"
         compact={isCompact}
@@ -932,7 +932,7 @@ export default function WidgetRenderer({
               </select>
 
               <div className="text-xs text-[var(--muted)]">
-                Pagina {currentPage}
+                Página {currentPage}
               </div>
               {widgetLimit ? (
                 <div className="text-[11px] text-[var(--muted)]">
@@ -1009,8 +1009,8 @@ export default function WidgetRenderer({
         onStatusChange={onStatusChange}
       />
     <WidgetEmptyState
-      title="Tipo nao suportado"
-      description="Este widget ainda nao possui visualizacao."
+      title="Tipo não suportado"
+      description="Este widget ainda não possui visualização."
       variant="metrics"
       compact={isCompact}
       className="border-0 bg-transparent p-0"

@@ -119,7 +119,7 @@ test('health returns WARN when required platform is missing', async () => {
     pages: [
       {
         id: randomUUID(),
-        name: 'Pagina 1',
+        name: 'Página 1',
         widgets: [
           {
             id: randomUUID(),

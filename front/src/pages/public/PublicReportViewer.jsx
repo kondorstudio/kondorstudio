@@ -281,7 +281,7 @@ export default function PublicReportViewer() {
       <ThemeProvider theme={normalizedLayout?.theme} className="min-h-screen bg-[var(--bg)]">
         <PageShell>
           <div className="rounded-[16px] border border-rose-200 bg-rose-50 px-6 py-5 text-sm text-rose-700">
-            Relatorio publico nao encontrado.
+            Relatório público não encontrado.
           </div>
         </PageShell>
       </ThemeProvider>
@@ -294,13 +294,13 @@ export default function PublicReportViewer() {
         {!isPdf && !isExport ? (
           <div className="mb-6">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-              Relatorio publico
+              Relatório público
             </p>
             <h1 className="text-2xl font-semibold text-[var(--text)]">
-              {data.dashboard?.name || "Relatorio"}
+              {data.dashboard?.name || "Relatório"}
             </h1>
             <p className="text-sm text-[var(--muted)]">
-              Compartilhado para visualizacao externa.
+              Compartilhado para visualização externa.
             </p>
             {refreshNotice ? (
               <p className="mt-2 text-xs text-[var(--muted)]">{refreshNotice}</p>
@@ -314,7 +314,7 @@ export default function PublicReportViewer() {
               KONDOR STUDIO • RELATORIO
             </p>
             <h1 className="mt-1 text-xl font-semibold text-[var(--text)]">
-              {data.dashboard?.name || "Relatorio"}
+              {data.dashboard?.name || "Relatório"}
             </h1>
             <p className="mt-1 text-xs text-[var(--muted)]">
               Gerado em {formatDateTime(data?.meta?.generatedAt)}
@@ -337,7 +337,7 @@ export default function PublicReportViewer() {
             {!isPdf && !isExport && pages.length > 1 ? (
               <div
                 role="tablist"
-                aria-label="Paginas do dashboard"
+                aria-label="Páginas do dashboard"
                 className="mb-4 flex flex-wrap gap-2 rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-2"
               >
                 {pages.map((page) => (
@@ -382,7 +382,7 @@ export default function PublicReportViewer() {
           </>
         ) : (
           <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] px-6 py-5 text-sm text-[var(--muted)]">
-            Layout nao encontrado.
+            Layout não encontrado.
           </div>
         )}
       </PageShell>

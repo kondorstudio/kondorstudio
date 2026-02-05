@@ -641,7 +641,7 @@ export default function Dashboard() {
                       onClick={() => navigate("/clients")}
                     />
                     <ActionTile
-                      title="Metricas"
+                      title="Métricas"
                       description="Resultados e insights"
                       icon={BarChart3}
                       accent={STAT_ACCENTS.team}

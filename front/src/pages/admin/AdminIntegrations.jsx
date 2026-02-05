@@ -187,7 +187,7 @@ export default function AdminIntegrations() {
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
         <p className="text-sm uppercase tracking-wide text-gray-500">Integracoes</p>
-        <h1 className="text-3xl font-bold text-gray-900">Conexoes ativas</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Conexões ativas</h1>
         <p className="text-gray-600">
           Gerencie status e credenciais de integracao por tenant.
         </p>
@@ -366,7 +366,7 @@ export default function AdminIntegrations() {
 
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 text-sm text-gray-600 border-t border-gray-100">
             <span>
-              Pagina {pagination.page} de {pagination.totalPages || 1} — {pagination.total} registros
+              Página {pagination.page} de {pagination.totalPages || 1} — {pagination.total} registros
             </span>
             <div className="flex items-center gap-2">
               <button

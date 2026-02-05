@@ -567,7 +567,7 @@ export function PostForm({
           base.facebook.push({
             integrationId: integration.id,
             accountId: pageId,
-            label: pageMeta?.pageName || `Pagina ${pageId.slice(-4)}`,
+            label: pageMeta?.pageName || `Página ${pageId.slice(-4)}`,
             status: integration.status,
           });
         }

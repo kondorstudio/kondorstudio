@@ -15,7 +15,7 @@ import {
 
 const CHART_ITEMS = [
   { type: "kpi", label: "KPI", icon: Gauge },
-  { type: "timeseries", label: "Serie temporal", icon: LineChart },
+  { type: "timeseries", label: "Série temporal", icon: LineChart },
   { type: "bar", label: "Barras", icon: BarChart3 },
   { type: "table", label: "Tabela", icon: Table2 },
   { type: "pie", label: "Pizza", icon: PieChart },
@@ -66,7 +66,7 @@ export default function AddMenu({
           className="absolute right-0 z-40 mt-2 w-[280px] rounded-[14px] border border-[var(--border)] bg-white p-2 shadow-[var(--shadow-md)]"
         >
           <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
-            Graficos
+            Gráficos
           </p>
           {CHART_ITEMS.map((item) => {
             const Icon = item.icon;

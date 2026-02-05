@@ -94,8 +94,8 @@ const navGroups = [
   {
     label: "Insights",
     items: [
-      { to: "/relatorios/v2", label: "Relatorios", icon: PieChart },
-      { to: "/metrics", label: "Metricas", icon: BarChart3 },
+      { to: "/relatorios/v2", label: "Relatórios", icon: PieChart },
+      { to: "/metrics", label: "Métricas", icon: BarChart3 },
       {
         to: "/competitors",
         label: "Concorrentes",

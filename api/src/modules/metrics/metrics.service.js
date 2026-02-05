@@ -2,6 +2,21 @@ const { prisma } = require('../../prisma');
 const { ensureGa4FactMetrics } = require('../../services/ga4FactMetricsService');
 const { ensureFactMetrics } = require('../../services/factMetricsSyncService');
 
+const SUPPORTED_PLATFORMS = new Set([
+  'META_ADS',
+  'GOOGLE_ADS',
+  'TIKTOK_ADS',
+  'LINKEDIN_ADS',
+  'GA4',
+  'GMB',
+  'FB_IG',
+]);
+
+const PLATFORM_ALIASES = {
+  META_ADS: ['FB_IG'],
+  FB_IG: ['META_ADS'],
+};
+
 const DIMENSION_COLUMN_MAP = {
   date: 'date',
   platform: 'platform',
@@ -55,6 +70,108 @@ const METRICS_QUERY_CONCURRENCY_LIMIT = Math.max(
 const metricsQueryCache = new Map();
 const metricsQueryInFlight = new Map();
 const dashboardQueues = new Map();
+
+function toArray(value) {
+  if (!value) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function normalizePlatform(value) {
+  if (!value) return null;
+  const normalized = String(value).trim().toUpperCase();
+  if (!SUPPORTED_PLATFORMS.has(normalized)) return null;
+  return normalized;
+}
+
+function extractPlatformsFromFilters(filters = []) {
+  const set = new Set();
+  (filters || []).forEach((filter) => {
+    if (!filter || filter.field !== 'platform') return;
+    if (filter.op === 'eq') {
+      const platform = normalizePlatform(filter.value);
+      if (platform) set.add(platform);
+      return;
+    }
+    if (filter.op === 'in') {
+      toArray(filter.value).forEach((entry) => {
+        const platform = normalizePlatform(entry);
+        if (platform) set.add(platform);
+      });
+    }
+  });
+  return set;
+}
+
+function expandPlatformSet(platformSet) {
+  const expanded = new Set(platformSet || []);
+  Array.from(platformSet || []).forEach((platform) => {
+    (PLATFORM_ALIASES[platform] || []).forEach((alias) => expanded.add(alias));
+  });
+  return expanded;
+}
+
+async function resolveConnectedPlatforms(tenantId, brandId) {
+  const connections = await prisma.brandSourceConnection.findMany({
+    where: {
+      tenantId,
+      brandId,
+      status: 'ACTIVE',
+    },
+    select: { platform: true },
+  });
+  const connected = new Set(
+    (connections || [])
+      .map((item) => normalizePlatform(item.platform))
+      .filter(Boolean),
+  );
+
+  if (connected.has('GA4') && prisma.integrationGoogleGa4?.findFirst) {
+    const ga4Integration = await prisma.integrationGoogleGa4.findFirst({
+      where: { tenantId, status: 'CONNECTED' },
+      select: { id: true },
+    });
+    if (!ga4Integration) {
+      connected.delete('GA4');
+    }
+  }
+
+  return expandPlatformSet(connected);
+}
+
+async function assertRequiredPlatformsConnected({
+  tenantId,
+  brandId,
+  requiredPlatforms,
+  filters,
+}) {
+  const required = new Set();
+  toArray(requiredPlatforms).forEach((platform) => {
+    const normalized = normalizePlatform(platform);
+    if (normalized) required.add(normalized);
+  });
+  const fromFilters = extractPlatformsFromFilters(filters);
+  fromFilters.forEach((platform) => required.add(platform));
+
+  if (!required.size) {
+    return { required: [], missing: [] };
+  }
+
+  const connected = await resolveConnectedPlatforms(tenantId, brandId);
+  const missing = Array.from(required).filter((platform) => !connected.has(platform));
+
+  if (missing.length) {
+    const err = new Error('Conexões pendentes para as plataformas solicitadas');
+    err.code = 'MISSING_CONNECTIONS';
+    err.status = 409;
+    err.details = {
+      missing,
+      required: Array.from(required),
+    };
+    throw err;
+  }
+
+  return { required: Array.from(required), missing: [] };
+}
 
 function stableStringify(value) {
   if (value === null || value === undefined) return 'null';
@@ -120,6 +237,7 @@ function buildMetricsCacheKey(tenantId, payload = {}) {
     dimensions: payload.dimensions || [],
     metrics: payload.metrics || [],
     filters: payload.filters || [],
+    requiredPlatforms: payload.requiredPlatforms || [],
     compareTo: payload.compareTo || null,
     sort: payload.sort || null,
     limit: payload.limit || null,
@@ -660,6 +778,13 @@ async function executeQueryMetrics(tenantId, payload = {}) {
     err.status = 404;
     throw err;
   }
+
+  await assertRequiredPlatformsConnected({
+    tenantId,
+    brandId,
+    requiredPlatforms: payload.requiredPlatforms,
+    filters,
+  });
 
   const catalogEntries = await prisma.metricsCatalog.findMany({
     where: { key: { in: metrics } },

@@ -34,7 +34,7 @@ const navItems = [
   { to: "/admin/users", label: "Usuarios", icon: Users, permission: "users.read" },
   { to: "/admin/billing", label: "Billing", icon: CreditCard, permission: "billing.read" },
   { to: "/admin/integrations", label: "Integracoes", icon: Plug, permission: "integrations.read" },
-  { to: "/admin/reports", label: "Relatorios", icon: BarChart3, permission: "reports.read" },
+  { to: "/admin/reports", label: "Relatórios", icon: BarChart3, permission: "reports.read" },
   { to: "/admin/logs", label: "Logs", icon: FileText, permission: "logs.read" },
   { to: "/admin/jobs", label: "Jobs", icon: Server, permission: "jobs.read" },
   { to: "/admin/data", label: "Data Studio", icon: Database, permission: "data.query" },

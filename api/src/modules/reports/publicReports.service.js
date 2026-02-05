@@ -101,7 +101,7 @@ async function queryPublicMetrics(token, payload = {}) {
     !dashboard.publishedVersionId ||
     !dashboard.publishedVersion
   ) {
-    const err = new Error('Relatorio publico nao encontrado');
+    const err = new Error('Relatório público não encontrado');
     err.code = 'PUBLIC_REPORT_NOT_FOUND';
     err.status = 404;
     throw err;

@@ -43,7 +43,7 @@ function buildExportServiceHarness(options = {}) {
     pages: [
       {
         id: 'a3f2a8ee-0f0f-4f34-84af-9d53d3ed4d73',
-        name: 'Pagina 1',
+        name: 'Página 1',
         widgets: [
           {
             id: 'f95f9e5f-af6f-4fdb-b7e2-a93e7992fd2d',
@@ -372,7 +372,7 @@ test('exportDashboardPdf allows export when only missing connections are detecte
         pages: [
           {
             id: '74d19647-13f3-4c6f-b0d4-fe1779f7043c',
-            name: 'Pagina 1',
+            name: 'Página 1',
             widgets: [
               {
                 id: '190f521b-98da-4f72-9499-92b41235f6d2',
@@ -435,7 +435,7 @@ test('exportDashboardPdf blocks when health status is BLOCKED', async () => {
         pages: [
           {
             id: '74d19647-13f3-4c6f-b0d4-fe1779f7043c',
-            name: 'Pagina 1',
+            name: 'Página 1',
             widgets: [
               {
                 id: '190f521b-98da-4f72-9499-92b41235f6d2',

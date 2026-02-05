@@ -352,7 +352,7 @@ function WidgetDialog({
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <p className="text-xs text-[var(--text-muted)]">Metricas</p>
+                <p className="text-xs text-[var(--text-muted)]">Métricas</p>
                 <div className="max-h-40 space-y-2 overflow-auto rounded-lg border border-[var(--border)] p-3">
                   {metrics.map((metric) => (
                     <label key={metric.apiName} className="flex items-center gap-2 text-xs">
@@ -405,7 +405,7 @@ function WidgetDialog({
 
             <div className="grid gap-3 md:grid-cols-2">
               <div>
-                <label className="text-xs text-[var(--text-muted)]">Periodo</label>
+                <label className="text-xs text-[var(--text-muted)]">Período</label>
                 <SelectNative
                   value={draft.config.dateRange.type}
                   onChange={(event) =>

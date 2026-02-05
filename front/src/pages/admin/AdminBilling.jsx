@@ -301,7 +301,7 @@ export default function AdminBilling() {
 
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 text-sm text-gray-600 border-t border-gray-100">
           <span>
-            Pagina {pagination.page} de {pagination.totalPages || 1} — {pagination.total} tenants
+            Página {pagination.page} de {pagination.totalPages || 1} — {pagination.total} tenants
           </span>
           <div className="flex items-center gap-2">
             <button

@@ -24,7 +24,7 @@ async function getReport(req, res) {
     const report = await publicReportsService.getPublicReport(req.params.token);
     if (!report) {
       return res.status(404).json({
-        error: { code: 'PUBLIC_REPORT_NOT_FOUND', message: 'Relatorio nao encontrado', details: null },
+        error: { code: 'PUBLIC_REPORT_NOT_FOUND', message: 'Relatório não encontrado', details: null },
       });
     }
     return res.json(report);
