@@ -112,7 +112,11 @@ async function queryPublicMetrics(token, payload = {}) {
     brandId: dashboard.brandId,
   };
 
-  return metricsService.queryMetrics(dashboard.tenantId, safePayload);
+  const useReportei = safePayload.responseFormat === 'reportei';
+  const queryFn = useReportei
+    ? metricsService.queryMetricsReportei
+    : metricsService.queryMetrics;
+  return queryFn(dashboard.tenantId, safePayload);
 }
 
 module.exports = {

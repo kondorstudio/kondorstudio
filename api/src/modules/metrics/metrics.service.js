@@ -209,6 +209,106 @@ function buildCompareRange(dateFrom, dateTo, mode) {
   return null;
 }
 
+function normalizeReporteiCell(value) {
+  if (value && typeof value === 'object') {
+    if (Object.prototype.hasOwnProperty.call(value, 'text')) return value.text;
+    if (Object.prototype.hasOwnProperty.call(value, 'value')) return value.value;
+    if (Object.prototype.hasOwnProperty.call(value, 'title')) return value.title;
+  }
+  return value;
+}
+
+function resolveKpiValue(rows, totals, metric, dimensions) {
+  if (dimensions?.length === 1 && dimensions[0] === 'date' && Array.isArray(rows) && rows.length) {
+    const sorted = [...rows].sort((a, b) =>
+      String(a?.date || '').localeCompare(String(b?.date || '')),
+    );
+    return sorted[sorted.length - 1]?.[metric];
+  }
+  return totals?.[metric];
+}
+
+function buildReporteiComparison(currentValue, compareValue) {
+  if (compareValue === null || compareValue === undefined) {
+    return {
+      values: null,
+      difference: null,
+      absoluteDifference: null,
+    };
+  }
+  const currentNum = toNumber(currentValue);
+  const compareNum = toNumber(compareValue);
+  const absoluteDifference = currentNum - compareNum;
+  const difference = compareNum === 0 ? null : (absoluteDifference / compareNum) * 100;
+  return {
+    values: compareValue,
+    difference,
+    absoluteDifference,
+  };
+}
+
+function buildReporteiChart(rows, metrics, dimension) {
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const labels = safeRows.map((row, index) => {
+    if (dimension && row && row[dimension] !== undefined) return row[dimension];
+    if (row?.label !== undefined) return row.label;
+    if (row?.date !== undefined) return row.date;
+    return String(index + 1);
+  });
+  const values = (Array.isArray(metrics) ? metrics : []).map((metric) => ({
+    name: metric,
+    data: safeRows.map((row) => {
+      const value = row ? row[metric] : null;
+      const numeric = toNumber(value);
+      return Number.isFinite(numeric) ? numeric : 0;
+    }),
+  }));
+  return { labels, values };
+}
+
+function buildReporteiTable(rows, dimensions, metrics) {
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const columns = [...(dimensions || []), ...(metrics || [])];
+  const values = safeRows.map((row) =>
+    columns.map((column) => normalizeReporteiCell(row ? row[column] : null)),
+  );
+  return { values };
+}
+
+function formatReporteiResponse(result, payload = {}) {
+  const widgetId = payload.widgetId || null;
+  const widgetType = String(payload.widgetType || '').toLowerCase();
+  const metrics = Array.isArray(payload.metrics) ? payload.metrics : [];
+  const dimensions = Array.isArray(payload.dimensions) ? payload.dimensions : [];
+  const rows = Array.isArray(result?.rows) ? result.rows : [];
+  const totals = result?.totals || {};
+  const compareTotals = result?.compare?.totals || null;
+
+  const metricForKpi = metrics[0] || Object.keys(totals || {})[0];
+  let entry = {};
+
+  if (widgetType === 'kpi' || (!widgetType && !dimensions.length)) {
+    const currentValue = resolveKpiValue(rows, totals, metricForKpi, dimensions);
+    const compareValue =
+      compareTotals && metricForKpi ? compareTotals[metricForKpi] : null;
+    entry = {
+      values: currentValue ?? 0,
+      trend: { data: [] },
+      comparison: buildReporteiComparison(currentValue, compareValue),
+    };
+  } else if (['timeseries', 'bar', 'pie', 'donut'].includes(widgetType)) {
+    const dimension = dimensions[0] || 'label';
+    entry = buildReporteiChart(rows, metrics, dimension);
+  } else {
+    entry = buildReporteiTable(rows, dimensions, metrics);
+  }
+
+  if (widgetId) {
+    return { [widgetId]: entry };
+  }
+  return entry;
+}
+
 function normalizeMetricCatalog(entries = []) {
   return entries.map((entry) => ({
     key: entry.key,
@@ -739,8 +839,19 @@ async function queryMetrics(tenantId, payload = {}) {
   }
 }
 
+async function queryMetricsReportei(tenantId, payload = {}) {
+  const { widgetId, widgetType, responseFormat, ...rest } = payload || {};
+  const result = await queryMetrics(tenantId, rest);
+  return formatReporteiResponse(result, {
+    widgetId,
+    widgetType,
+    ...rest,
+  });
+}
+
 module.exports = {
   queryMetrics,
+  queryMetricsReportei,
   buildCompareRange,
   buildMetricsPlan,
   buildWhereClause,

@@ -92,6 +92,93 @@ function formatMetricValue(metricKey, value, meta, formatOverride = "auto") {
   return formatNumber(number, { compact: true });
 }
 
+function normalizeReporteiCell(value) {
+  if (value && typeof value === "object") {
+    if (Object.prototype.hasOwnProperty.call(value, "text")) return value.text;
+    if (Object.prototype.hasOwnProperty.call(value, "value")) return value.value;
+    if (Object.prototype.hasOwnProperty.call(value, "title")) return value.title;
+  }
+  return value;
+}
+
+function buildTotalsFromRows(rows, metrics) {
+  const totals = {};
+  metrics.forEach((metric) => {
+    totals[metric] = rows.reduce((sum, row) => {
+      const value = row?.[metric];
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? sum + numeric : sum;
+    }, 0);
+  });
+  return totals;
+}
+
+function normalizeReporteiEntry(entry, widget) {
+  if (!entry || typeof entry !== "object") return null;
+  const metrics = Array.isArray(widget?.query?.metrics) ? widget.query.metrics : [];
+  const dimensions = Array.isArray(widget?.query?.dimensions)
+    ? widget.query.dimensions
+    : [];
+  const widgetType = widget?.type || "kpi";
+  const rows = [];
+  const pageInfo = { limit: rows.length, offset: 0, hasMore: false };
+
+  if (widgetType === "kpi") {
+    const metric = metrics[0];
+    return {
+      rows: [],
+      totals: metric ? { [metric]: entry.values ?? 0 } : {},
+      meta: {},
+      pageInfo,
+    };
+  }
+
+  if (Array.isArray(entry.labels) && Array.isArray(entry.values)) {
+    const dimension = dimensions[0] || "label";
+    entry.labels.forEach((label, index) => {
+      const row = { [dimension]: label };
+      entry.values.forEach((serie) => {
+        const serieName = serie?.name || "value";
+        const serieValue = Array.isArray(serie?.data) ? serie.data[index] : null;
+        row[serieName] = serieValue;
+      });
+      rows.push(row);
+    });
+    return {
+      rows,
+      totals: buildTotalsFromRows(rows, metrics),
+      meta: {},
+      pageInfo: { ...pageInfo, limit: rows.length },
+    };
+  }
+
+  if (Array.isArray(entry.values)) {
+    const columns = [...dimensions, ...metrics];
+    entry.values.forEach((rowValues) => {
+      const row = {};
+      columns.forEach((column, columnIndex) => {
+        row[column] = normalizeReporteiCell(rowValues?.[columnIndex]);
+      });
+      rows.push(row);
+    });
+    return {
+      rows,
+      totals: buildTotalsFromRows(rows, metrics),
+      meta: {},
+      pageInfo: { ...pageInfo, limit: rows.length },
+    };
+  }
+
+  return null;
+}
+
+function resolveReporteiData(data, widget) {
+  if (!data || typeof data !== "object") return null;
+  if (data.rows || data.totals || data.pageInfo) return null;
+  const entry = widget?.id && data[widget.id] ? data[widget.id] : data;
+  return normalizeReporteiEntry(entry, widget);
+}
+
 function resolveRefreshLabel(fetchReason) {
   if (fetchReason === "auto") return "Atualizando automaticamente...";
   if (fetchReason === "filters") return "Aplicando filtros...";
@@ -307,6 +394,9 @@ export default function WidgetRenderer({
     ...(widgetLimit ? { limit: widgetLimit } : {}),
     pagination,
     sort,
+    responseFormat: "reportei",
+    widgetId: widget?.id,
+    widgetType,
   };
 
   const queryKey = buildWidgetQueryKey({
@@ -505,10 +595,15 @@ export default function WidgetRenderer({
   );
 }
 
-  const rows = Array.isArray(data?.rows) ? data.rows : [];
-  const totals = data?.totals || {};
-  const meta = data?.meta || {};
-  const pageInfo = data?.pageInfo || {
+  const normalizedData = React.useMemo(
+    () => resolveReporteiData(data, widget) || data,
+    [data, widget]
+  );
+
+  const rows = Array.isArray(normalizedData?.rows) ? normalizedData.rows : [];
+  const totals = normalizedData?.totals || {};
+  const meta = normalizedData?.meta || {};
+  const pageInfo = normalizedData?.pageInfo || {
     limit: pagination?.limit || 0,
     offset: pagination?.offset || 0,
     hasMore: false,

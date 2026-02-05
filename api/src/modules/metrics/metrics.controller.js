@@ -44,7 +44,10 @@ async function query(req, res) {
 
   try {
     const { tenantId: _ignored, ...safePayload } = payload;
-    const result = await metricsService.queryMetrics(req.tenantId, safePayload);
+    const useReportei = safePayload.responseFormat === 'reportei';
+    const result = useReportei
+      ? await metricsService.queryMetricsReportei(req.tenantId, safePayload)
+      : await metricsService.queryMetrics(req.tenantId, safePayload);
     return res.json(result);
   } catch (err) {
     return handleError(res, err);

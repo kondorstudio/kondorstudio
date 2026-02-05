@@ -83,6 +83,9 @@ const metricsQuerySchema = z
   .object({
     tenantId: z.string().uuid().optional(),
     brandId: z.string().uuid(),
+    widgetId: z.string().uuid().optional(),
+    widgetType: z.string().min(1).optional(),
+    responseFormat: z.enum(['reportei']).optional(),
     dateRange: dateRangeSchema,
     dimensions: z.array(dimensionEnum).default([]),
     metrics: z.array(z.string().min(1)).min(1),
