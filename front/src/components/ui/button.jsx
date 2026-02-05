@@ -16,7 +16,7 @@ export function Button({
     "transition-[transform,box-shadow,background-color,border-color,color] duration-[var(--motion-base)] ease-[var(--ease-standard)] " +
     "hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] " +
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 " +
-    "focus-visible:ring-[rgba(31,111,235,0.35)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none";
+    "focus-visible:ring-[rgba(var(--primary-rgb),0.35)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none";
 
   const variantClasses = {
     primary:

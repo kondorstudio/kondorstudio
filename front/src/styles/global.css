@@ -16,9 +16,10 @@
   font-family: "Manrope", "Helvetica Neue", Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  --primary: #1f6feb;
-  --primary-dark: #1a5fd0;
-  --primary-light: rgba(31, 111, 235, 0.12);
+  --primary: #B050F0;
+  --primary-dark: #9515EA;
+  --primary-light: rgba(176, 80, 240, 0.12);
+  --primary-rgb: 176, 80, 240;
   --accent: #B050F0;
   --accent-blue: #1f6feb;
   --accent-teal: #0f766e;
@@ -38,7 +39,7 @@
   --radius-card: 12px;
   --radius-input: 10px;
   --radius-button: 12px;
-  --chart-1: #1f6feb;
+  --chart-1: #B050F0;
   --chart-2: #22c55e;
   --chart-3: #B050F0;
   --chart-4: #0ea5e9;

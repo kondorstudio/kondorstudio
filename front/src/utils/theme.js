@@ -1,5 +1,9 @@
-const DEFAULT_PRIMARY = "#A78BFA";
-const DEFAULT_ACCENT = "#39FF14";
+const BRAND_PRIMARY = "#B050F0";
+const BRAND_ACCENT = "#B050F0";
+const FORCE_BRAND_THEME = true;
+
+const DEFAULT_PRIMARY = BRAND_PRIMARY;
+const DEFAULT_ACCENT = BRAND_ACCENT;
 
 const HEX_RE = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 
@@ -52,14 +56,18 @@ function rgbaString(rgb, alpha) {
 }
 
 export function deriveThemeColors(tenant = {}) {
-  const primary = normalizeHexColor(
-    tenant.primary_color || tenant.primaryColor || tenant.primary,
-    DEFAULT_PRIMARY
-  );
-  const accent = normalizeHexColor(
-    tenant.accent_color || tenant.accentColor || tenant.accent,
-    DEFAULT_ACCENT
-  );
+  const primary = FORCE_BRAND_THEME
+    ? BRAND_PRIMARY
+    : normalizeHexColor(
+        tenant.primary_color || tenant.primaryColor || tenant.primary,
+        DEFAULT_PRIMARY
+      );
+  const accent = FORCE_BRAND_THEME
+    ? BRAND_ACCENT
+    : normalizeHexColor(
+        tenant.accent_color || tenant.accentColor || tenant.accent,
+        DEFAULT_ACCENT
+      );
 
   const primaryRgb = hexToRgb(primary);
   const accentRgb = hexToRgb(accent);
@@ -100,6 +108,14 @@ export function applyTenantTheme(tenant) {
 }
 
 export function resolveTenantBranding(tenant = {}) {
+  if (FORCE_BRAND_THEME) {
+    return {
+      name: tenant.agency_name || tenant.name || "Kondor",
+      logoUrl: tenant.logo_url || tenant.logoUrl || null,
+      primaryColor: BRAND_PRIMARY,
+      accentColor: BRAND_ACCENT,
+    };
+  }
   return {
     name: tenant.agency_name || tenant.name || "Kondor",
     logoUrl: tenant.logo_url || tenant.logoUrl || null,

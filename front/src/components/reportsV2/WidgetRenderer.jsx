@@ -30,7 +30,7 @@ import {
 const CHART_COLORS = [
   "var(--primary)",
   "var(--accent)",
-  "#1f6feb",
+  "#B050F0",
   "var(--danger)",
   "#8b5cf6",
 ];

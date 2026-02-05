@@ -22,7 +22,7 @@ const STATUS_OPTIONS = [
 const STATUS_BAR_COLORS = {
   TODO: "#c4b5fd",
   IN_PROGRESS: "#a78bfa",
-  REVIEW: "#fcd34d",
+  REVIEW: "#B050F0",
   DONE: "#34d399",
   BLOCKED: "#fb7185",
 };
