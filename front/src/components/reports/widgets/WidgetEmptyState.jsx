@@ -6,7 +6,7 @@ import { cn } from "@/utils/classnames.js";
 const VARIANT_META = {
   connection: {
     icon: Link2,
-    tone: "border-amber-200 bg-amber-50 text-amber-700",
+    tone: "border-purple-200 bg-purple-50 text-purple-700",
   },
   metrics: {
     icon: Sliders,

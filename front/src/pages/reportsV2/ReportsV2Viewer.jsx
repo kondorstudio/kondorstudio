@@ -508,7 +508,7 @@ export default function ReportsV2Viewer() {
               <p className="mt-2 text-xs text-[var(--muted)]">{refreshNotice}</p>
             ) : null}
             {isHealthWarn ? (
-              <span className="mt-2 inline-flex rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+              <span className="mt-2 inline-flex rounded-full border border-purple-300 bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-700">
                 Dados parcialmente indisponiveis
               </span>
             ) : null}
@@ -543,7 +543,7 @@ export default function ReportsV2Viewer() {
           <div
             className={
               isHealthBlocked
-                ? "mt-5 rounded-[16px] border border-amber-200 bg-amber-50 px-5 py-4"
+                ? "mt-5 rounded-[16px] border border-purple-200 bg-purple-50 px-5 py-4"
                 : "mt-5 rounded-[16px] border border-slate-200 bg-slate-50 px-5 py-4"
             }
           >
@@ -584,7 +584,7 @@ export default function ReportsV2Viewer() {
                 {missingPlatforms.map((platform) => (
                   <span
                     key={platform}
-                    className="rounded-full border border-amber-300 bg-white px-2.5 py-1 text-xs font-semibold text-amber-700"
+                    className="rounded-full border border-purple-300 bg-white px-2.5 py-1 text-xs font-semibold text-purple-700"
                   >
                     {formatPlatform(platform)}
                   </span>
@@ -749,7 +749,7 @@ export default function ReportsV2Viewer() {
                 </p>
               ) : null}
               {isHealthBlocked ? (
-                <p className="mt-2 text-xs text-amber-700">
+                <p className="mt-2 text-xs text-purple-700">
                   Compartilhamento bloqueado ate corrigir widgets com configuracao invalida.
                 </p>
               ) : null}
@@ -796,7 +796,7 @@ export default function ReportsV2Viewer() {
               {missingPlatforms.map((platform) => (
                 <span
                   key={`blocked-${platform}`}
-                  className="rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700"
+                  className="rounded-full border border-purple-300 bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-700"
                 >
                   {formatPlatform(platform)}
                 </span>

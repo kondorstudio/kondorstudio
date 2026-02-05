@@ -392,7 +392,7 @@ export default function Posts() {
             ))}
           </SelectNative>
           {clients.length === 0 ? (
-            <p className="text-[11px] text-amber-600 mt-1">
+            <p className="text-[11px] text-purple-600 mt-1">
               Adicione um cliente para visualizar posts aqui.
             </p>
           ) : null}

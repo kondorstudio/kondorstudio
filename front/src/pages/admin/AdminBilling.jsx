@@ -245,7 +245,7 @@ export default function AdminBilling() {
                         {subscription?.status || "Sem assinatura"}
                       </Badge>
                       {subscription?.cancelAtPeriodEnd && (
-                        <p className="text-xs text-amber-600 mt-1">
+                        <p className="text-xs text-purple-600 mt-1">
                           Cancelamento agendado
                         </p>
                       )}
@@ -269,7 +269,7 @@ export default function AdminBilling() {
                         type="button"
                         onClick={() => handleCancel(subscription?.id)}
                         disabled={!canWrite || !subscription?.id || actionId === subscription?.id}
-                        className="block text-xs text-amber-600 hover:text-amber-800 disabled:opacity-50"
+                        className="block text-xs text-purple-600 hover:text-purple-800 disabled:opacity-50"
                       >
                         Cancelar assinatura
                       </button>

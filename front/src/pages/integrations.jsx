@@ -81,7 +81,7 @@ const INTEGRATION_CATALOG = [
     ownerKey: "INSTAGRAM",
     kind: "instagram_only",
     scope: "client",
-    accentClass: "from-pink-500 to-orange-500",
+    accentClass: "from-pink-500 to-purple-500",
     icon: Instagram,
     dialogDescription:
       "Conecte uma conta Instagram Business para publicar.",
@@ -177,7 +177,7 @@ const INTEGRATION_CATALOG = [
     ownerKey: "GOOGLE_BUSINESS",
     kind: "google_business",
     scope: "client",
-    accentClass: "from-amber-500 to-orange-500",
+    accentClass: "from-purple-500 to-purple-500",
     icon: MapPin,
     comingSoon: true,
   },
@@ -229,7 +229,7 @@ const INTEGRATION_CATALOG = [
     ownerKey: "GA4",
     kind: "google_analytics",
     scope: "client",
-    accentClass: "from-amber-500 to-orange-500",
+    accentClass: "from-purple-500 to-purple-500",
     icon: BarChart3,
     dialogDescription:
       "Cadastre a propriedade GA4 e as credenciais de acesso.",
@@ -319,7 +319,7 @@ const INTEGRATION_CATALOG = [
     ownerKey: "GOOGLE_ADS",
     kind: "google_ads",
     scope: "client",
-    accentClass: "from-yellow-500 to-orange-500",
+    accentClass: "from-yellow-500 to-purple-500",
     icon: Megaphone,
     comingSoon: true,
   },
@@ -723,7 +723,7 @@ export default function Integrations() {
                 ))}
               </SelectNative>
               {clients.length === 0 ? (
-                <p className="text-[11px] text-amber-600">
+                <p className="text-[11px] text-purple-600">
                   Cadastre um cliente antes de conectar redes sociais.
                 </p>
               ) : null}

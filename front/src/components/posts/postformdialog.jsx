@@ -128,7 +128,7 @@ const STATUS_PREVIEW = {
   DRAFT: { label: "Rascunho", className: "bg-slate-100 text-slate-700" },
   CLIENT_APPROVAL: {
     label: "Em aprovacao",
-    className: "bg-amber-100 text-amber-700",
+    className: "bg-purple-100 text-purple-700",
   },
   DONE: { label: "Publicado", className: "bg-emerald-100 text-emerald-700" },
   PUBLISHING: { label: "Publicando", className: "bg-violet-100 text-violet-700" },

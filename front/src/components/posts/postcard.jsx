@@ -329,11 +329,11 @@ export default function Postcard({
               </p>
             )}
             {hasClientFeedback && (
-              <div className="rounded-[12px] border border-amber-200 bg-amber-50 px-3 py-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+              <div className="rounded-[12px] border border-purple-200 bg-purple-50 px-3 py-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-purple-700">
                   Ajustes solicitados
                 </p>
-                <p className="text-xs text-amber-800 line-clamp-2 whitespace-pre-line">
+                <p className="text-xs text-purple-800 line-clamp-2 whitespace-pre-line">
                   {clientFeedback}
                 </p>
               </div>

@@ -67,7 +67,7 @@ const CHART_COLORS = [
 const STAT_ACCENTS = {
   clients: { solid: "#2563eb", soft: "rgba(37, 99, 235, 0.12)" },
   posts: { solid: "#6d28d9", soft: "rgba(109, 40, 217, 0.12)" },
-  tasks: { solid: "#f59e0b", soft: "rgba(245, 158, 11, 0.16)" },
+  tasks: { solid: "#B050F0", soft: "rgba(176, 80, 240, 0.16)" },
   team: { solid: "#0f766e", soft: "rgba(15, 118, 110, 0.16)" },
 };
 

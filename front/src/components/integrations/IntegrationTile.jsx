@@ -20,7 +20,7 @@ function statusClass(status) {
   if (value === "soon") {
     return "border-slate-200 text-slate-500 bg-slate-50";
   }
-  return "border-amber-200 text-amber-700 bg-amber-50";
+  return "border-purple-200 text-purple-700 bg-purple-50";
 }
 
 export default function IntegrationTile({

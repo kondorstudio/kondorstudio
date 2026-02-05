@@ -6,7 +6,7 @@ const dateKey = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 const DEFAULT_REPORT_THEME = Object.freeze({
   mode: 'light',
-  brandColor: '#F59E0B',
+  brandColor: '#B050F0',
   accentColor: '#22C55E',
   bg: '#FFFFFF',
   text: '#0F172A',

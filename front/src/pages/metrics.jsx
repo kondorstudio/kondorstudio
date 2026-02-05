@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 
 const NETWORKS = [
-  { key: "instagram", label: "Instagram", gradient: "from-pink-500 to-orange-500" },
+  { key: "instagram", label: "Instagram", gradient: "from-pink-500 to-purple-500" },
   { key: "facebook", label: "Facebook", gradient: "from-blue-600 to-indigo-600" },
   { key: "linkedin", label: "LinkedIn", gradient: "from-sky-600 to-blue-700" },
   { key: "tiktok", label: "TikTok", gradient: "from-slate-700 to-slate-900" },

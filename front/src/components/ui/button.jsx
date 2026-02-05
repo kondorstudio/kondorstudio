@@ -33,7 +33,7 @@ export function Button({
     success:
       "bg-emerald-500 border-transparent text-white shadow-[var(--shadow-sm)] hover:bg-emerald-600 hover:shadow-[var(--shadow-md)] hover:-translate-y-0.5",
     accent:
-      "bg-[var(--accent)] border-transparent text-white shadow-[var(--shadow-sm)] hover:bg-orange-600 hover:shadow-[var(--shadow-md)] hover:-translate-y-0.5",
+      "bg-[var(--accent)] border-transparent text-white shadow-[var(--shadow-sm)] hover:bg-purple-600 hover:shadow-[var(--shadow-md)] hover:-translate-y-0.5",
     link: "bg-transparent border-transparent text-[var(--primary)] underline-offset-4 hover:underline",
   };
 

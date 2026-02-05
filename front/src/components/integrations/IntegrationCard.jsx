@@ -11,7 +11,7 @@ function StatusBadge({ status }) {
       ? "border-emerald-200 text-emerald-700"
       : s === "error"
         ? "border-red-200 text-red-700"
-        : "border-amber-200 text-amber-700";
+        : "border-purple-200 text-purple-700";
 
   return (
     <Badge variant="outline" className={cls}>

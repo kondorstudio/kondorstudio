@@ -9,7 +9,7 @@ const { computeDashboardHealth } = require('./dashboardHealth.service');
 const DEFAULT_LAYOUT = {
   theme: {
     mode: 'light',
-    brandColor: '#F59E0B',
+    brandColor: '#B050F0',
     accentColor: '#22C55E',
     bg: '#FFFFFF',
     text: '#0F172A',

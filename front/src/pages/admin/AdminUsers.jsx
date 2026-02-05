@@ -316,7 +316,7 @@ export default function AdminUsers() {
       )}
 
       {tempPassword && (
-        <div className="text-sm rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
+        <div className="text-sm rounded-lg border border-purple-200 bg-purple-50 px-4 py-3 text-purple-900">
           Senha temporaria para o usuario {tempPassword.userId}:{" "}
           <span className="font-semibold">{tempPassword.password}</span>
         </div>
@@ -425,7 +425,7 @@ export default function AdminUsers() {
                       type="button"
                       onClick={() => handleForceLogout(user.id)}
                       disabled={!canUpdate || user.role === "SUPER_ADMIN" || actionId === user.id}
-                      className="block text-xs text-amber-600 hover:text-amber-800 disabled:opacity-50"
+                      className="block text-xs text-purple-600 hover:text-purple-800 disabled:opacity-50"
                     >
                       Forcar logout
                     </button>

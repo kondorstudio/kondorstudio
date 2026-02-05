@@ -627,12 +627,12 @@ export function ClientMetricsPage() {
 function StatsRow({ pending, awaiting, approved, total }) {
   const cards = [
     {
-      icon: <AlertTriangle className="h-5 w-5 text-orange-500" />,
+      icon: <AlertTriangle className="h-5 w-5 text-purple-500" />,
       label: "Posts aguardando aprovação",
       value: pending,
     },
     {
-      icon: <Clock className="h-5 w-5 text-amber-500" />,
+      icon: <Clock className="h-5 w-5 text-purple-500" />,
       label: "Aguardando correção",
       value: awaiting,
     },

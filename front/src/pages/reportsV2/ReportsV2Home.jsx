@@ -44,8 +44,8 @@ const themeStyle = {
   "--border": "#E2E8F0",
   "--text": "#0F172A",
   "--text-muted": "#64748B",
-  "--primary": "#F59E0B",
-  "--primary-dark": "#D97706",
+  "--primary": "#B050F0",
+  "--primary-dark": "#9515EA",
   "--accent": "#22C55E",
   "--shadow-sm": "0 2px 6px rgba(15, 23, 42, 0.08)",
   "--shadow-md": "0 18px 32px rgba(15, 23, 42, 0.12)",
@@ -153,7 +153,7 @@ export default function ReportsV2Home() {
 
   return (
     <div className="min-h-screen bg-white" style={themeStyle}>
-      <div className="border-b border-[var(--border)] bg-[linear-gradient(135deg,rgba(245,158,11,0.08),rgba(34,197,94,0.04))]">
+      <div className="border-b border-[var(--border)] bg-[linear-gradient(135deg,rgba(176,80,240,0.08),rgba(34,197,94,0.04))]">
         <PageShell>
           <PageHeader
             kicker="Relatorios"
@@ -333,7 +333,7 @@ export default function ReportsV2Home() {
                             "rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]",
                             dashboard.status === "PUBLISHED"
                               ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                              : "border-amber-200 bg-amber-50 text-amber-700"
+                              : "border-purple-200 bg-purple-50 text-purple-700"
                           )}
                         >
                           {dashboard.status === "PUBLISHED" ? "Publicado" : "Rascunho"}

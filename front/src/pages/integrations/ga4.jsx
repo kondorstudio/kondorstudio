@@ -199,7 +199,7 @@ export default function Ga4IntegrationPage() {
         </div>
       ) : null}
       {reauthNotice ? (
-        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+        <div className="mb-4 rounded-xl border border-purple-200 bg-purple-50 px-4 py-3 text-sm text-purple-700">
           {reauthNotice}
         </div>
       ) : null}
@@ -228,7 +228,7 @@ export default function Ga4IntegrationPage() {
                         {status}
                       </p>
                       {needsReconnect ? (
-                        <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                        <span className="rounded-full border border-purple-200 bg-purple-50 px-2 py-0.5 text-xs font-semibold text-purple-700">
                           Reconectar
                         </span>
                       ) : null}
@@ -323,7 +323,7 @@ export default function Ga4IntegrationPage() {
                       ))}
                     </SelectNative>
                     {!selectedProperty ? (
-                      <p className="text-xs text-amber-600">
+                      <p className="text-xs text-purple-600">
                         Nenhuma propriedade selecionada. Selecione uma para
                         habilitar relatórios e dashboards.
                       </p>

@@ -18,7 +18,7 @@ const PIE_COLORS = [
   "var(--primary-dark)",
   "#0EA5E9",
   "#14B8A6",
-  "#F97316",
+  "#B050F0",
   "#6366F1",
   "#EC4899",
   "#22C55E",

@@ -59,15 +59,15 @@ export default function Navbar() {
   return (
     <>
       {impersonation && (
-        <div className="w-full bg-amber-50 border-b border-amber-200">
-          <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs text-amber-900">
+        <div className="w-full bg-purple-50 border-b border-purple-200">
+          <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs text-purple-900">
             <span>
               Modo impersonate ativo: {impersonation.userName || impersonation.userEmail}
             </span>
             <button
               type="button"
               onClick={handleStopImpersonation}
-              className="inline-flex items-center rounded-md border border-amber-600 px-3 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100"
+              className="inline-flex items-center rounded-md border border-purple-600 px-3 py-1 text-xs font-medium text-purple-900 hover:bg-purple-100"
             >
               Encerrar impersonate
             </button>

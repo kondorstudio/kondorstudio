@@ -349,7 +349,7 @@ export default function IntegrationConnectDialog({
                 <p className="mt-3 text-[11px] text-red-600">{oauthError}</p>
               ) : null}
               {isClientScope && !selectedClientId ? (
-                <p className="mt-2 text-[11px] text-amber-600">
+                <p className="mt-2 text-[11px] text-purple-600">
                   Selecione um cliente para conectar esta integração.
                 </p>
               ) : null}
@@ -357,11 +357,11 @@ export default function IntegrationConnectDialog({
           ) : null}
 
           {isMetaProvider && effectiveExisting && !metaAccounts.length ? (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
-              <p className="text-sm font-semibold text-amber-900">
+            <div className="rounded-2xl border border-purple-200 bg-purple-50/60 p-4">
+              <p className="text-sm font-semibold text-purple-900">
                 Conexão feita, mas sem contas disponíveis
               </p>
-              <p className="text-xs text-amber-700 mt-1">
+              <p className="text-xs text-purple-700 mt-1">
                 Verifique permissões do app Meta ou conecte outro usuário com acesso às contas.
               </p>
             </div>
@@ -392,7 +392,7 @@ export default function IntegrationConnectDialog({
                     ))}
                   </SelectNative>
                   {metaAdOptions.length === 0 ? (
-                    <div className="text-[11px] text-amber-600">
+                    <div className="text-[11px] text-purple-600">
                       <p>Nenhuma conta de anuncios disponivel para este usuario.</p>
                       <a
                         href="https://business.facebook.com"
@@ -419,7 +419,7 @@ export default function IntegrationConnectDialog({
                     ))}
                   </SelectNative>
                   {metaPageOptions.length === 0 ? (
-                    <div className="text-[11px] text-amber-600">
+                    <div className="text-[11px] text-purple-600">
                       <p>Nenhuma pagina com Instagram Business vinculada.</p>
                       <a
                         href="https://business.facebook.com"
@@ -479,7 +479,7 @@ export default function IntegrationConnectDialog({
                   ))}
                 </SelectNative>
                 {clients.length === 0 ? (
-                  <p className="text-[11px] text-amber-600">
+                  <p className="text-[11px] text-purple-600">
                     Cadastre um cliente antes de conectar esta integração.
                   </p>
                 ) : null}

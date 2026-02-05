@@ -19,10 +19,10 @@
   --primary: #1f6feb;
   --primary-dark: #1a5fd0;
   --primary-light: rgba(31, 111, 235, 0.12);
-  --accent: #f97316;
+  --accent: #B050F0;
   --accent-blue: #1f6feb;
   --accent-teal: #0f766e;
-  --accent-amber: #f59e0b;
+  --accent-amber: #B050F0;
   --accent-rose: #ef4444;
   --accent-indigo: #4f46e5;
   --accent-sky: #0ea5e9;
@@ -40,7 +40,7 @@
   --radius-button: 12px;
   --chart-1: #1f6feb;
   --chart-2: #22c55e;
-  --chart-3: #f97316;
+  --chart-3: #B050F0;
   --chart-4: #0ea5e9;
   --chart-5: #ef4444;
   --chart-6: #a855f7;

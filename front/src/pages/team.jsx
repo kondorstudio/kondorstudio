@@ -25,7 +25,7 @@ const roleColors = {
   designer: "bg-pink-100 text-pink-700",
   social_media: "bg-green-100 text-green-700",
   copywriter: "bg-yellow-100 text-yellow-700",
-  videomaker: "bg-orange-100 text-orange-700",
+  videomaker: "bg-purple-100 text-purple-700",
 };
 
 export default function Team() {

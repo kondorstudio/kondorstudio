@@ -59,12 +59,12 @@ export const WORKFLOW_STATUS_CONFIG = {
   CLIENT_APPROVAL: {
     label: "Aprovacao do cliente",
     icon: UserCheck,
-    tone: "text-amber-600",
-    badge: "bg-amber-50 text-amber-700",
-    accent: "bg-amber-400",
-    accentSoft: "bg-amber-50",
-    accentBorder: "border-amber-200/70",
-    accentText: "text-amber-700",
+    tone: "text-purple-600",
+    badge: "bg-purple-50 text-purple-700",
+    accent: "bg-purple-400",
+    accentSoft: "bg-purple-50",
+    accentBorder: "border-purple-200/70",
+    accentText: "text-purple-700",
     description: "Aguardando validacao do cliente.",
   },
   CHANGES: {

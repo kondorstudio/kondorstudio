@@ -4,7 +4,7 @@ const HEX_COLOR_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
 export const DEFAULT_REPORT_THEME = Object.freeze({
   mode: "light",
-  brandColor: "#F59E0B",
+  brandColor: "#B050F0",
   accentColor: "#22C55E",
   bg: "#FFFFFF",
   text: "#0F172A",

@@ -96,7 +96,7 @@ export default function AdminOverview() {
       label: "Integracoes conectadas",
       value: integrationsData.connected,
       icon: Plug,
-      bg: "bg-amber-50",
+      bg: "bg-purple-50",
     },
   ];
 

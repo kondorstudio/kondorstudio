@@ -335,7 +335,7 @@ export default function AdminIntegrations() {
                         type="button"
                         onClick={() => handleDisconnect(integration.id)}
                         disabled={!canWrite || actionId === integration.id}
-                        className="block text-xs text-amber-600 hover:text-amber-800 disabled:opacity-50"
+                        className="block text-xs text-purple-600 hover:text-purple-800 disabled:opacity-50"
                       >
                         Desconectar
                       </button>

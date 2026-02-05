@@ -102,7 +102,7 @@ export default function AdminLogin() {
             Ambiente exclusivo para monitorar tenants, billing, jobs e suporte.
           </p>
           {reason === "forbidden" && (
-            <p className="text-xs text-amber-300">
+            <p className="text-xs text-purple-300">
               Sessão anterior não tinha permissão para acessar o painel mestre.
             </p>
           )}

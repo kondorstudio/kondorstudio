@@ -1878,7 +1878,7 @@ export default function ReportsV2Editor() {
     return (
       <ThemeProvider theme={layoutJson?.theme} className="min-h-screen bg-[var(--bg)]">
         <div className="mx-auto max-w-[1200px] px-6 py-10">
-          <div className="rounded-[16px] border border-amber-200 bg-amber-50 px-6 py-5 text-sm text-amber-700">
+          <div className="rounded-[16px] border border-purple-200 bg-purple-50 px-6 py-5 text-sm text-purple-700">
             Voce nao tem permissao para editar este dashboard.
           </div>
         </div>
@@ -2207,7 +2207,7 @@ export default function ReportsV2Editor() {
                   <input
                     type="color"
                     aria-label="Cor principal do dashboard"
-                    value={HEX_COLOR_RE.test(themeDraft.brandColor) ? themeDraft.brandColor : "#F59E0B"}
+                    value={HEX_COLOR_RE.test(themeDraft.brandColor) ? themeDraft.brandColor : "#B050F0"}
                     onChange={(event) => {
                       setThemeDraft((prev) => ({
                         ...prev,
@@ -2227,7 +2227,7 @@ export default function ReportsV2Editor() {
                       }));
                       setThemeFormError("");
                     }}
-                    placeholder="#F59E0B"
+                    placeholder="#B050F0"
                   />
                 </div>
               </div>

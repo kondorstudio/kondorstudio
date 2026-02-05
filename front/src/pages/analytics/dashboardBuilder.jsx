@@ -55,7 +55,7 @@ const MATCH_OPTIONS = [
   { value: "CONTAINS", label: "Contem" },
 ];
 
-const PIE_COLORS = ["#2563eb", "#0ea5e9", "#22c55e", "#f97316", "#ec4899"];
+const PIE_COLORS = ["#2563eb", "#0ea5e9", "#22c55e", "#B050F0", "#ec4899"];
 
 function createLayoutItem(id, existingLayout) {
   const cols = 12;
@@ -850,7 +850,7 @@ export default function AnalyticsDashboardBuilder() {
       />
 
       {isNew && !properties.length ? (
-        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+        <div className="mb-4 rounded-xl border border-purple-200 bg-purple-50 px-4 py-3 text-sm text-purple-700">
           Conecte o GA4 e sincronize propriedades antes de criar um dashboard.
         </div>
       ) : null}
