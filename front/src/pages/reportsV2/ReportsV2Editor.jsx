@@ -89,18 +89,38 @@ const WIDGET_TYPES = [
 ];
 
 const METRIC_OPTIONS = [
-  { value: "spend", label: "Valor investido" },
-  { value: "ctr", label: "CTR" },
-  { value: "cpc", label: "CPC" },
-  { value: "cpm", label: "CPM" },
-  { value: "impressions", label: "Impressões" },
-  { value: "clicks", label: "Cliques" },
-  { value: "conversions", label: "Conversões" },
-  { value: "revenue", label: "Receita" },
-  { value: "roas", label: "ROAS" },
-  { value: "cpa", label: "CPA" },
-  { value: "sessions", label: "Sessões" },
-  { value: "leads", label: "Leads" },
+  {
+    value: "spend",
+    label: "Valor investido",
+    shortLabel: "Invest.",
+    category: "Investimento",
+  },
+  { value: "cpc", label: "CPC", shortLabel: "CPC", category: "Investimento" },
+  { value: "cpm", label: "CPM", shortLabel: "CPM", category: "Investimento" },
+  {
+    value: "impressions",
+    label: "Impressões",
+    shortLabel: "Imp.",
+    category: "Alcance",
+  },
+  { value: "clicks", label: "Cliques", shortLabel: "Cliques", category: "Alcance" },
+  { value: "ctr", label: "CTR", shortLabel: "CTR", category: "Alcance" },
+  {
+    value: "conversions",
+    label: "Conversões",
+    shortLabel: "Conv.",
+    category: "Conversões",
+  },
+  { value: "cpa", label: "CPA", shortLabel: "CPA", category: "Conversões" },
+  { value: "leads", label: "Leads", shortLabel: "Leads", category: "Conversões" },
+  { value: "revenue", label: "Receita", shortLabel: "Receita", category: "Receita" },
+  { value: "roas", label: "ROAS", shortLabel: "ROAS", category: "Receita" },
+  {
+    value: "sessions",
+    label: "Sessões",
+    shortLabel: "Sessões",
+    category: "Aquisição",
+  },
 ];
 
 const METRIC_LABELS = METRIC_OPTIONS.reduce((acc, item) => {
@@ -110,17 +130,17 @@ const METRIC_LABELS = METRIC_OPTIONS.reduce((acc, item) => {
 
 const ADS_METRIC_KEYS = [
   "spend",
-  "ctr",
   "cpc",
   "cpm",
   "impressions",
   "clicks",
+  "ctr",
   "conversions",
-  "revenue",
-  "roas",
   "cpa",
+  "roas",
+  "revenue",
 ];
-const GA4_METRIC_KEYS = ["sessions", "conversions", "revenue", "leads"];
+const GA4_METRIC_KEYS = ["sessions", "conversions", "leads", "revenue"];
 
 const PLATFORM_LABELS = {
   META_ADS: "Meta Ads",
@@ -139,6 +159,32 @@ const METRICS_BY_PLATFORM = {
   LINKEDIN_ADS: ADS_METRIC_KEYS,
   FB_IG: ADS_METRIC_KEYS,
   GA4: GA4_METRIC_KEYS,
+};
+
+const METRIC_GROUPS = {
+  ADS: [
+    { key: "investimento", label: "Investimento", metrics: ["spend", "cpc", "cpm"] },
+    { key: "alcance", label: "Alcance", metrics: ["impressions", "clicks", "ctr"] },
+    {
+      key: "conversoes",
+      label: "Conversões",
+      metrics: ["conversions", "cpa", "roas", "revenue"],
+    },
+  ],
+  GA4: [
+    { key: "aquisicao", label: "Aquisição", metrics: ["sessions"] },
+    { key: "conversoes", label: "Conversões", metrics: ["conversions", "leads"] },
+    { key: "receita", label: "Receita", metrics: ["revenue"] },
+  ],
+};
+
+const METRIC_GROUPS_BY_PLATFORM = {
+  META_ADS: METRIC_GROUPS.ADS,
+  GOOGLE_ADS: METRIC_GROUPS.ADS,
+  TIKTOK_ADS: METRIC_GROUPS.ADS,
+  LINKEDIN_ADS: METRIC_GROUPS.ADS,
+  FB_IG: METRIC_GROUPS.ADS,
+  GA4: METRIC_GROUPS.GA4,
 };
 
 const DIMENSION_OPTIONS = [
@@ -646,7 +692,7 @@ function EditorWidgetCard({
         if (event.key === "Enter") onSelect(widget.id);
       }}
       className={cn(
-        "group flex h-full flex-col justify-between rounded-[16px] border bg-white p-4 text-left shadow-none transition-shadow hover:shadow-[var(--shadow-sm)]",
+        "group flex h-full flex-col justify-between rounded-[18px] border bg-white p-3 text-left shadow-[0_6px_18px_rgba(15,23,42,0.06)] transition-shadow hover:shadow-[0_12px_24px_rgba(15,23,42,0.12)]",
         selected
           ? "border-[var(--primary)] ring-2 ring-[var(--primary-light)]"
           : "border-[var(--border)] hover:border-slate-300",
@@ -801,6 +847,34 @@ export default function ReportsV2Editor() {
       }))
       .filter((metric) => Boolean(metric.value));
   }, [activeMetricPlatform]);
+  const metricGroupsForActivePlatform = React.useMemo(() => {
+    const groups = METRIC_GROUPS_BY_PLATFORM[activeMetricPlatform] || [];
+    if (!groups.length) return [];
+    const metricMap = new Map(
+      metricsForActivePlatform.map((metric) => [metric.value, metric])
+    );
+    const usedKeys = new Set();
+    const mapped = groups
+      .map((group) => {
+        const items = (group.metrics || [])
+          .map((key) => metricMap.get(key))
+          .filter(Boolean);
+        items.forEach((item) => usedKeys.add(item.value));
+        return {
+          key: group.key,
+          label: group.label,
+          metrics: items,
+        };
+      })
+      .filter((group) => group.metrics.length);
+    const leftovers = metricsForActivePlatform.filter(
+      (metric) => !usedKeys.has(metric.value)
+    );
+    if (leftovers.length) {
+      mapped.push({ key: "outros", label: "Outros", metrics: leftovers });
+    }
+    return mapped;
+  }, [activeMetricPlatform, metricsForActivePlatform]);
   const debouncedLayoutJson = useDebouncedValue(layoutJson, 1500);
 
   React.useEffect(() => {
@@ -2180,7 +2254,10 @@ export default function ReportsV2Editor() {
 
   if (isLoading) {
     return (
-      <ThemeProvider theme={layoutJson?.theme} className="min-h-screen bg-[var(--bg)]">
+      <ThemeProvider
+        theme={layoutJson?.theme}
+        className="min-h-screen bg-[var(--surface-muted)]"
+      >
         <div className="mx-auto max-w-[1400px] px-6 py-10">
           <div className="h-6 w-48 rounded-full kondor-shimmer" />
           <div className="mt-6 h-16 rounded-[16px] border border-[var(--border)] kondor-shimmer" />
@@ -2192,7 +2269,10 @@ export default function ReportsV2Editor() {
 
   if (error || !dashboard) {
     return (
-      <ThemeProvider theme={layoutJson?.theme} className="min-h-screen bg-[var(--bg)]">
+      <ThemeProvider
+        theme={layoutJson?.theme}
+        className="min-h-screen bg-[var(--surface-muted)]"
+      >
         <div className="mx-auto max-w-[1200px] px-6 py-10">
           <div className="rounded-[16px] border border-rose-200 bg-rose-50 px-6 py-5 text-sm text-rose-700">
             Nao foi possivel carregar o dashboard.
@@ -2204,7 +2284,10 @@ export default function ReportsV2Editor() {
 
   if (!dashboard.latestVersion) {
     return (
-      <ThemeProvider theme={layoutJson?.theme} className="min-h-screen bg-[var(--bg)]">
+      <ThemeProvider
+        theme={layoutJson?.theme}
+        className="min-h-screen bg-[var(--surface-muted)]"
+      >
         <div className="mx-auto max-w-[1200px] px-6 py-10">
           <div className="rounded-[16px] border border-purple-200 bg-purple-50 px-6 py-5 text-sm text-purple-700">
             Voce nao tem permissao para editar este dashboard.
@@ -2224,9 +2307,12 @@ export default function ReportsV2Editor() {
     : "Desligado";
 
   return (
-    <ThemeProvider theme={layoutJson?.theme} className="min-h-screen bg-[var(--bg)]">
-      <div className="sticky top-0 z-30 border-b border-[var(--border)] bg-white/80 backdrop-blur">
-        <div className="mx-auto flex max-w-[1400px] flex-wrap items-center justify-between gap-3 px-6 py-4">
+    <ThemeProvider
+      theme={layoutJson?.theme}
+      className="min-h-screen bg-[var(--surface-muted)]"
+    >
+      <div className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur shadow-[0_6px_18px_rgba(15,23,42,0.05)]">
+        <div className="mx-auto flex max-w-[1480px] flex-wrap items-center justify-between gap-3 px-5 py-4">
           <div className="flex items-center gap-4">
             <button
               type="button"
@@ -2320,12 +2406,13 @@ export default function ReportsV2Editor() {
         </div>
       </div>
 
-      <div className="mx-auto flex w-full max-w-[1400px] gap-6 px-6 py-6">
-        <aside className="hidden w-full max-w-[260px] self-start xl:block sticky top-24">
+      <div className="mx-auto flex w-full max-w-[1480px] gap-5 px-5 py-6">
+        <aside className="sticky top-28 hidden w-full max-w-[280px] self-start xl:block">
           <MetricsLibraryPanel
             platforms={metricsPlatformOptions}
             activePlatform={activeMetricPlatform}
             onPlatformChange={setActiveMetricPlatform}
+            groups={metricGroupsForActivePlatform}
             metrics={metricsForActivePlatform}
             searchTerm={metricsSearch}
             onSearchChange={setMetricsSearch}
@@ -2340,6 +2427,7 @@ export default function ReportsV2Editor() {
               platforms={metricsPlatformOptions}
               activePlatform={activeMetricPlatform}
               onPlatformChange={setActiveMetricPlatform}
+              groups={metricGroupsForActivePlatform}
               metrics={metricsForActivePlatform}
               searchTerm={metricsSearch}
               onSearchChange={setMetricsSearch}
@@ -2356,7 +2444,7 @@ export default function ReportsV2Editor() {
               <div
                 role="tablist"
                 aria-label="Paginas do dashboard"
-                className="mt-2 flex flex-wrap gap-2 rounded-[16px] border border-[var(--border)] bg-white p-2"
+                className="mt-2 flex flex-wrap gap-2 rounded-[14px] border border-slate-200 bg-slate-50 p-1.5"
               >
                 {pages.map((page) => (
                   <button
@@ -2434,13 +2522,8 @@ export default function ReportsV2Editor() {
           ) : null}
 
           <div
-            className="rounded-[20px] border border-slate-200 bg-white p-5 shadow-[0_18px_40px_rgba(15,23,42,0.05)]"
-            style={{
-              minHeight: "560px",
-              backgroundImage:
-                "radial-gradient(circle, rgba(148,163,184,0.18) 1px, transparent 0)",
-              backgroundSize: "24px 24px",
-            }}
+            className="rounded-[22px] border border-slate-200 bg-white p-4 shadow-[0_14px_30px_rgba(15,23,42,0.08)]"
+            style={{ minHeight: "560px" }}
             onMouseDown={(event) => {
               if (event.target.closest("[data-editor-widget-card='true']")) return;
               if (event.target.closest("[data-global-filters='true']")) return;
@@ -2454,7 +2537,7 @@ export default function ReportsV2Editor() {
                 onChange={handleGlobalFiltersChange}
                 connections={connections}
                 collapsible={false}
-                className="bg-white shadow-none hover:shadow-none border-slate-200"
+                className="rounded-[16px] border border-slate-200 bg-white shadow-[0_8px_20px_rgba(15,23,42,0.06)] hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)]"
               />
             </div>
 
@@ -2541,7 +2624,7 @@ export default function ReportsV2Editor() {
           </div>
         </main>
 
-        <aside className="w-full max-w-[360px] space-y-4 self-start sticky top-24">
+        <aside className="sticky top-28 w-full max-w-[360px] space-y-4 self-start">
           <SidePanel
             selectedWidget={selectedWidget}
             activeTab={activeTab}
@@ -2567,7 +2650,7 @@ export default function ReportsV2Editor() {
             onPieOptionsChange={handlePieOptionsChange}
           />
 
-          <div className="rounded-[16px] border border-[var(--border)] bg-white p-4 shadow-none transition-shadow hover:shadow-[var(--shadow-sm)]">
+          <div className="rounded-[20px] border border-slate-200 bg-white p-4 shadow-[0_8px_20px_rgba(15,23,42,0.06)] transition-shadow hover:shadow-[0_12px_24px_rgba(15,23,42,0.1)]">
             <div className="mb-3">
               <p className="text-sm font-semibold text-[var(--text)]">
                 Tema do dashboard

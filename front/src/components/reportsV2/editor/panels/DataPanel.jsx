@@ -79,6 +79,7 @@ export default function DataPanel({
           <div className="grid grid-cols-3 gap-2">
             {metricOptions.map((metric) => {
               const active = metrics.includes(metric.value);
+              const displayLabel = metric.shortLabel || metric.label;
               return (
                 <button
                   key={metric.value}
@@ -92,7 +93,7 @@ export default function DataPanel({
                   )}
                   title={metric.label}
                 >
-                  {metric.label}
+                  {displayLabel}
                 </button>
               );
             })}

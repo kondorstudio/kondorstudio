@@ -29,7 +29,7 @@ export default function SidePanel({
   onPieOptionsChange,
 }) {
   return (
-    <div className="rounded-[18px] border border-slate-200 bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+    <div className="rounded-[20px] border border-slate-200 bg-white p-4 shadow-[0_12px_28px_rgba(15,23,42,0.08)]">
       <div className="mb-4 flex items-center justify-between">
         <div>
           <p className="text-sm font-semibold text-slate-900">Configurações</p>

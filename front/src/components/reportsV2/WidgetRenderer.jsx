@@ -47,6 +47,26 @@ const PLATFORM_LABELS = {
   FB_IG: "Facebook/Instagram",
 };
 
+const METRIC_LABELS = {
+  spend: "Valor investido",
+  impressions: "Impressões",
+  clicks: "Cliques",
+  conversions: "Conversões",
+  revenue: "Receita",
+  sessions: "Sessões",
+  leads: "Leads",
+  ctr: "CTR",
+  cpc: "CPC",
+  cpm: "CPM",
+  cpa: "CPA",
+  roas: "ROAS",
+};
+
+const COMPARISON_LABELS = {
+  previous_period: "vs período anterior",
+  previous_year: "vs ano anterior",
+};
+
 function formatPlatformList(list) {
   if (!Array.isArray(list) || !list.length) return "conexoes necessarias";
   return list
@@ -92,6 +112,33 @@ function formatMetricValue(metricKey, value, meta, formatOverride = "auto") {
   return formatNumber(number, { compact: true });
 }
 
+function formatMetricLabel(metricKey) {
+  if (!metricKey) return "-";
+  return METRIC_LABELS[metricKey] || metricKey;
+}
+
+function buildComparison(currentValue, compareValue) {
+  if (compareValue === null || compareValue === undefined) return null;
+  const currentNum = Number(currentValue);
+  const compareNum = Number(compareValue);
+  if (!Number.isFinite(compareNum)) return null;
+  const absoluteDifference = (Number.isFinite(currentNum) ? currentNum : 0) - compareNum;
+  const difference = compareNum === 0 ? null : (absoluteDifference / compareNum) * 100;
+  return {
+    values: compareValue,
+    difference,
+    absoluteDifference,
+  };
+}
+
+function formatComparisonPercent(value) {
+  if (value === null || value === undefined) return null;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  const sign = numeric > 0 ? "+" : "";
+  return `${sign}${numeric.toFixed(1)}%`;
+}
+
 function normalizeReporteiCell(value) {
   if (value && typeof value === "object") {
     if (Object.prototype.hasOwnProperty.call(value, "text")) return value.text;
@@ -128,7 +175,10 @@ function normalizeReporteiEntry(entry, widget) {
     return {
       rows: [],
       totals: metric ? { [metric]: entry.values ?? 0 } : {},
-      meta: {},
+      meta: {
+        comparison: entry.comparison ?? null,
+        trend: entry.trend ?? null,
+      },
       pageInfo,
     };
   }
@@ -632,6 +682,32 @@ export default function WidgetRenderer({
   if (widgetType === "kpi") {
     const metric = metrics[0];
     const value = getKpiValue(rows, totals, metric, dimensions);
+    const comparison =
+      meta?.comparison ??
+      (data?.compare?.totals && metric
+        ? buildComparison(value, data.compare.totals[metric])
+        : null);
+    const diffPercentLabel = formatComparisonPercent(comparison?.difference);
+    const diffTone =
+      comparison?.difference > 0
+        ? "bg-emerald-50 text-emerald-700"
+        : comparison?.difference < 0
+        ? "bg-rose-50 text-rose-600"
+        : "bg-slate-100 text-slate-500";
+    const diffIcon =
+      comparison?.difference > 0
+        ? "▲"
+        : comparison?.difference < 0
+        ? "▼"
+        : "•";
+    const comparisonLabel = compareTo?.mode
+      ? COMPARISON_LABELS[compareTo.mode] || "vs período anterior"
+      : "comparação";
+    const diffAbsoluteLabel =
+      comparison?.absoluteDifference !== null &&
+      comparison?.absoluteDifference !== undefined
+        ? formatMetricValue(metric, comparison.absoluteDifference, meta, formatOverride)
+        : null;
     return (
       <>
         <WidgetStatusReporter
@@ -640,18 +716,27 @@ export default function WidgetRenderer({
           reason={null}
           onStatusChange={onStatusChange}
         />
-        <div className="flex h-full flex-col justify-between gap-3">
+        <div className="flex h-full flex-col gap-2">
           <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-            {metric}
+            {formatMetricLabel(metric)}
           </div>
           <div className="text-3xl font-semibold text-[var(--text)]">
             {formatMetricValue(metric, value, meta, formatOverride)}
           </div>
-          {isRefreshing ? (
-            <div className="text-xs text-[var(--muted)]">{refreshLabel}</div>
-          ) : (
-            <div className="text-xs text-[var(--muted)]">Atualizado agora</div>
-          )}
+          {diffPercentLabel ? (
+            <div className="flex items-center gap-2 text-xs">
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-1 font-semibold ${diffTone}`}
+                title={diffAbsoluteLabel ? `Δ ${diffAbsoluteLabel}` : undefined}
+              >
+                {diffIcon} {diffPercentLabel}
+              </span>
+              <span className="text-[var(--muted)]">{comparisonLabel}</span>
+            </div>
+          ) : null}
+          <div className="mt-auto text-xs text-[var(--muted)]">
+            {isRefreshing ? refreshLabel : "Atualizado agora"}
+          </div>
         </div>
       </>
     );
