@@ -6,7 +6,7 @@ const dateKey = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 const DEFAULT_REPORT_THEME = Object.freeze({
   mode: 'light',
-  brandColor: '#B050F0',
+  brandColor: '#0B5ED7',
   accentColor: '#22C55E',
   bg: '#FFFFFF',
   text: '#0F172A',
@@ -163,7 +163,7 @@ const vizSchema = z
 const textContentSchema = z
   .object({
     text: z.string().min(1),
-    format: z.enum(['plain', 'markdown']).default('plain'),
+    format: z.enum(['plain', 'markdown', 'html']).default('plain'),
   })
   .strict();
 
@@ -172,6 +172,7 @@ const widgetSchema = z
     id: z.string().uuid(),
     type: z.enum(['kpi', 'timeseries', 'bar', 'table', 'pie', 'donut', 'text']),
     title: z.string().min(1),
+    section: z.string().min(1).max(60).optional(),
     layout: layoutSchema,
     query: querySchema.optional(),
     content: textContentSchema.optional(),

@@ -211,6 +211,16 @@ function LayoutContent() {
     return location.pathname === item.to || location.pathname.startsWith(`${item.to}/`);
   });
   const isReportsV2Route = location.pathname.startsWith("/relatorios/v2");
+
+  if (isReportsV2Route) {
+    return (
+      <div className="min-h-screen reportei-theme bg-[var(--background)] text-[var(--text)]">
+        <main className="min-h-screen">
+          <Outlet />
+        </main>
+      </div>
+    );
+  }
   const connections = connectionsStatus?.items || [];
   const activePlatforms = useMemo(() => {
     const platforms = new Set();
