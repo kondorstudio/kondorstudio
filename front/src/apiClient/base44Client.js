@@ -171,7 +171,7 @@ async function autoRefreshWrapper(fetchFn, path, options = {}) {
 async function rawFetch(path, options = {}) {
   const base = API_BASE_URL.replace(/\/+$/, "");
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const url = `${base}/api${normalizedPath}`;
+  const url = `${base}${normalizedPath}`;
 
   const defaultHeaders = {
     "Content-Type": "application/json",
@@ -196,7 +196,7 @@ async function rawFetch(path, options = {}) {
 function buildApiUrl(path) {
   const base = API_BASE_URL.replace(/\/+$/, "");
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  return `${base}/api${normalizedPath}`;
+  return `${base}${normalizedPath}`;
 }
 
 function buildQuery(params) {
