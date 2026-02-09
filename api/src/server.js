@@ -193,6 +193,76 @@ function safeMount(mountPath, router) {
   }
 }
 
+// Compat: alguns proxies da DigitalOcean encaminham "/api/*" para o container sem o prefixo "/api".
+// Reescrevemos rotas internas conhecidas para manter compatibilidade sem exigir "/api/api/*" no frontend.
+const apiCompatPrefixes = [
+  "/auth",
+  "/client-portal",
+  "/public",
+  "/webhooks",
+  "/integrations",
+  "/tenants",
+  "/clients",
+  "/posts",
+  "/tasks",
+  "/competitors",
+  "/finance",
+  "/metrics",
+  "/approvals",
+  "/uploads",
+  "/reports",
+  "/reporting",
+  "/analytics",
+  "/billing",
+  "/team",
+  "/dashboard",
+  "/admin",
+  "/me",
+  "/automation",
+];
+
+function shouldRewriteToApi(pathname, method) {
+  if (!pathname) return false;
+  if (pathname === "/api" || pathname.startsWith("/api/")) return false;
+  if (pathname === "/health" || pathname === "/healthz") return false;
+
+  // Mantém assets/redirect públicos de upload funcionando sem autenticação.
+  if (pathname === "/uploads/public" || pathname.startsWith("/uploads/public/")) {
+    return false;
+  }
+
+  // Preserva arquivos estáticos de /uploads/* em GET/HEAD quando não são endpoints protegidos.
+  if (pathname.startsWith("/uploads/")) {
+    const protectedUploadPaths = new Set([
+      "/uploads",
+      "/uploads/presign",
+      "/uploads/list",
+    ]);
+    const isProtectedUploadRoute =
+      protectedUploadPaths.has(pathname) || /^\/uploads\/[^/]+$/.test(pathname);
+    if (!isProtectedUploadRoute && (method === "GET" || method === "HEAD")) {
+      return false;
+    }
+  }
+
+  return apiCompatPrefixes.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+  );
+}
+
+app.use((req, _res, next) => {
+  const currentUrl = req.url || "";
+  const queryIndex = currentUrl.indexOf("?");
+  const pathname = queryIndex >= 0 ? currentUrl.slice(0, queryIndex) : currentUrl;
+  const search = queryIndex >= 0 ? currentUrl.slice(queryIndex) : "";
+
+  if (shouldRewriteToApi(pathname, req.method)) {
+    req.url = `/api${pathname}${search}`;
+  }
+
+  return next();
+});
+
 // CORS configurado antes de qualquer parser, para garantir headers em respostas de erro
 const devOrigins = [
   "http://localhost:3000",
