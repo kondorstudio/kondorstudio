@@ -5,7 +5,14 @@ const ga4MetadataService = require('../services/ga4MetadataService');
 const { prisma, useTenant } = require('../prisma');
 
 function getFrontUrl() {
-  return process.env.APP_URL_FRONT || 'http://localhost:5173';
+  return (
+    process.env.APP_URL_FRONT ||
+    process.env.PUBLIC_APP_URL ||
+    process.env.APP_PUBLIC_URL ||
+    process.env.APP_BASE_URL ||
+    process.env.PUBLIC_APP_BASE_URL ||
+    'http://localhost:5173'
+  );
 }
 
 function buildRedirectUrl(params) {

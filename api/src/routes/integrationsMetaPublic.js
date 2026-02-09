@@ -7,6 +7,17 @@ const router = express.Router();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'changeme_local_secret';
 
+function getPublicAppBase() {
+  const value =
+    process.env.PUBLIC_APP_URL ||
+    process.env.APP_PUBLIC_URL ||
+    process.env.APP_URL_FRONT ||
+    process.env.APP_BASE_URL ||
+    process.env.PUBLIC_APP_BASE_URL ||
+    '';
+  return String(value || '').replace(/\/+$/, '');
+}
+
 function buildRedirectUrl(status, info = {}) {
   const suffix = status === 'connected' ? 'connected' : 'error';
   const params = new URLSearchParams();
@@ -15,9 +26,9 @@ function buildRedirectUrl(status, info = {}) {
   if (info.clientId) params.set('clientId', info.clientId);
 
   const fallback = `/integrations?${params.toString()}`;
-  const base = process.env.PUBLIC_APP_URL || process.env.APP_PUBLIC_URL;
+  const base = getPublicAppBase();
   if (!base) return fallback;
-  return `${String(base).replace(/\/+$/, '')}${fallback}`;
+  return `${base}${fallback}`;
 }
 
 function decodeState(state) {
@@ -49,7 +60,7 @@ router.get('/callback', async (req, res) => {
 
   if (metaError) {
     const redirectUrl = buildRedirectUrl('error', decoded);
-    if (process.env.PUBLIC_APP_URL || process.env.APP_PUBLIC_URL) {
+    if (getPublicAppBase()) {
       return res.redirect(302, redirectUrl);
     }
     return res.status(400).json({ error: 'meta_oauth_error' });
@@ -59,7 +70,7 @@ router.get('/callback', async (req, res) => {
 
   if (!code || !state) {
     const redirectUrl = buildRedirectUrl('error', decoded);
-    if (process.env.PUBLIC_APP_URL || process.env.APP_PUBLIC_URL) {
+    if (getPublicAppBase()) {
       return res.redirect(302, redirectUrl);
     }
     return res.status(400).json({ error: 'missing code or state' });
@@ -68,13 +79,13 @@ router.get('/callback', async (req, res) => {
   try {
     const result = await metaSocialService.handleCallback({ code, state });
     const redirectUrl = buildRedirectUrl('connected', result || decoded);
-    if (process.env.PUBLIC_APP_URL || process.env.APP_PUBLIC_URL) {
+    if (getPublicAppBase()) {
       return res.redirect(302, redirectUrl);
     }
     return res.json({ ok: true, ...result });
   } catch (err) {
     const redirectUrl = buildRedirectUrl('error', decoded);
-    if (process.env.PUBLIC_APP_URL || process.env.APP_PUBLIC_URL) {
+    if (getPublicAppBase()) {
       return res.redirect(302, redirectUrl);
     }
     return res.status(500).json({ error: err?.message || 'meta_oauth_failed' });

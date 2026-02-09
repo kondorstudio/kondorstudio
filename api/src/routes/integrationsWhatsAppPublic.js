@@ -8,12 +8,23 @@ const router = express.Router();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'changeme_local_secret';
 
+function getPublicAppBase() {
+  const value =
+    process.env.PUBLIC_APP_URL ||
+    process.env.APP_PUBLIC_URL ||
+    process.env.APP_URL_FRONT ||
+    process.env.APP_BASE_URL ||
+    process.env.PUBLIC_APP_BASE_URL ||
+    '';
+  return String(value || '').replace(/\/+$/, '');
+}
+
 function buildRedirectUrl(result) {
   const suffix = result === 'connected' ? 'connected' : 'error';
   const fallback = `/integrations?whatsapp=${suffix}`;
-  const base = process.env.PUBLIC_APP_URL;
+  const base = getPublicAppBase();
   if (!base) return fallback;
-  return `${String(base).replace(/\/+$/, '')}${fallback}`;
+  return `${base}${fallback}`;
 }
 
 async function fetchJsonWithTimeout(
@@ -92,7 +103,7 @@ router.get('/callback', async (req, res) => {
   const metaError = req.query && (req.query.error || req.query.error_description);
   if (metaError) {
     const redirectUrl = buildRedirectUrl('error');
-    if (process.env.PUBLIC_APP_URL) return res.redirect(302, redirectUrl);
+    if (getPublicAppBase()) return res.redirect(302, redirectUrl);
     return res.status(400).json({ error: 'meta_oauth_error' });
   }
 
@@ -101,7 +112,7 @@ router.get('/callback', async (req, res) => {
 
   if (!code || !state) {
     const redirectUrl = buildRedirectUrl('error');
-    if (process.env.PUBLIC_APP_URL) return res.redirect(302, redirectUrl);
+    if (getPublicAppBase()) return res.redirect(302, redirectUrl);
     return res.status(400).json({ error: 'missing code or state' });
   }
 
@@ -141,7 +152,7 @@ router.get('/callback', async (req, res) => {
     if (!shortResp.ok) {
       const msg = shortResp?.data?.error?.message || 'Falha ao trocar code por token';
       const redirectUrl = buildRedirectUrl('error');
-      if (process.env.PUBLIC_APP_URL) return res.redirect(302, redirectUrl);
+      if (getPublicAppBase()) return res.redirect(302, redirectUrl);
       return res.status(502).json({ error: msg });
     }
 
@@ -151,7 +162,7 @@ router.get('/callback', async (req, res) => {
 
     if (!shortToken) {
       const redirectUrl = buildRedirectUrl('error');
-      if (process.env.PUBLIC_APP_URL) return res.redirect(302, redirectUrl);
+      if (getPublicAppBase()) return res.redirect(302, redirectUrl);
       return res.status(502).json({ error: 'token ausente na resposta da Meta' });
     }
 
@@ -188,7 +199,7 @@ router.get('/callback', async (req, res) => {
     if (!meResp.ok) {
       const msg = meResp?.data?.error?.message || 'Token inválido (falha em /me)';
       const redirectUrl = buildRedirectUrl('error');
-      if (process.env.PUBLIC_APP_URL) return res.redirect(302, redirectUrl);
+      if (getPublicAppBase()) return res.redirect(302, redirectUrl);
       return res.status(502).json({ error: msg });
     }
 
@@ -210,7 +221,7 @@ router.get('/callback', async (req, res) => {
 
     if (!wabaId) {
       const redirectUrl = buildRedirectUrl('error');
-      if (process.env.PUBLIC_APP_URL) return res.redirect(302, redirectUrl);
+      if (getPublicAppBase()) return res.redirect(302, redirectUrl);
       return res.status(502).json({ error: 'Nenhuma WABA encontrada para este usuário' });
     }
 
@@ -251,7 +262,7 @@ router.get('/callback', async (req, res) => {
 
     if (!phoneNumberId) {
       const redirectUrl = buildRedirectUrl('error');
-      if (process.env.PUBLIC_APP_URL) return res.redirect(302, redirectUrl);
+      if (getPublicAppBase()) return res.redirect(302, redirectUrl);
       return res.status(502).json({ error: 'Nenhum phone_number_id encontrado para esta WABA' });
     }
 
@@ -305,7 +316,7 @@ router.get('/callback', async (req, res) => {
     });
 
     const redirectUrl = buildRedirectUrl('connected');
-    if (process.env.PUBLIC_APP_URL) return res.redirect(302, redirectUrl);
+    if (getPublicAppBase()) return res.redirect(302, redirectUrl);
     return res.json({
       ok: true,
       status: 'CONNECTED',
@@ -318,7 +329,7 @@ router.get('/callback', async (req, res) => {
     });
   } catch (err) {
     const redirectUrl = buildRedirectUrl('error');
-    if (process.env.PUBLIC_APP_URL) return res.redirect(302, redirectUrl);
+    if (getPublicAppBase()) return res.redirect(302, redirectUrl);
 
     const message =
       err?.code === 'MISSING_ENV'

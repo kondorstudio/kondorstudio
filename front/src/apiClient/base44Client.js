@@ -1,19 +1,6 @@
 // src/apiClient/base44Client.js
 
-// ⚙️ Base URL da API — usando variáveis do Vite, sem "process"
-function detectHostedApiUrl() {
-  if (typeof window === "undefined") return null;
-  const host = window.location.hostname;
-  if (!host) return null;
-  if (/onrender\.com$/.test(host)) {
-    return "https://kondor-api.onrender.com";
-  }
-  if (host === "kondorstudio.app" || host === "www.kondorstudio.app") {
-    return "https://kondor-api.onrender.com";
-  }
-  return null;
-}
-
+// ⚙️ Base URL da API — prioriza env explícita e cai para same-origin (/api)
 function detectWindowOrigin() {
   if (typeof window === "undefined") return null;
   const { origin } = window.location || {};
@@ -23,6 +10,38 @@ function detectWindowOrigin() {
   return null;
 }
 
+function normalizeApiBaseUrl(value) {
+  if (!value) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  if (/^https?:\/\//i.test(raw)) {
+    try {
+      const parsed = new URL(raw);
+      parsed.hash = "";
+      parsed.search = "";
+      parsed.pathname =
+        parsed.pathname && parsed.pathname !== "/"
+          ? parsed.pathname.replace(/\/+$/, "")
+          : "/api";
+      return parsed.toString().replace(/\/$/, "");
+    } catch (_) {
+      return raw.replace(/\/+$/, "");
+    }
+  }
+
+  const cleaned = raw.replace(/\/+$/, "");
+  if (!cleaned || cleaned === "/") return "/api";
+  if (cleaned.startsWith("/")) return cleaned;
+  return `/${cleaned}`;
+}
+
+function detectSameOriginApiBaseUrl() {
+  const origin = detectWindowOrigin();
+  if (!origin) return null;
+  return normalizeApiBaseUrl(`${origin}/api`);
+}
+
 function preferPageProtocol(url) {
   if (!url) return url;
   if (typeof window === "undefined") return url;
@@ -30,6 +49,12 @@ function preferPageProtocol(url) {
   if (!pageProtocol || pageProtocol === "http:") return url;
   try {
     const parsed = new URL(url);
+    if (
+      parsed.hostname === "localhost" ||
+      parsed.hostname.startsWith("127.")
+    ) {
+      return url;
+    }
     if (parsed.protocol !== pageProtocol) {
       parsed.protocol = pageProtocol;
       return parsed.toString();
@@ -42,15 +67,44 @@ function preferPageProtocol(url) {
   return url;
 }
 
-const API_BASE_URL = preferPageProtocol(
+const configuredApiBaseUrl =
   (typeof import.meta !== "undefined" &&
     import.meta.env &&
     (import.meta.env.VITE_API_URL || import.meta.env.VITE_APP_API_URL)) ||
-    (typeof window !== "undefined" && window.__KONDOR_API_URL) ||
-    detectHostedApiUrl() ||
-    detectWindowOrigin() ||
-    "http://localhost:4000"
+  (typeof window !== "undefined" && window.__KONDOR_API_URL) ||
+  null;
+
+const STATIC_API_BASE_URL = preferPageProtocol(
+  normalizeApiBaseUrl(configuredApiBaseUrl) ||
+    detectSameOriginApiBaseUrl() ||
+    "http://localhost:4000/api"
 );
+
+let adaptiveApiBaseUrl = null;
+
+function getCurrentApiBaseUrl() {
+  return adaptiveApiBaseUrl || STATIC_API_BASE_URL;
+}
+
+function joinApiUrl(base, path) {
+  const normalizedBase = String(base || "").replace(/\/+$/, "");
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${normalizedBase}${normalizedPath}`;
+}
+
+function computeAlternativeApiBaseUrl(base) {
+  const normalizedBase = String(base || "").replace(/\/+$/, "");
+  if (/\/api\/api$/i.test(normalizedBase)) {
+    return normalizedBase.replace(/\/api$/i, "");
+  }
+  if (/\/api$/i.test(normalizedBase)) {
+    return `${normalizedBase}/api`;
+  }
+  return `${normalizedBase}/api`;
+}
+
+const apiPrefixFallbackCandidates =
+  /^\/(auth|admin|analytics|approvals|billing|clients|competitors|dashboard|finance|integrations|me|metrics|posts|public|reports|tasks|team|tenants|uploads)\b/i;
 
 // --------------------
 // Helpers de storage
@@ -169,9 +223,9 @@ async function autoRefreshWrapper(fetchFn, path, options = {}) {
 // --------------------
 
 async function rawFetch(path, options = {}) {
-  const base = API_BASE_URL.replace(/\/+$/, "");
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const url = `${base}${normalizedPath}`;
+  const base = getCurrentApiBaseUrl();
+  const url = joinApiUrl(base, normalizedPath);
 
   const defaultHeaders = {
     "Content-Type": "application/json",
@@ -189,14 +243,28 @@ async function rawFetch(path, options = {}) {
     opts.body = JSON.stringify(options.body);
   }
 
-  const res = await fetch(url, opts);
+  let res = await fetch(url, opts);
+  const shouldTryPrefixFallback =
+    res.status === 404 && apiPrefixFallbackCandidates.test(normalizedPath);
+
+  if (shouldTryPrefixFallback) {
+    const alternativeBase = computeAlternativeApiBaseUrl(base);
+    if (alternativeBase && alternativeBase !== base) {
+      const alternativeUrl = joinApiUrl(alternativeBase, normalizedPath);
+      const alternativeRes = await fetch(alternativeUrl, opts);
+      if (alternativeRes.status !== 404) {
+        adaptiveApiBaseUrl = alternativeBase;
+        console.warn(`[base44] API base ajustada para ${adaptiveApiBaseUrl}`);
+        res = alternativeRes;
+      }
+    }
+  }
+
   return res;
 }
 
 function buildApiUrl(path) {
-  const base = API_BASE_URL.replace(/\/+$/, "");
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  return `${base}${normalizedPath}`;
+  return joinApiUrl(getCurrentApiBaseUrl(), path);
 }
 
 function buildQuery(params) {
@@ -1330,7 +1398,9 @@ const Me = {
 // --------------------
 
 export const base44 = {
-  API_BASE_URL,
+  get API_BASE_URL() {
+    return getCurrentApiBaseUrl();
+  },
   rawFetch,
   jsonFetch,
   authedFetch,

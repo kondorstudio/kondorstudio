@@ -77,7 +77,7 @@ export function resolveMediaUrl(raw) {
     return enforceProtocol(raw);
   }
 
-  // base da API (Render ou local)
+  // base da API (mesmo domínio ou URL explícita)
   const base =
     (typeof import.meta !== "undefined" &&
       import.meta.env &&

@@ -16,7 +16,7 @@ const errorLogger = require("./middleware/errorLogger");
 
 const app = express();
 
-// Honra X-Forwarded-* headers quando estamos atrás de proxies (Render / Nginx).
+// Honra X-Forwarded-* headers quando estamos atrás de proxies (Cloudflare / Nginx / LB).
 // Sem isso, req.protocol fica como "http" e os links de upload retornam URLs inseguras.
 app.set("trust proxy", 1);
 
@@ -200,15 +200,6 @@ const devOrigins = [
   "http://localhost:4173",
 ];
 
-let envOrigins = [];
-const corsEnvRaw = process.env.CORS_ORIGINS || process.env.CORS_ORIGIN || "";
-if (corsEnvRaw) {
-  envOrigins = corsEnvRaw
-    .split(",")
-    .map((o) => o.trim())
-    .filter(Boolean);
-}
-
 function normalizeOrigin(value) {
   if (!value) return "";
   const trimmed = String(value).trim();
@@ -220,38 +211,72 @@ function normalizeOrigin(value) {
   }
 }
 
+function parseOrigins(raw) {
+  return String(raw || "")
+    .split(/[,\n;]+/)
+    .map((origin) => normalizeOrigin(origin))
+    .filter(Boolean);
+}
+
+const corsEnvRaw = process.env.CORS_ORIGINS || process.env.CORS_ORIGIN || "";
+const envOrigins = parseOrigins(corsEnvRaw);
+
 const extraOrigins = [
   process.env.APP_URL_FRONT,
   process.env.PUBLIC_APP_URL,
   process.env.APP_PUBLIC_URL,
+  process.env.APP_BASE_URL,
+  process.env.PUBLIC_APP_BASE_URL,
 ]
   .map(normalizeOrigin)
   .filter(Boolean);
 
+const defaultOrigins = isProduction
+  ? []
+  : devOrigins.map((origin) => normalizeOrigin(origin)).filter(Boolean);
+
 const allowedOrigins = Array.from(
-  new Set([...devOrigins, ...envOrigins, ...extraOrigins])
+  new Set([...defaultOrigins, ...envOrigins, ...extraOrigins])
 );
 
-if (isProduction && envOrigins.length === 0) {
-  console.error("⚠️  CORS_ORIGINS não definido. Configure no Render.");
+if (
+  isProduction &&
+  process.env.CORS_ALLOW_ALL !== "true" &&
+  allowedOrigins.length === 0
+) {
+  console.error(
+    "⚠️  Nenhuma origem CORS permitida em produção. Configure CORS_ORIGINS e/ou APP_URL_FRONT."
+  );
+}
+
+if (
+  isProduction &&
+  allowedOrigins.length > 0 &&
+  allowedOrigins.every((origin) => /localhost|127\.0\.0\.1/i.test(origin))
+) {
+  console.warn(
+    "⚠️  CORS em produção só permite localhost. Configure os domínios públicos (ex.: https://kondorstudio.app)."
+  );
 }
 
 const allowAllOrigins =
   process.env.CORS_ALLOW_ALL === "true" ||
-  (!isProduction && envOrigins.length === 0);
+  (!isProduction && envOrigins.length === 0 && extraOrigins.length === 0);
 
 const corsOptions = {
   origin(origin, callback) {
     if (allowAllOrigins) {
-      if (origin) {
-        return callback(null, true);
-      }
       return callback(null, true);
     }
-    if (!origin || allowedOrigins.includes(origin)) {
+
+    const normalizedOrigin = normalizeOrigin(origin);
+    if (!origin || allowedOrigins.includes(normalizedOrigin)) {
       return callback(null, true);
     }
-    console.warn(`🚫 CORS bloqueado para origem: ${origin}`);
+
+    console.warn(
+      `🚫 CORS bloqueado para origem: ${origin} (normalizada: ${normalizedOrigin || "n/a"})`
+    );
     const err = new Error("Not allowed by CORS");
     err.status = 403;
     return callback(err);

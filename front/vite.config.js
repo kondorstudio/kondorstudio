@@ -28,7 +28,9 @@ export default defineConfig(({ mode }) => {
     define: {
       // Garante que a API URL esteja disponível no frontend em tempo de build:
       // - VITE_API_URL (principal)
-      "import.meta.env.VITE_API_URL": JSON.stringify(env.VITE_API_URL)
+      // - VITE_APP_API_URL (legado)
+      "import.meta.env.VITE_API_URL": JSON.stringify(env.VITE_API_URL),
+      "import.meta.env.VITE_APP_API_URL": JSON.stringify(env.VITE_APP_API_URL)
     },
     build: {
       outDir: "dist",

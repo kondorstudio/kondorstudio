@@ -356,6 +356,8 @@ router.get('/:id/public-link', async (req, res) => {
 
     const baseUrl =
       process.env.PUBLIC_APP_URL
+      || process.env.APP_PUBLIC_URL
+      || process.env.APP_URL_FRONT
       || process.env.PUBLIC_PORTAL_URL_BASE
       || process.env.APP_BASE_URL
       || '';
