@@ -1,6 +1,10 @@
 // src/apiClient/base44Client.js
 
-// ⚙️ Base URL da API — prioriza env explícita e cai para same-origin (/api)
+// Convenção:
+// - VITE_API_URL aponta para a ORIGEM (ex.: https://kondorstudio.app), sem "/api"
+// - As chamadas do cliente sempre trafegam em "/api/*"
+const API_PREFIX = "/api";
+
 function detectWindowOrigin() {
   if (typeof window === "undefined") return null;
   const { origin } = window.location || {};
@@ -20,26 +24,36 @@ function normalizeApiBaseUrl(value) {
       const parsed = new URL(raw);
       parsed.hash = "";
       parsed.search = "";
-      parsed.pathname =
+      let pathname =
         parsed.pathname && parsed.pathname !== "/"
           ? parsed.pathname.replace(/\/+$/, "")
-          : "/api";
+          : "";
+      if (pathname === API_PREFIX) {
+        pathname = "";
+      } else if (/\/api$/i.test(pathname)) {
+        pathname = pathname.replace(/\/api$/i, "");
+      }
+      parsed.pathname = pathname || "/";
       return parsed.toString().replace(/\/$/, "");
     } catch (_) {
-      return raw.replace(/\/+$/, "");
+      const cleaned = raw.replace(/\/+$/, "");
+      if (/\/api$/i.test(cleaned)) {
+        return cleaned.replace(/\/api$/i, "");
+      }
+      return cleaned;
     }
   }
 
   const cleaned = raw.replace(/\/+$/, "");
-  if (!cleaned || cleaned === "/") return "/api";
-  if (cleaned.startsWith("/")) return cleaned;
+  if (!cleaned || cleaned === "/" || cleaned === API_PREFIX) return "";
+  if (cleaned.startsWith("/")) return cleaned.replace(/\/api$/i, "");
   return `/${cleaned}`;
 }
 
 function detectSameOriginApiBaseUrl() {
   const origin = detectWindowOrigin();
   if (!origin) return null;
-  return normalizeApiBaseUrl(`${origin}/api`);
+  return normalizeApiBaseUrl(origin);
 }
 
 function preferPageProtocol(url) {
@@ -77,13 +91,11 @@ const configuredApiBaseUrl =
 const STATIC_API_BASE_URL = preferPageProtocol(
   normalizeApiBaseUrl(configuredApiBaseUrl) ||
     detectSameOriginApiBaseUrl() ||
-    "http://localhost:4000/api"
+    "http://localhost:4000"
 );
 
-let adaptiveApiBaseUrl = null;
-
 function getCurrentApiBaseUrl() {
-  return adaptiveApiBaseUrl || STATIC_API_BASE_URL;
+  return STATIC_API_BASE_URL;
 }
 
 function joinApiUrl(base, path) {
@@ -92,19 +104,16 @@ function joinApiUrl(base, path) {
   return `${normalizedBase}${normalizedPath}`;
 }
 
-function computeAlternativeApiBaseUrl(base) {
-  const normalizedBase = String(base || "").replace(/\/+$/, "");
-  if (/\/api\/api$/i.test(normalizedBase)) {
-    return normalizedBase.replace(/\/api$/i, "");
+function normalizeApiPath(path) {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  if (
+    normalizedPath === API_PREFIX ||
+    normalizedPath.startsWith(`${API_PREFIX}/`)
+  ) {
+    return normalizedPath;
   }
-  if (/\/api$/i.test(normalizedBase)) {
-    return `${normalizedBase}/api`;
-  }
-  return `${normalizedBase}/api`;
+  return `${API_PREFIX}${normalizedPath}`;
 }
-
-const apiPrefixFallbackCandidates =
-  /^\/(auth|admin|analytics|approvals|billing|clients|competitors|dashboard|finance|integrations|me|metrics|posts|public|reports|tasks|team|tenants|uploads)\b/i;
 
 // --------------------
 // Helpers de storage
@@ -223,7 +232,7 @@ async function autoRefreshWrapper(fetchFn, path, options = {}) {
 // --------------------
 
 async function rawFetch(path, options = {}) {
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const normalizedPath = normalizeApiPath(path);
   const base = getCurrentApiBaseUrl();
   const url = joinApiUrl(base, normalizedPath);
 
@@ -243,28 +252,11 @@ async function rawFetch(path, options = {}) {
     opts.body = JSON.stringify(options.body);
   }
 
-  let res = await fetch(url, opts);
-  const shouldTryPrefixFallback =
-    res.status === 404 && apiPrefixFallbackCandidates.test(normalizedPath);
-
-  if (shouldTryPrefixFallback) {
-    const alternativeBase = computeAlternativeApiBaseUrl(base);
-    if (alternativeBase && alternativeBase !== base) {
-      const alternativeUrl = joinApiUrl(alternativeBase, normalizedPath);
-      const alternativeRes = await fetch(alternativeUrl, opts);
-      if (alternativeRes.status !== 404) {
-        adaptiveApiBaseUrl = alternativeBase;
-        console.warn(`[base44] API base ajustada para ${adaptiveApiBaseUrl}`);
-        res = alternativeRes;
-      }
-    }
-  }
-
-  return res;
+  return fetch(url, opts);
 }
 
 function buildApiUrl(path) {
-  return joinApiUrl(getCurrentApiBaseUrl(), path);
+  return joinApiUrl(getCurrentApiBaseUrl(), normalizeApiPath(path));
 }
 
 function buildQuery(params) {

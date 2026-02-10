@@ -269,6 +269,10 @@ const devOrigins = [
   "http://localhost:5173",
   "http://localhost:4173",
 ];
+const productionOrigins = [
+  "https://kondorstudio.app",
+  "https://www.kondorstudio.app",
+];
 
 function normalizeOrigin(value) {
   if (!value) return "";
@@ -301,9 +305,12 @@ const extraOrigins = [
   .map(normalizeOrigin)
   .filter(Boolean);
 
-const defaultOrigins = isProduction
-  ? []
-  : devOrigins.map((origin) => normalizeOrigin(origin)).filter(Boolean);
+const defaultOrigins = [
+  ...productionOrigins,
+  ...(isProduction ? [] : devOrigins),
+]
+  .map((origin) => normalizeOrigin(origin))
+  .filter(Boolean);
 
 const allowedOrigins = Array.from(
   new Set([...defaultOrigins, ...envOrigins, ...extraOrigins])
@@ -413,6 +420,16 @@ app.get("/healthz", async (req, res) => {
     return res.json({ status: "ok", db: "ok" });
   } catch (err) {
     console.error("❌ Healthcheck /healthz falhou:", err);
+    return res.status(500).json({ status: "error", db: "error" });
+  }
+});
+app.get("/api/health", (req, res) => res.json({ status: "ok" }));
+app.get("/api/healthz", async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    return res.json({ status: "ok", db: "ok" });
+  } catch (err) {
+    console.error("❌ Healthcheck /api/healthz falhou:", err);
     return res.status(500).json({ status: "error", db: "error" });
   }
 });
