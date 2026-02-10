@@ -253,11 +253,18 @@ function shouldRewriteToApi(pathname, method) {
 app.use((req, _res, next) => {
   const currentUrl = req.url || "";
   const queryIndex = currentUrl.indexOf("?");
-  const pathname = queryIndex >= 0 ? currentUrl.slice(0, queryIndex) : currentUrl;
+  let pathname = queryIndex >= 0 ? currentUrl.slice(0, queryIndex) : currentUrl;
   const search = queryIndex >= 0 ? currentUrl.slice(queryIndex) : "";
+
+  // Compat extra: evita "/api/api/*" vindo de env/build antigos no front.
+  while (/^\/api\/api(?=\/|$)/i.test(pathname)) {
+    pathname = pathname.replace(/^\/api\/api(?=\/|$)/i, "/api");
+  }
 
   if (shouldRewriteToApi(pathname, req.method)) {
     req.url = `/api${pathname}${search}`;
+  } else if (pathname !== (queryIndex >= 0 ? currentUrl.slice(0, queryIndex) : currentUrl)) {
+    req.url = `${pathname}${search}`;
   }
 
   return next();
@@ -340,24 +347,7 @@ const allowAllOrigins =
   process.env.CORS_ALLOW_ALL === "true" ||
   (!isProduction && envOrigins.length === 0 && extraOrigins.length === 0);
 
-const corsOptions = {
-  origin(origin, callback) {
-    if (allowAllOrigins) {
-      return callback(null, true);
-    }
-
-    const normalizedOrigin = normalizeOrigin(origin);
-    if (!origin || allowedOrigins.includes(normalizedOrigin)) {
-      return callback(null, true);
-    }
-
-    console.warn(
-      `🚫 CORS bloqueado para origem: ${origin} (normalizada: ${normalizedOrigin || "n/a"})`
-    );
-    const err = new Error("Not allowed by CORS");
-    err.status = 403;
-    return callback(err);
-  },
+const corsSharedOptions = {
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: [
@@ -371,8 +361,46 @@ const corsOptions = {
   optionsSuccessStatus: 204,
 };
 
-app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
+function resolveRequestOrigin(req) {
+  const forwardedProto = String(req.headers["x-forwarded-proto"] || "")
+    .split(",")[0]
+    .trim();
+  const forwardedHost = String(req.headers["x-forwarded-host"] || "")
+    .split(",")[0]
+    .trim();
+  const host = forwardedHost || req.get("host") || "";
+  const protocol = forwardedProto || req.protocol || "http";
+  if (!host) return "";
+  return normalizeOrigin(`${protocol}://${host}`);
+}
+
+function corsOptionsDelegate(req, callback) {
+  const origin = req.header("Origin");
+  const normalizedOrigin = normalizeOrigin(origin);
+  const requestOrigin = resolveRequestOrigin(req);
+  const isAllowedOrigin =
+    !origin ||
+    allowAllOrigins ||
+    allowedOrigins.includes(normalizedOrigin) ||
+    (normalizedOrigin && requestOrigin && normalizedOrigin === requestOrigin);
+
+  if (!isAllowedOrigin) {
+    console.warn(
+      `🚫 CORS bloqueado para origem: ${origin} (normalizada: ${normalizedOrigin || "n/a"})`
+    );
+    const err = new Error("Not allowed by CORS");
+    err.status = 403;
+    return callback(err);
+  }
+
+  return callback(null, {
+    ...corsSharedOptions,
+    origin: origin || true,
+  });
+}
+
+app.use(cors(corsOptionsDelegate));
+app.options("*", cors(corsOptionsDelegate));
 
 // Body parsers (JSON / urlencoded)
 app.use(

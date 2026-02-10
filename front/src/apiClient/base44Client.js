@@ -105,7 +105,10 @@ function joinApiUrl(base, path) {
 }
 
 function normalizeApiPath(path) {
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  let normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  while (/^\/api\/api(?=\/|$)/i.test(normalizedPath)) {
+    normalizedPath = normalizedPath.replace(/^\/api\/api(?=\/|$)/i, API_PREFIX);
+  }
   if (
     normalizedPath === API_PREFIX ||
     normalizedPath.startsWith(`${API_PREFIX}/`)
