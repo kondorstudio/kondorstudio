@@ -145,14 +145,14 @@ export default function DashboardRenderer({
         const showTitle = widget?.viz?.options?.showTitle !== false;
         const showHeader = showTitle && (widget?.type !== "text" || hasTitle);
         return (
-          <div className="h-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--card)] p-4 shadow-none transition-shadow hover:shadow-[var(--shadow-sm)] overflow-hidden">
+          <div className="h-full overflow-hidden rounded-[12px] border border-[#dbe3ed] bg-[var(--card)] p-3 shadow-none">
             {showHeader ? (
-              <div className="mb-3 flex items-center justify-between">
+              <div className="mb-2 flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-[var(--text)]">
+                  <p className="text-[13px] font-bold text-[var(--text)]">
                     {widget.title || "Widget"}
                   </p>
-                  <p className="text-xs text-[var(--muted)]">
+                  <p className="text-[11px] text-[var(--muted)]">
                     {String(widget.type || "").toUpperCase()}
                   </p>
                 </div>

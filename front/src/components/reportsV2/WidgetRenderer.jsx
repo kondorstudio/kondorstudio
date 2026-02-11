@@ -717,10 +717,10 @@ export default function WidgetRenderer({
           onStatusChange={onStatusChange}
         />
         <div className="flex h-full flex-col gap-2">
-          <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+          <div className="text-[15px] font-semibold text-[var(--text)]">
             {formatMetricLabel(metric)}
           </div>
-          <div className="text-3xl font-semibold text-[var(--text)]">
+          <div className="text-[42px] font-extrabold leading-none text-[var(--text)]">
             {formatMetricValue(metric, value, meta, formatOverride)}
           </div>
           {diffPercentLabel ? (

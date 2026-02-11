@@ -3,27 +3,32 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useContainerWidth } from "react-grid-layout";
 import {
-  ArrowLeft,
   Plus,
   Copy,
-  Eye,
-  Pencil,
   Save,
   CheckCircle2,
   History,
   Undo2,
   Redo2,
+  Sidebar,
+  SlidersHorizontal,
+  Layers3,
 } from "lucide-react";
 import DashboardCanvas from "@/components/reportsV2/editor/DashboardCanvas.jsx";
 import DashboardRenderer from "@/components/reportsV2/DashboardRenderer.jsx";
 import WidgetRenderer from "@/components/reportsV2/WidgetRenderer.jsx";
-import GlobalFiltersBar from "@/components/reportsV2/GlobalFiltersBar.jsx";
 import ThemeProvider from "@/components/reportsV2/ThemeProvider.jsx";
 import SidePanel from "@/components/reportsV2/editor/SidePanel.jsx";
 import AddMenu from "@/components/reportsV2/editor/AddMenu.jsx";
 import WidgetContextMenu from "@/components/reportsV2/editor/WidgetContextMenu.jsx";
 import GuidesOverlay from "@/components/reportsV2/editor/GuidesOverlay.jsx";
 import MetricsLibraryPanel from "@/components/reportsV2/editor/MetricsLibraryPanel.jsx";
+import ReporteiTopbar from "@/components/reportsV2/ReporteiTopbar.jsx";
+import ReporteiReportToolbar from "@/components/reportsV2/ReporteiReportToolbar.jsx";
+import ReporteiFiltersCards from "@/components/reportsV2/ReporteiFiltersCards.jsx";
+import ReporteiShareDialog from "@/components/reportsV2/ReporteiShareDialog.jsx";
+import ReporteiLeftRail from "@/components/reportsV2/ReporteiLeftRail.jsx";
+import ReporteiCoverCard from "@/components/reportsV2/ReporteiCoverCard.jsx";
 import useHistoryState from "@/components/reportsV2/editor/useHistoryState.js";
 import {
   SNAP_THRESHOLD,
@@ -48,6 +53,7 @@ import {
 import { Button } from "@/components/ui/button.jsx";
 import { Input } from "@/components/ui/input.jsx";
 import { Checkbox } from "@/components/ui/checkbox.jsx";
+import Toast from "@/components/ui/toast.jsx";
 import {
   Dialog,
   DialogContent,
@@ -57,6 +63,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog.jsx";
 import { cn } from "@/utils/classnames.js";
+import useToast from "@/hooks/useToast.js";
 import { base44 } from "@/apiClient/base44Client";
 
 const DEFAULT_LAYOUT = {
@@ -150,6 +157,16 @@ const PLATFORM_LABELS = {
   GA4: "GA4",
   GMB: "Google Meu Negocio",
   FB_IG: "Facebook/Instagram",
+};
+
+const PLATFORM_BADGE = {
+  META_ADS: { short: "M", className: "bg-blue-100 text-blue-700" },
+  GOOGLE_ADS: { short: "G", className: "bg-emerald-100 text-emerald-700" },
+  TIKTOK_ADS: { short: "T", className: "bg-slate-200 text-slate-700" },
+  LINKEDIN_ADS: { short: "In", className: "bg-sky-100 text-sky-700" },
+  GA4: { short: "GA", className: "bg-orange-100 text-orange-700" },
+  GMB: { short: "GMB", className: "bg-lime-100 text-lime-700" },
+  FB_IG: { short: "FB", className: "bg-indigo-100 text-indigo-700" },
 };
 
 const METRICS_BY_PLATFORM = {
@@ -692,19 +709,19 @@ function EditorWidgetCard({
         if (event.key === "Enter") onSelect(widget.id);
       }}
       className={cn(
-        "group flex h-full flex-col justify-between rounded-[18px] border bg-white p-3 text-left shadow-[0_6px_18px_rgba(15,23,42,0.06)] transition-shadow hover:shadow-[0_12px_24px_rgba(15,23,42,0.12)]",
+        "group flex h-full flex-col justify-between rounded-[12px] border bg-white p-3 text-left shadow-none transition-colors hover:border-slate-300",
         selected
           ? "border-[var(--primary)] ring-2 ring-[var(--primary-light)]"
-          : "border-[var(--border)] hover:border-slate-300",
+          : "border-[var(--border)]",
         hasErrors && "border-rose-300 ring-2 ring-rose-200"
       )}
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-[var(--text)]">
+          <p className="text-[13px] font-bold text-[var(--text)]">
             {widget.title || "Widget"}
           </p>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">
+          <p className="text-[11px] font-semibold text-[var(--text-muted)]">
             {String(widget.type || "").toUpperCase()}
           </p>
         </div>
@@ -738,6 +755,7 @@ export default function ReportsV2Editor() {
   const navigate = useNavigate();
   const { id } = useParams();
   const queryClient = useQueryClient();
+  const { toast, showToast } = useToast();
   const { width, containerRef } = useContainerWidth({
     measureBeforeMount: true,
     initialWidth: 960,
@@ -769,6 +787,12 @@ export default function ReportsV2Editor() {
   const [autoSaveStatus, setAutoSaveStatus] = React.useState("idle");
   const [showHistory, setShowHistory] = React.useState(false);
   const [showRenamePage, setShowRenamePage] = React.useState(false);
+  const [showSaveTemplate, setShowSaveTemplate] = React.useState(false);
+  const [templateName, setTemplateName] = React.useState("");
+  const [templateCategory, setTemplateCategory] = React.useState("Meus templates");
+  const [showShareDialog, setShowShareDialog] = React.useState(false);
+  const [shareUrl, setShareUrl] = React.useState("");
+  const [metricsPanelOpen, setMetricsPanelOpen] = React.useState(false);
   const [pageNameDraft, setPageNameDraft] = React.useState("");
   const [themeDraft, setThemeDraft] = React.useState(() => ({
     brandColor: DEFAULT_LAYOUT.theme.brandColor,
@@ -782,6 +806,7 @@ export default function ReportsV2Editor() {
   const [metricsSearch, setMetricsSearch] = React.useState("");
   const [activeMetricPlatform, setActiveMetricPlatform] = React.useState("");
   const [isMetricDragOver, setIsMetricDragOver] = React.useState(false);
+  const [inspectorOpen, setInspectorOpen] = React.useState(false);
   const interactionRef = React.useRef(false);
   const skipNextLayoutChangeRef = React.useRef(false);
   const guidesRef = React.useRef(null);
@@ -790,6 +815,11 @@ export default function ReportsV2Editor() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["reportsV2-dashboard", id],
     queryFn: () => base44.reportsV2.getDashboard(id),
+  });
+  const shareStatusQuery = useQuery({
+    queryKey: ["reportsV2-public-share", id],
+    queryFn: () => base44.reportsV2.getPublicShareStatus(id),
+    enabled: Boolean(id),
   });
 
   const versionsQuery = useQuery({
@@ -899,6 +929,11 @@ export default function ReportsV2Editor() {
     setLastSavedKey(stableStringify(initialPayload));
     setHasHydrated(true);
   }, [layoutFromApi, resetState]);
+
+  React.useEffect(() => {
+    const url = shareStatusQuery.data?.publicUrl || "";
+    setShareUrl(url);
+  }, [shareStatusQuery.data?.publicUrl]);
 
   React.useEffect(() => {
     const pages = Array.isArray(layoutJson.pages) ? layoutJson.pages : [];
@@ -1054,6 +1089,22 @@ export default function ReportsV2Editor() {
         type: "error",
         text: "Não foi possível duplicar o dashboard.",
       });
+    },
+  });
+
+  const createTemplateMutation = useMutation({
+    mutationFn: async (payload) => base44.reportsV2.createTemplate(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["reportsV2-templates"] });
+      setShowSaveTemplate(false);
+      showToast("Template salvo com sucesso.", "success");
+    },
+    onError: (error) => {
+      const message =
+        error?.data?.error?.message ||
+        error?.message ||
+        "Não foi possível salvar o template.";
+      showToast(message, "error");
     },
   });
 
@@ -2217,6 +2268,31 @@ export default function ReportsV2Editor() {
     }
   };
 
+  const handleOpenSaveTemplate = () => {
+    setTemplateName(`${dashboard?.name || "Novo dashboard"} - Template`);
+    setTemplateCategory("Meus templates");
+    setShowSaveTemplate(true);
+  };
+
+  const handleSaveTemplate = async () => {
+    const name = String(templateName || "").trim();
+    if (!name) {
+      showToast("Informe o nome do template.", "error");
+      return;
+    }
+    const layoutPayload = sanitizeLayoutForSave(layoutJson);
+    await createTemplateMutation.mutateAsync({
+      name,
+      category: String(templateCategory || "").trim() || "Meus templates",
+      layoutJson: layoutPayload,
+    });
+  };
+
+  const handleViewClient = () => {
+    if (!id) return;
+    navigate(`/relatorios/v2/${id}`);
+  };
+
   const handleRestoreVersion = (version) => {
     if (!version?.layoutJson) return;
     const merged = mergeLayoutDefaults(version.layoutJson);
@@ -2309,121 +2385,74 @@ export default function ReportsV2Editor() {
   return (
     <ThemeProvider
       theme={layoutJson?.theme}
-      className="min-h-screen bg-[var(--surface-muted)]"
+      className="min-h-screen reportei-theme bg-[var(--surface-muted)]"
     >
-      <div className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur shadow-[0_6px_18px_rgba(15,23,42,0.05)]">
-        <div className="mx-auto flex max-w-[1480px] flex-wrap items-center justify-between gap-3 px-5 py-4">
-          <div className="flex items-center gap-4">
-            <button
-              type="button"
-              onClick={() => navigate("/relatorios/v2")}
-              className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Voltar
-            </button>
-            <div>
-              <h1 className="text-xl font-semibold text-[var(--text)]">
-                {dashboard.name}
-              </h1>
-              <p className="text-xs text-[var(--text-muted)]">
-                {dashboard.status === "PUBLISHED" ? "Publicado" : "Rascunho"}
-              </p>
-            </div>
-          </div>
+      <ReporteiTopbar />
 
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-2 rounded-full border border-[var(--border)] bg-white px-3 py-2 text-xs">
-              <Checkbox
-                checked={autoSaveEnabled}
-                onCheckedChange={(checked) => {
-                  const enabled = Boolean(checked);
-                  setAutoSaveEnabled(enabled);
-                  if (!enabled) setAutoSaveStatus("idle");
-                }}
-              />
-              <span className="font-semibold text-[var(--text)]">Auto-salvar</span>
-              <span className="text-[var(--text-muted)]">{autoSaveLabel}</span>
-            </div>
+      <ReporteiReportToolbar
+        title={dashboard.name}
+        statusLabel={autoSaveLabel}
+        onBack={() => navigate("/relatorios/v2")}
+        onSaveTemplate={handleOpenSaveTemplate}
+        onViewClient={handleViewClient}
+        onShare={() => setShowShareDialog(true)}
+        extraActions={
+          <div className="hidden items-center gap-1.5 2xl:flex">
             <Button
               variant="secondary"
-              onClick={undo}
-              disabled={!canUndo}
-              leftIcon={Undo2}
-              aria-label="Desfazer"
-              title="Desfazer"
+              onClick={() => setMetricsPanelOpen((prev) => !prev)}
+              className="reportei-toolbar-button gap-1.5 px-3"
             >
-              Desfazer
+              <Sidebar className="h-4 w-4" />
+              {metricsPanelOpen ? "Fechar métricas" : "Adicionar métricas"}
             </Button>
-            <Button
-              variant="secondary"
-              onClick={redo}
-              disabled={!canRedo}
-              leftIcon={Redo2}
-              aria-label="Refazer"
-              title="Refazer"
-            >
-              Refazer
+            <Button variant="secondary" onClick={() => setInspectorOpen((prev) => !prev)} className="reportei-toolbar-button px-3">
+              <SlidersHorizontal className="h-4 w-4" />
+              {inspectorOpen ? "Fechar painel" : "Painel"}
             </Button>
-            <Button
-              variant="secondary"
-              onClick={() => setShowHistory(true)}
-              leftIcon={History}
-            >
-              Historico
+            <Button variant="secondary" onClick={undo} disabled={!canUndo} className="reportei-toolbar-button w-8 p-0">
+              <Undo2 className="h-4 w-4" />
+            </Button>
+            <Button variant="secondary" onClick={redo} disabled={!canRedo} className="reportei-toolbar-button w-8 p-0">
+              <Redo2 className="h-4 w-4" />
+            </Button>
+            <Button variant="secondary" onClick={() => setShowHistory(true)} className="reportei-toolbar-button w-8 p-0">
+              <History className="h-4 w-4" />
             </Button>
             <Button
               variant="secondary"
               onClick={handleCloneDashboard}
               disabled={cloneMutation.isPending}
-              leftIcon={Copy}
+              className="reportei-toolbar-button w-8 p-0"
             >
-              {cloneMutation.isPending ? "Duplicando..." : "Duplicar dashboard"}
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => setPreviewMode((prev) => !prev)}
-              leftIcon={previewMode ? Pencil : Eye}
-            >
-              {previewMode ? "Editar" : "Preview"}
+              <Copy className="h-4 w-4" />
             </Button>
             <Button
               variant="secondary"
               onClick={handleSave}
               disabled={saveMutation.isPending || publishMutation.isPending}
-              leftIcon={Save}
+              className="reportei-toolbar-button gap-1.5 px-3"
             >
-              {saveMutation.isPending ? "Salvando..." : "Salvar rascunho"}
+              <Save className="h-4 w-4" />
+              {saveMutation.isPending ? "Salvando..." : "Salvar"}
             </Button>
             <Button
               onClick={handlePublish}
               disabled={saveMutation.isPending || publishMutation.isPending}
-              leftIcon={CheckCircle2}
+              className="h-8 rounded-full px-3 text-xs font-bold"
             >
+              <CheckCircle2 className="h-4 w-4" />
               {publishMutation.isPending ? "Publicando..." : "Publicar"}
             </Button>
           </div>
-        </div>
-      </div>
+        }
+      />
 
-      <div className="mx-auto flex w-full max-w-[1480px] gap-5 px-5 py-6">
-        <aside className="sticky top-28 hidden w-full max-w-[280px] self-start xl:block">
-          <MetricsLibraryPanel
-            platforms={metricsPlatformOptions}
-            activePlatform={activeMetricPlatform}
-            onPlatformChange={setActiveMetricPlatform}
-            groups={metricGroupsForActivePlatform}
-            metrics={metricsForActivePlatform}
-            searchTerm={metricsSearch}
-            onSearchChange={setMetricsSearch}
-            onMetricClick={handleMetricClick}
-            onMetricDragStart={handleMetricDragStart}
-          />
-        </aside>
-
-        <main className="flex-1">
-          <div className="mb-4 xl:hidden">
+      {metricsPanelOpen ? (
+        <>
+          <div className="fixed bottom-0 left-0 top-[100px] z-50 w-[360px] max-w-[90vw] border-r border-[#d8e1ec] bg-white p-3 shadow-[0_18px_32px_rgba(15,23,42,0.14)]">
             <MetricsLibraryPanel
+              mode="drawer"
               platforms={metricsPlatformOptions}
               activePlatform={activeMetricPlatform}
               onPlatformChange={setActiveMetricPlatform}
@@ -2435,196 +2464,254 @@ export default function ReportsV2Editor() {
               onMetricDragStart={handleMetricDragStart}
             />
           </div>
+        </>
+      ) : null}
 
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
-                Página atual
-              </p>
-              <div
-                role="tablist"
-                aria-label="Páginas do dashboard"
-                className="mt-2 flex flex-wrap gap-2 rounded-[14px] border border-slate-200 bg-slate-50 p-1.5"
-              >
-                {pages.map((page) => (
-                  <button
-                    key={page.id}
-                    role="tab"
-                    type="button"
-                    aria-selected={page.id === activePageId}
-                    className={
-                      page.id === activePageId
-                        ? "rounded-[12px] bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
-                        : "rounded-[12px] px-4 py-2 text-sm font-semibold text-[var(--text-muted)] hover:bg-[var(--surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
-                    }
-                    onClick={() => setActivePageId(page.id)}
-                  >
-                    {page.name}
-                  </button>
-                ))}
+      <div className="mx-auto w-full max-w-[1760px] px-4 py-5 lg:px-6">
+        <div className="mb-5" data-global-filters="true">
+          <ReporteiFiltersCards
+            filters={previewFilters}
+            onChange={handleGlobalFiltersChange}
+            shareUrl={shareUrl}
+            defaultExpanded
+          />
+        </div>
+
+        <ReporteiLeftRail
+          items={metricsPlatformOptions.map((platform) => {
+            const badge = PLATFORM_BADGE[platform.value] || {
+              short: platform.label.slice(0, 1).toUpperCase(),
+              className: "bg-slate-100 text-slate-700",
+            };
+            return {
+              value: platform.value,
+              label: platform.label,
+              shortLabel: badge.short,
+              className: badge.className,
+            };
+          })}
+          activeItem={activeMetricPlatform}
+          onSelect={(value) => {
+            setActiveMetricPlatform(value);
+            setMetricsPanelOpen(true);
+          }}
+          onAdd={() => setMetricsPanelOpen(true)}
+        />
+
+        <div className="flex gap-4 lg:pl-8">
+          <main className="min-w-0 flex-1">
+            {pages.length > 1 ? (
+              <div className="mb-4">
+                <div
+                  role="tablist"
+                  aria-label="Páginas do dashboard"
+                  className="mt-2 flex flex-wrap gap-2 rounded-[14px] border border-slate-200 bg-slate-50 p-1.5"
+                >
+                  {pages.map((page) => (
+                    <button
+                      key={page.id}
+                      role="tab"
+                      type="button"
+                      aria-selected={page.id === activePageId}
+                      className={
+                        page.id === activePageId
+                          ? "rounded-[12px] bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+                          : "rounded-[12px] px-4 py-2 text-sm font-semibold text-[var(--text-muted)] hover:bg-[var(--surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+                      }
+                      onClick={() => setActivePageId(page.id)}
+                    >
+                      {page.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <ReporteiCoverCard
+              title={dashboard.name}
+              subtitle={dashboard.subtitle || "Análise de desempenho"}
+              filters={previewFilters}
+              onAddAnalysis={handleAddTextWidget}
+              className="mb-4"
+            />
+
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={handleAddTextWidget}
+                  className="h-8 gap-1.5 rounded-full border-[#d1dae6] bg-white px-3 text-xs font-bold text-slate-600"
+                >
+                  <SlidersHorizontal className="h-3.5 w-3.5" />
+                  + Adicionar análise
+                </Button>
+                <Button
+                  variant="default"
+                  onClick={() => setMetricsPanelOpen(true)}
+                  className="h-8 gap-1.5 rounded-full bg-[var(--primary)] px-3 text-xs font-bold text-white"
+                >
+                  <Layers3 className="h-3.5 w-3.5" />
+                  + Adicionar métricas
+                </Button>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button variant="secondary" onClick={handleAddPage} className="h-8 rounded-full px-3 text-xs font-bold">
+                  + Nova página
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={handleRenamePage}
+                  disabled={!activePageId}
+                  className="h-8 rounded-full px-3 text-xs font-bold"
+                >
+                  Renomear
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={handleRemovePage}
+                  disabled={pages.length <= 1}
+                  className="h-8 rounded-full px-3 text-xs font-bold"
+                >
+                  Remover
+                </Button>
+                <div className="ml-1 flex items-center gap-2 rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-xs">
+                  <Checkbox
+                    checked={autoSaveEnabled}
+                    onCheckedChange={(checked) => {
+                      const enabled = Boolean(checked);
+                      setAutoSaveEnabled(enabled);
+                      if (!enabled) setAutoSaveStatus("idle");
+                    }}
+                  />
+                  <span className="font-semibold text-[var(--text)]">Auto-salvar</span>
+                </div>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button variant="secondary" onClick={handleAddPage}>
-                + Nova pagina
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={handleRenamePage}
-                disabled={!activePageId}
-              >
-                Renomear
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={handleRemovePage}
-                disabled={pages.length <= 1}
-              >
-                Remover
-              </Button>
-            </div>
-          </div>
 
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-slate-900">
-                Canvas do dashboard
-              </p>
-              <p className="text-xs text-slate-500">
-                Arraste, redimensione e configure os widgets.
-              </p>
-            </div>
-            <AddMenu
-              controls={controlFlags}
-              onAddChart={handleAddWidget}
-              onAddText={handleAddTextWidget}
-              onEnableControl={handleEnableControl}
-            />
-          </div>
+            {showValidation && hasValidationErrors ? (
+              <div className="mb-4 rounded-[14px] border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
+                Corrija os erros nos widgets antes de salvar.
+              </div>
+            ) : null}
 
-          {showValidation && hasValidationErrors ? (
-            <div className="mb-4 rounded-[14px] border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
-              Corrija os erros nos widgets antes de salvar.
-            </div>
-          ) : null}
-
-          {actionMessage ? (
-            <div
-              className={cn(
-                "mb-4 rounded-[14px] border px-4 py-3 text-xs",
-                actionMessage.type === "success"
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                  : "border-rose-200 bg-rose-50 text-rose-700"
-              )}
-            >
-              {actionMessage.text}
-            </div>
-          ) : null}
-
-          <div
-            className="rounded-[22px] border border-slate-200 bg-white p-4 shadow-[0_14px_30px_rgba(15,23,42,0.08)]"
-            style={{ minHeight: "560px" }}
-            onMouseDown={(event) => {
-              if (event.target.closest("[data-editor-widget-card='true']")) return;
-              if (event.target.closest("[data-global-filters='true']")) return;
-              setSelectedWidgetId(null);
-            }}
-          >
-            <div className="mb-4" data-global-filters="true">
-              <GlobalFiltersBar
-                filters={previewFilters}
-                controls={controlFlags}
-                onChange={handleGlobalFiltersChange}
-                connections={connections}
-                collapsible={false}
-                className="rounded-[16px] border border-slate-200 bg-white shadow-[0_8px_20px_rgba(15,23,42,0.06)] hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)]"
-              />
-            </div>
-
-            {previewMode ? (
-              <DashboardRenderer
-                layout={layoutJson}
-                dashboardId={dashboard.id}
-                brandId={dashboard.brandId}
-                globalFilters={debouncedPreviewFilters}
-                activePageId={activePageId}
-              />
-            ) : (
+            {actionMessage ? (
               <div
                 className={cn(
-                  "relative",
-                  isMetricDragOver &&
-                    "rounded-[16px] ring-2 ring-[var(--primary)] ring-offset-2 ring-offset-[var(--surface)]"
+                  "mb-4 rounded-[14px] border px-4 py-3 text-xs",
+                  actionMessage.type === "success"
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    : "border-rose-200 bg-rose-50 text-rose-700"
                 )}
-                onDragEnter={handleMetricDragEnter}
-                onDragOver={handleMetricDragOver}
-                onDragLeave={handleMetricDragLeave}
-                onDrop={handleMetricDrop}
               >
-                {activeWidgets.length ? (
-                  <DashboardCanvas
-                    layout={rglLayout}
-                    items={activeWidgets}
-                    width={width}
-                    containerRef={containerRef}
-                    isEditable
-                    rowHeight={CANVAS_ROW_HEIGHT}
-                    margin={CANVAS_MARGIN}
-                    onLayoutChange={handleLayoutChange}
-                    onDragStart={handleDragStart}
-                    onDrag={handleDrag}
-                    onDragStop={handleDragStop}
-                    onResizeStart={handleResizeStart}
-                    onResize={handleResize}
-                    onResizeStop={handleResizeStop}
-                    renderItem={(widget) => (
-                      <EditorWidgetCard
-                        widget={widget}
-                        dashboardId={dashboard.id}
-                        brandId={dashboard.brandId}
-                        globalFilters={debouncedPreviewFilters}
-                        pageId={activePageId}
-                        selected={selectedWidgetId === widget.id}
-                        hasErrors={Boolean(validation.widgetIssues[widget.id])}
-                        errorCount={validation.widgetIssues[widget.id]?.length || 0}
-                        onSelect={setSelectedWidgetId}
-                        onDuplicate={handleDuplicateWidget}
-                        onRemove={handleRemoveWidget}
-                      />
-                    )}
+                {actionMessage.text}
+              </div>
+            ) : null}
+
+            <div
+              className="rounded-[16px] border border-slate-200 border-t-[3px] border-t-[#0b5ed7] bg-white p-3 shadow-[0_8px_20px_rgba(15,23,42,0.06)]"
+              style={{ minHeight: "560px" }}
+              onMouseDown={(event) => {
+                if (event.target.closest("[data-editor-widget-card='true']")) return;
+                if (event.target.closest("[data-global-filters='true']")) return;
+                setSelectedWidgetId(null);
+              }}
+            >
+              <AddMenu
+                controls={controlFlags}
+                onAddChart={handleAddWidget}
+                onAddText={handleAddTextWidget}
+                onEnableControl={handleEnableControl}
+              />
+
+              <div className="mt-4">
+                {previewMode ? (
+                  <DashboardRenderer
+                    layout={layoutJson}
+                    dashboardId={dashboard.id}
+                    brandId={dashboard.brandId}
+                    globalFilters={debouncedPreviewFilters}
+                    activePageId={activePageId}
                   />
                 ) : (
-                  <div className="flex min-h-[320px] flex-col items-center justify-center text-center text-sm text-[var(--text-muted)]">
-                    <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-full border border-dashed border-[var(--border)]">
-                      <Plus className="h-5 w-5" />
-                    </div>
-                    <p className="font-semibold text-slate-900">
-                      Sem widgets
-                    </p>
-                    <p className="max-w-[320px] text-xs text-slate-500">
-                      Clique em "Adicionar" ou arraste uma métrica para criar um
-                      KPI.
-                    </p>
+                  <div
+                    className={cn(
+                      "relative",
+                      isMetricDragOver &&
+                        "rounded-[16px] ring-2 ring-[var(--primary)] ring-offset-2 ring-offset-[var(--surface)]"
+                    )}
+                    onDragEnter={handleMetricDragEnter}
+                    onDragOver={handleMetricDragOver}
+                    onDragLeave={handleMetricDragLeave}
+                    onDrop={handleMetricDrop}
+                  >
+                    {activeWidgets.length ? (
+                      <DashboardCanvas
+                        layout={rglLayout}
+                        items={activeWidgets}
+                        width={width}
+                        containerRef={containerRef}
+                        isEditable
+                        rowHeight={CANVAS_ROW_HEIGHT}
+                        margin={CANVAS_MARGIN}
+                        onLayoutChange={handleLayoutChange}
+                        onDragStart={handleDragStart}
+                        onDrag={handleDrag}
+                        onDragStop={handleDragStop}
+                        onResizeStart={handleResizeStart}
+                        onResize={handleResize}
+                        onResizeStop={handleResizeStop}
+                        renderItem={(widget) => (
+                          <EditorWidgetCard
+                            widget={widget}
+                            dashboardId={dashboard.id}
+                            brandId={dashboard.brandId}
+                            globalFilters={debouncedPreviewFilters}
+                            pageId={activePageId}
+                            selected={selectedWidgetId === widget.id}
+                            hasErrors={Boolean(validation.widgetIssues[widget.id])}
+                            errorCount={validation.widgetIssues[widget.id]?.length || 0}
+                            onSelect={(widgetId) => {
+                              setSelectedWidgetId(widgetId);
+                              setInspectorOpen(true);
+                            }}
+                            onDuplicate={handleDuplicateWidget}
+                            onRemove={handleRemoveWidget}
+                          />
+                        )}
+                      />
+                    ) : (
+                      <div className="flex min-h-[320px] flex-col items-center justify-center text-center text-sm text-[var(--text-muted)]">
+                        <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-full border border-dashed border-[var(--border)]">
+                          <Plus className="h-5 w-5" />
+                        </div>
+                        <p className="font-semibold text-slate-900">
+                          Sem widgets
+                        </p>
+                        <p className="max-w-[320px] text-xs text-slate-500">
+                          Clique em "Adicionar métricas" ou arraste uma métrica para o dashboard.
+                        </p>
+                      </div>
+                    )}
+
+                    {isMetricDragOver ? (
+                      <div className="pointer-events-none absolute inset-3 z-20 flex items-center justify-center rounded-[14px] border-2 border-dashed border-[var(--primary)] bg-white/80 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--primary)]">
+                        Solte para adicionar
+                      </div>
+                    ) : null}
+
+                    <GuidesOverlay
+                      guides={activeGuides}
+                      width={width}
+                      height={guidesCanvasHeight}
+                    />
                   </div>
                 )}
-
-                {isMetricDragOver ? (
-                  <div className="pointer-events-none absolute inset-3 z-20 flex items-center justify-center rounded-[14px] border-2 border-dashed border-[var(--primary)] bg-white/80 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--primary)]">
-                    Solte para adicionar
-                  </div>
-                ) : null}
-
-                <GuidesOverlay
-                  guides={activeGuides}
-                  width={width}
-                  height={guidesCanvasHeight}
-                />
               </div>
-            )}
-          </div>
-        </main>
+            </div>
+          </main>
 
-        <aside className="sticky top-28 w-full max-w-[360px] space-y-4 self-start">
+          {inspectorOpen ? (
+          <aside className="sticky top-[176px] hidden w-full max-w-[360px] space-y-4 self-start xl:block">
           <SidePanel
             selectedWidget={selectedWidget}
             activeTab={activeTab}
@@ -2807,7 +2894,9 @@ export default function ReportsV2Editor() {
               </label>
             </div>
           </div>
-        </aside>
+          </aside>
+          ) : null}
+        </div>
       </div>
 
       <Dialog open={showRenamePage} onOpenChange={setShowRenamePage}>
@@ -2844,6 +2933,62 @@ export default function ReportsV2Editor() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={showSaveTemplate} onOpenChange={setShowSaveTemplate}>
+        <DialogContent className="max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>Salvar como template</DialogTitle>
+            <DialogDescription>
+              Salve o layout atual para reutilizar em outros dashboards.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
+                Nome do template
+              </label>
+              <Input
+                value={templateName}
+                onChange={(event) => setTemplateName(event.target.value)}
+                placeholder="Ex: Padrão Meta + GA4"
+                maxLength={120}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
+                Categoria
+              </label>
+              <Input
+                value={templateCategory}
+                onChange={(event) => setTemplateCategory(event.target.value)}
+                placeholder="Meus templates"
+                maxLength={80}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setShowSaveTemplate(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSaveTemplate}
+              disabled={createTemplateMutation.isPending}
+            >
+              {createTemplateMutation.isPending ? "Salvando..." : "Salvar template"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ReporteiShareDialog
+        dashboardId={id}
+        open={showShareDialog}
+        onOpenChange={setShowShareDialog}
+        onToast={showToast}
+        onShareUrlChange={setShareUrl}
+      />
 
       <Dialog open={showHistory} onOpenChange={setShowHistory}>
         <DialogContent className="max-w-[760px]">
@@ -2926,6 +3071,8 @@ export default function ReportsV2Editor() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Toast toast={toast} />
     </ThemeProvider>
   );
 }

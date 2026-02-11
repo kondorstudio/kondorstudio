@@ -98,6 +98,19 @@ function createFakePrisma() {
         );
         return allowed ? { ...allowed } : null;
       },
+      create: async ({ data }) => {
+        const template = {
+          id: randomUUID(),
+          tenantId: data.tenantId ?? null,
+          name: data.name,
+          category: data.category ?? null,
+          layoutJson: data.layoutJson,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        state.templates.push(template);
+        return { ...template };
+      },
     },
     reportDashboard: {
       create: async ({ data }) => {
@@ -279,6 +292,60 @@ test('POST /templates/:id/instantiate creates dashboard + version 1', async () =
   assert.equal(state.dashboards.length, 1);
   assert.equal(state.versions.length, 1);
   assert.equal(state.versions[0].versionNumber, 1);
+});
+
+test('POST /templates creates tenant template', async () => {
+  const { app, state } = buildApp();
+
+  const res = await request(app)
+    .post('/api/reports/templates')
+    .set('x-role', 'MEMBER')
+    .set('x-tenant-id', 'tenant-1')
+    .send({
+      name: 'Template personalizado',
+      category: 'Meus templates',
+      layoutJson: buildLayout(),
+    });
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(state.templates.length, 1);
+  assert.equal(state.templates[0].tenantId, 'tenant-1');
+  assert.equal(state.templates[0].name, 'Template personalizado');
+  assert.equal(res.body.name, 'Template personalizado');
+  assert.deepEqual(res.body.requiredPlatforms, []);
+});
+
+test('POST /templates applies default category when empty', async () => {
+  const { app, state } = buildApp();
+
+  const res = await request(app)
+    .post('/api/reports/templates')
+    .set('x-role', 'MEMBER')
+    .set('x-tenant-id', 'tenant-1')
+    .send({
+      name: 'Template sem categoria',
+      category: '   ',
+      layoutJson: buildLayout(),
+    });
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(state.templates[0].category, 'Meus templates');
+  assert.equal(res.body.category, 'Meus templates');
+});
+
+test('POST /templates validates payload', async () => {
+  const { app } = buildApp();
+
+  const res = await request(app)
+    .post('/api/reports/templates')
+    .set('x-role', 'MEMBER')
+    .send({
+      name: '',
+      layoutJson: buildLayout(),
+    });
+
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.body.error.code, 'VALIDATION_ERROR');
 });
 
 test('tenant cannot instantiate template from another tenant', async () => {

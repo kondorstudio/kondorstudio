@@ -2,8 +2,6 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Sparkles, LayoutGrid, Boxes, Zap, Search, ArrowRight, Plus } from "lucide-react";
-import PageShell from "@/components/ui/page-shell.jsx";
-import PageHeader from "@/components/ui/page-header.jsx";
 import { Card, CardContent } from "@/components/ui/card.jsx";
 import { Button } from "@/components/ui/button.jsx";
 import { Input } from "@/components/ui/input.jsx";
@@ -11,6 +9,7 @@ import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog.jsx";
 import Toast from "@/components/ui/toast.jsx";
 import useToast from "@/hooks/useToast.js";
+import ReporteiTopbar from "@/components/reportsV2/ReporteiTopbar.jsx";
 import { base44 } from "@/apiClient/base44Client";
 import { cn } from "@/utils/classnames.js";
 
@@ -135,128 +134,120 @@ export default function ReportsV2Home() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--background)]">
-      <div className="border-b border-[var(--border)] bg-[linear-gradient(135deg,rgba(176,80,240,0.08),rgba(34,197,94,0.04))]">
-        <PageShell>
-          <PageHeader
-            kicker="Relatórios"
-            title="Relatórios inteligentes"
-            subtitle="Construa dashboards vivos com métricas normalizadas e filtros globais."
-            actions={
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="secondary"
-                  onClick={() => navigate("/relatorios/v2/conexoes")}
-                >
-                  Conexões por marca
-                </Button>
-                <Button
-                  variant="secondary"
-                  onClick={() => setCreateOpen(true)}
-                  className="gap-2"
-                >
-                  Criar do zero
-                  <Plus className="h-4 w-4" />
-                </Button>
-                <Button
-                  onClick={() => navigate("/relatorios/v2/templates")}
-                  className="gap-2"
-                >
-                  Criar com template
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </div>
-            }
-          />
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {FEATURE_CARDS.map((card) => {
-              const Icon = card.icon;
-              return (
-                <button
-                  key={card.title}
-                  type="button"
-                  onClick={() => featureActions[card.title]?.()}
-                  className="group text-left rounded-[16px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] cursor-pointer"
-                  aria-label={card.title}
-                >
-                  <Card className="bg-white/70 transition group-hover:shadow-[var(--shadow-sm)]">
-                    <CardContent className="flex h-full flex-col gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-[var(--primary-light)] text-[var(--primary)]">
-                        <Icon className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <p className="text-base font-semibold text-[var(--text)]">
-                          {card.title}
-                        </p>
-                        <p className="mt-1 text-sm text-[var(--text-muted)]">
-                          {card.description}
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </button>
-              );
-            })}
+    <div className="reportei-theme min-h-screen bg-[var(--surface-muted)]">
+      <ReporteiTopbar />
+
+      <div className="border-b border-[#dbe3ed] bg-white">
+        <div className="mx-auto flex min-h-[48px] max-w-[1760px] flex-wrap items-center justify-between gap-3 px-4 py-2 lg:px-6">
+          <div>
+            <p className="text-[23px] font-extrabold text-[var(--primary)]">Dashboards</p>
+            <p className="text-xs text-[var(--text-muted)]">
+              Crie e gerencie dashboards conectados.
+            </p>
           </div>
-        </PageShell>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => navigate("/relatorios/v2/conexoes")}
+            >
+              Conexões por marca
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => setCreateOpen(true)}
+              className="gap-2"
+            >
+              Criar do zero
+              <Plus className="h-4 w-4" />
+            </Button>
+            <Button
+              onClick={() => navigate("/relatorios/v2/templates")}
+              className="gap-2"
+            >
+              Criar com template
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
       </div>
 
-      <div id="reports-dashboards-list">
-        <PageShell>
-        <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div className="flex flex-1 flex-wrap gap-3">
-            <div className="min-w-[220px] flex-1">
-              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
-                Buscar dashboard
-              </label>
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
-                <Input
-                  className="pl-9"
-                  placeholder="Digite o nome"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-              </div>
-            </div>
-            <div className="min-w-[200px]">
-              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
-                Marca
-              </label>
-              <Select
-                value={brandId || "all"}
-                onValueChange={(value) => setBrandId(value === "all" ? "" : value)}
+      <div className="mx-auto w-full max-w-[1760px] px-4 py-5 lg:px-6">
+        <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {FEATURE_CARDS.map((card) => {
+            const Icon = card.icon;
+            return (
+              <button
+                key={card.title}
+                type="button"
+                onClick={() => featureActions[card.title]?.()}
+                className="group text-left rounded-[16px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] cursor-pointer"
+                aria-label={card.title}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Todas as marcas" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas as marcas</SelectItem>
-                  {clients.map((client) => (
-                    <SelectItem key={client.id} value={client.id}>
-                      {client.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <Button variant="secondary" onClick={() => navigate("/relatorios/v2/templates")}>
-            Ver templates
-          </Button>
+                <Card className="h-full border-[var(--border)] bg-white transition group-hover:shadow-[var(--shadow-sm)]">
+                  <CardContent className="flex h-full flex-col gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-[var(--primary-light)] text-[var(--primary)]">
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="text-base font-semibold text-[var(--text)]">
+                        {card.title}
+                      </p>
+                      <p className="mt-1 text-sm text-[var(--text-muted)]">
+                        {card.description}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </button>
+            );
+          })}
         </div>
 
-        <div className="rounded-[18px] border border-[var(--border)] bg-white">
-          <div className="flex items-center justify-between border-b border-[var(--border)] px-6 py-4">
-            <div>
-              <p className="text-sm font-semibold text-[var(--text)]">Dashboards</p>
-              <p className="text-xs text-[var(--text-muted)]">
-                {filteredDashboards.length} resultados
-              </p>
+        <div id="reports-dashboards-list" className="reportei-card p-4">
+          <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div className="flex flex-1 flex-wrap gap-3">
+              <div className="min-w-[220px] flex-1">
+                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
+                  Buscar dashboard
+                </label>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
+                  <Input
+                    className="pl-9"
+                    placeholder="Digite o nome"
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="min-w-[200px]">
+                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
+                  Marca
+                </label>
+                <Select
+                  value={brandId || "all"}
+                  onValueChange={(value) => setBrandId(value === "all" ? "" : value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todas as marcas" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as marcas</SelectItem>
+                    {clients.map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+            <Button variant="secondary" onClick={() => navigate("/relatorios/v2/templates")}>
+              Ver templates
+            </Button>
           </div>
 
-          <div className="overflow-auto">
+          <div className="overflow-auto rounded-[18px] border border-[var(--border)] bg-white">
             <table className="min-w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-[var(--border)]">
@@ -303,9 +294,7 @@ export default function ReportsV2Home() {
                     <tr key={dashboard.id} className="border-b border-[var(--border)]">
                       <td className="px-6 py-4">
                         <p className="font-semibold text-[var(--text)]">{dashboard.name}</p>
-                        <p className="text-xs text-[var(--text-muted)]">
-                          {dashboard.id}
-                        </p>
+                        <p className="text-xs text-[var(--text-muted)]">{dashboard.id}</p>
                       </td>
                       <td className="px-6 py-4 text-sm text-[var(--text-muted)]">
                         {brandLookup.get(dashboard.brandId) || "—"}
@@ -316,7 +305,7 @@ export default function ReportsV2Home() {
                             "rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]",
                             dashboard.status === "PUBLISHED"
                               ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                              : "border-purple-200 bg-purple-50 text-purple-700"
+                              : "border-slate-200 bg-slate-50 text-slate-700"
                           )}
                         >
                           {dashboard.status === "PUBLISHED" ? "Publicado" : "Rascunho"}
@@ -362,7 +351,6 @@ export default function ReportsV2Home() {
             </table>
           </div>
         </div>
-        </PageShell>
       </div>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>

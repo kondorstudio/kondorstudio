@@ -155,7 +155,7 @@ const vizSchema = z
     variant: z.string().optional(),
     showLegend: z.boolean().optional(),
     format: z.string().optional(),
-    options: z.record(z.any()).optional(),
+    options: z.record(z.string(), z.any()).optional(),
   })
   .strict()
   .optional();

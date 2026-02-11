@@ -4,6 +4,7 @@
    ===================================== */
 
 @import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap");
 
 *,
 *::before,
@@ -67,24 +68,25 @@ body {
 }
 
 .reportei-theme {
-  background: #f4f6fb;
+  background: #edf1f4;
+  font-family: "Nunito Sans", "Manrope", "Helvetica Neue", Arial, sans-serif;
   --primary: #0B5ED7;
   --primary-dark: #0A58CA;
   --primary-light: rgba(11, 94, 215, 0.12);
   --primary-rgb: 11, 94, 215;
   --accent: #16a34a;
-  --background: #f4f6fb;
+  --background: #edf1f4;
   --surface: #ffffff;
-  --surface-muted: #f1f5f9;
+  --surface-muted: #f6f8fb;
   --surface-elevated: #ffffff;
   --text: #0f172a;
   --text-muted: #64748b;
-  --border: #e2e8f0;
-  --shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.06);
-  --shadow-md: 0 18px 30px rgba(15, 23, 42, 0.12);
-  --radius-card: 14px;
-  --radius-input: 12px;
-  --radius-button: 12px;
+  --border: #d8e0ea;
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 10px 24px rgba(15, 23, 42, 0.1);
+  --radius-card: 12px;
+  --radius-input: 10px;
+  --radius-button: 999px;
   --chart-1: #0B5ED7;
   --chart-2: #16a34a;
   --chart-3: #f97316;
@@ -94,13 +96,41 @@ body {
 }
 
 .reportei-theme .reportei-topbar {
-  background: linear-gradient(90deg, #0b5ed7 0%, #0f4fc1 60%, #0b5ed7 100%);
+  background: #0b5ed7;
   color: #ffffff;
 }
 
 .reportei-theme .reportei-topbar .reportei-logo {
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0.02em;
+}
+
+.reportei-theme .reportei-toolbar-button {
+  height: 32px;
+  border-radius: 999px;
+  border: 1px solid #d1dae6;
+  background: #fff;
+  color: #5f7389;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.reportei-theme .react-grid-layout {
+  min-height: 280px;
+}
+
+.reportei-theme .react-grid-item.react-grid-placeholder {
+  border-radius: 14px;
+  border: 1px dashed rgba(11, 94, 215, 0.45);
+  background: rgba(11, 94, 215, 0.12);
+}
+
+.reportei-theme .react-resizable-handle {
+  opacity: 0.72;
+}
+
+.reportei-theme .react-grid-item.react-grid-placeholder + .react-resizable-handle {
+  opacity: 1;
 }
 
 .reportei-theme .reportei-card {
@@ -108,6 +138,15 @@ body {
   background: #ffffff;
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-sm);
+}
+
+.reportei-theme button {
+  transform: none !important;
+}
+
+.reportei-theme .k-button,
+.reportei-theme .reportei-pill {
+  border-radius: 999px;
 }
 
 .reporting-surface {

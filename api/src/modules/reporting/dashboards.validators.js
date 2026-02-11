@@ -9,7 +9,7 @@ const dashboardSchema = z.object({
   groupId: z.string().uuid().optional(),
   layoutSchema: z.array(z.any()).optional(),
   widgetsSchema: z.array(z.any()).optional(),
-  globalFiltersSchema: z.record(z.any()).optional(),
+  globalFiltersSchema: z.record(z.string(), z.any()).optional(),
 });
 
 module.exports = {

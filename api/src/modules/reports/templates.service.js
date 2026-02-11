@@ -34,7 +34,13 @@ async function ensureDefaultTemplates() {
 
 function collectRequiredPlatforms(layoutJson) {
   const platforms = new Set();
-  const widgets = Array.isArray(layoutJson?.widgets) ? layoutJson.widgets : [];
+  const widgets = Array.isArray(layoutJson?.pages)
+    ? layoutJson.pages.flatMap((page) =>
+        Array.isArray(page?.widgets) ? page.widgets : []
+      )
+    : Array.isArray(layoutJson?.widgets)
+      ? layoutJson.widgets
+      : [];
   widgets.forEach((widget) => {
     const required = widget?.query?.requiredPlatforms;
     if (Array.isArray(required)) {
@@ -88,8 +94,35 @@ async function instantiateTemplate(tenantId, userId, templateId, payload) {
   return { dashboardId: dashboard.id };
 }
 
+async function createTemplate(tenantId, _userId, payload) {
+  const layout = dashboardsService.ensureLayoutValid(payload.layoutJson);
+  const name = String(payload.name || '').trim();
+  if (!name) {
+    const err = new Error('Nome do template é obrigatório');
+    err.code = 'VALIDATION_ERROR';
+    err.status = 400;
+    throw err;
+  }
+
+  const category = String(payload.category || '').trim() || 'Meus templates';
+  const template = await prisma.reportTemplateV2.create({
+    data: {
+      tenantId,
+      name,
+      category,
+      layoutJson: layout,
+    },
+  });
+
+  return {
+    ...template,
+    requiredPlatforms: collectRequiredPlatforms(template.layoutJson),
+  };
+}
+
 module.exports = {
   listTemplates,
   getTemplateForTenant,
   instantiateTemplate,
+  createTemplate,
 };

@@ -797,6 +797,13 @@ const ReportsV2 = {
     return jsonFetch("/reports/templates", { method: "GET" });
   },
 
+  async createTemplate(payload = {}) {
+    return jsonFetch("/reports/templates", {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    });
+  },
+
   async instantiateTemplate(id, payload = {}) {
     if (!id) throw new Error("templateId obrigatorio");
     return jsonFetch(`/reports/templates/${id}/instantiate`, {

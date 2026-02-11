@@ -1,4 +1,4 @@
-const { instantiateTemplateSchema } = require('./templates.validators');
+const { instantiateTemplateSchema, createTemplateSchema } = require('./templates.validators');
 const templatesService = require('./templates.service');
 
 function formatValidationError(error) {
@@ -58,7 +58,32 @@ async function instantiate(req, res) {
   }
 }
 
+async function create(req, res) {
+  const parsed = createTemplateSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'Dados inválidos',
+        details: formatValidationError(parsed.error),
+      },
+    });
+  }
+
+  try {
+    const result = await templatesService.createTemplate(
+      req.tenantId,
+      req.user?.id,
+      parsed.data,
+    );
+    return res.status(201).json(result);
+  } catch (err) {
+    return handleError(res, err);
+  }
+}
+
 module.exports = {
   list,
   instantiate,
+  create,
 };

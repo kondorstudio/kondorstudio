@@ -231,12 +231,18 @@ function LayoutContent() {
     Boolean(activeClientId) && !connectionsLoading && activePlatforms.size === 0;
   const isCheckingConnections = Boolean(activeClientId) && connectionsLoading;
 
+  if (isReportsV2Route) {
+    return (
+      <div className="min-h-screen reportei-theme bg-[var(--background)] text-[var(--text)]">
+        <main className="min-h-screen">
+          <Outlet />
+        </main>
+      </div>
+    );
+  }
+
   return (
-    <div
-      className={`flex h-screen overflow-hidden bg-[var(--background)] text-[var(--text)] ${
-        isReportsV2Route ? "reportei-theme" : ""
-      }`}
-    >
+    <div className="flex h-screen overflow-hidden bg-[var(--background)] text-[var(--text)]">
       <Sidebar className="hidden lg:flex kondor-main-sidebar">
         <SidebarHeader className={`border-[var(--border)] bg-white/80 backdrop-blur ${collapsed ? "px-3" : "px-4"}`}>
             <div className="flex items-center justify-between gap-2">

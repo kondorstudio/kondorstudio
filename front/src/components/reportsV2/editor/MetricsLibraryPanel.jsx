@@ -1,5 +1,12 @@
 import React from "react";
-import { Search, GripVertical } from "lucide-react";
+import {
+  Search,
+  GripVertical,
+  BarChart3,
+  CircleDot,
+  Table2,
+  ChartPie,
+} from "lucide-react";
 import { Input } from "@/components/ui/input.jsx";
 import { cn } from "@/utils/classnames.js";
 
@@ -13,7 +20,32 @@ export default function MetricsLibraryPanel({
   onSearchChange,
   onMetricClick,
   onMetricDragStart,
+  mode = "panel",
 }) {
+  const [tab, setTab] = React.useState("predefined");
+  const currentPlatform = platforms.find(
+    (platform) => platform.value === activePlatform
+  );
+
+  const metricIconByValue = React.useMemo(
+    () => ({
+      spend: CircleDot,
+      clicks: CircleDot,
+      cpc: CircleDot,
+      cpm: CircleDot,
+      ctr: CircleDot,
+      conversions: CircleDot,
+      leads: CircleDot,
+      revenue: CircleDot,
+      roas: CircleDot,
+      impressions: BarChart3,
+      sessions: BarChart3,
+      table: Table2,
+      pie: ChartPie,
+    }),
+    []
+  );
+
   const filteredGroups = React.useMemo(() => {
     const query = String(searchTerm || "").trim().toLowerCase();
     const baseGroups =
@@ -41,23 +73,22 @@ export default function MetricsLibraryPanel({
   }, [groups, metrics, searchTerm]);
 
   return (
-    <div className="rounded-[20px] border border-slate-200 bg-white p-4 shadow-[0_12px_28px_rgba(15,23,42,0.08)]">
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <p className="text-sm font-semibold text-slate-900">
-            Biblioteca de métricas
-          </p>
-          <p className="text-xs text-slate-500">
-            Arraste para criar KPIs rapidamente.
-          </p>
-        </div>
-        <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-          Biblioteca
-        </span>
+    <div
+      className={cn(
+        "rounded-[14px] border border-[#d8e1ec] bg-white shadow-[var(--shadow-sm)]",
+        mode === "drawer" ? "h-full" : ""
+      )}
+    >
+      <div className="border-b border-[#d8e1ec] px-4 py-3.5">
+        <p className="text-[12px] font-semibold text-slate-500">
+          {currentPlatform?.label || "Fonte"}
+        </p>
+        <p className="text-[31px] font-extrabold leading-none text-[var(--primary)]">Métricas</p>
       </div>
 
       {platforms.length > 1 ? (
-        <div className="mb-3 flex flex-wrap gap-2">
+        <div className="border-b border-[#d8e1ec] px-4 py-3">
+          <div className="flex flex-wrap gap-2">
           {platforms.map((platform) => {
             const active = platform.value === activePlatform;
             return (
@@ -66,7 +97,7 @@ export default function MetricsLibraryPanel({
                 type="button"
                 onClick={() => onPlatformChange?.(platform.value)}
                 className={cn(
-                  "rounded-full border px-3 py-1.5 text-[11px] font-semibold transition",
+                  "rounded-full border px-2.5 py-1 text-[11px] font-semibold transition",
                   active
                     ? "border-[var(--primary)] bg-[var(--primary-light)] text-[var(--primary)]"
                     : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
@@ -76,24 +107,64 @@ export default function MetricsLibraryPanel({
               </button>
             );
           })}
+          </div>
         </div>
       ) : null}
 
-      <div className="relative mb-3">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-        <Input
-          value={searchTerm}
-          onChange={(event) => onSearchChange?.(event.target.value)}
-          placeholder="Buscar métrica..."
-          className="pl-9 bg-slate-50 border-slate-200"
-        />
+      <div className="border-b border-[#d8e1ec] px-4 py-3">
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => setTab("predefined")}
+            className={cn(
+              "rounded-[12px] border px-3 py-2 text-sm font-semibold transition",
+              tab === "predefined"
+                ? "border-[var(--primary)] bg-[var(--primary-light)] text-[var(--primary)]"
+                : "border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--surface-muted)]"
+            )}
+          >
+            Métricas predefinidas
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("custom")}
+            className={cn(
+              "rounded-[12px] border px-3 py-2 text-sm font-semibold transition",
+              tab === "custom"
+                ? "border-[var(--primary)] bg-[var(--primary-light)] text-[var(--primary)]"
+                : "border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--surface-muted)]"
+            )}
+          >
+            Métricas personalizáveis
+          </button>
+        </div>
       </div>
 
-      {filteredGroups.length ? (
-        <div className="space-y-4">
+      <div className="px-4 py-3">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Input
+            value={searchTerm}
+            onChange={(event) => onSearchChange?.(event.target.value)}
+            placeholder="Buscar..."
+            className="pl-9 bg-slate-50 border-slate-200"
+          />
+        </div>
+      </div>
+
+      {tab === "custom" ? (
+        <div className="px-4 pb-4">
+          <div className="rounded-[12px] border border-dashed border-[var(--border)] bg-[var(--surface-muted)] px-3 py-4 text-xs text-[var(--text-muted)]">
+            Crie uma métrica personalizada em breve.
+          </div>
+        </div>
+      ) : null}
+
+      {tab === "predefined" && filteredGroups.length ? (
+        <div className="max-h-[72vh] space-y-4 overflow-y-auto px-4 pb-4">
           {filteredGroups.map((group) => (
             <div key={group.key} className="space-y-2">
-              <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-400">
+              <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
                 <span>{group.label}</span>
                 <span>{group.metrics.length}</span>
               </div>
@@ -105,14 +176,18 @@ export default function MetricsLibraryPanel({
                     draggable
                     onDragStart={(event) => onMetricDragStart?.(event, metric)}
                     onClick={() => onMetricClick?.(metric)}
-                    className="flex w-full items-center justify-between rounded-[12px] border border-slate-200 bg-white px-3 py-2 text-left text-sm text-slate-900 transition hover:border-slate-300 hover:bg-slate-50"
+                    className="group flex w-full items-center justify-between rounded-[10px] border border-slate-200 bg-white px-3 py-2.5 text-left text-sm text-slate-900 transition hover:border-slate-300 hover:bg-slate-50"
                   >
                     <span className="flex items-center gap-2">
-                      <GripVertical className="h-4 w-4 text-slate-400" />
+                      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+                        {React.createElement(metricIconByValue[metric.value] || CircleDot, {
+                          className: "h-3.5 w-3.5",
+                        })}
+                      </span>
                       <span className="font-semibold">{metric.label}</span>
                     </span>
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                      {metric.value}
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                      <GripVertical className="h-4 w-4" />
                     </span>
                   </button>
                 ))}
@@ -120,11 +195,23 @@ export default function MetricsLibraryPanel({
             </div>
           ))}
         </div>
-      ) : (
+      ) : null}
+
+      {tab === "predefined" && !filteredGroups.length ? (
         <div className="rounded-[12px] border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-xs text-slate-500">
           Nenhuma métrica encontrada.
         </div>
-      )}
+      ) : null}
+
+      <div className="border-t border-[#d8e1ec] px-4 py-3 text-xs text-[var(--text-muted)]">
+        Não encontrou a métrica?
+        <button
+          type="button"
+          className="ml-1 font-semibold text-[var(--primary)] hover:underline"
+        >
+          Criar métrica personalizada
+        </button>
+      </div>
     </div>
   );
 }

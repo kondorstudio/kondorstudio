@@ -2,13 +2,14 @@ import React from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link2, PlusCircle, CheckCircle2, AlertTriangle } from "lucide-react";
-import PageShell from "@/components/ui/page-shell.jsx";
-import PageHeader from "@/components/ui/page-header.jsx";
 import { Card, CardContent, CardFooter } from "@/components/ui/card.jsx";
 import { Button } from "@/components/ui/button.jsx";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select.jsx";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog.jsx";
 import { Input } from "@/components/ui/input.jsx";
+import ReporteiTopbar from "@/components/reportsV2/ReporteiTopbar.jsx";
+import Toast from "@/components/ui/toast.jsx";
+import useToast from "@/hooks/useToast.js";
 import { cn } from "@/utils/classnames.js";
 import { base44 } from "@/apiClient/base44Client";
 
@@ -50,6 +51,11 @@ const PLATFORMS = [
   },
 ];
 
+const PLATFORM_STYLE = {
+  META_ADS: "border-[#0b5ed7] bg-[#0b5ed7] text-white",
+  GA4: "border-[#ff5d2b] bg-[#ff5d2b] text-white",
+};
+
 function groupConnections(items) {
   const map = new Map();
   (items || []).forEach((item) => {
@@ -64,6 +70,7 @@ export default function ReportsV2Connections() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
+  const { toast, showToast } = useToast();
   const [brandId, setBrandId] = React.useState("");
   const requestedPlatform = React.useMemo(
     () => String(searchParams.get("platform") || "").toUpperCase(),
@@ -74,6 +81,7 @@ export default function ReportsV2Connections() {
   const [selectedAccountId, setSelectedAccountId] = React.useState("");
   const [nameOverride, setNameOverride] = React.useState("");
   const [highlightPlatform, setHighlightPlatform] = React.useState("");
+  const [platformSearch, setPlatformSearch] = React.useState("");
   const platformRefs = React.useRef({});
 
   const { data: clients = [] } = useQuery({
@@ -127,6 +135,13 @@ export default function ReportsV2Connections() {
     () => groupConnections(connections),
     [connections]
   );
+  const visiblePlatforms = React.useMemo(() => {
+    const query = String(platformSearch || "").trim().toLowerCase();
+    if (!query) return PLATFORMS;
+    return PLATFORMS.filter((item) =>
+      `${item.label} ${item.description}`.toLowerCase().includes(query)
+    );
+  }, [platformSearch]);
 
   const { data: availableData, isLoading: availableLoading, error: availableError } = useQuery({
     queryKey: ["reportsV2-available", brandId, selectedPlatform],
@@ -154,6 +169,13 @@ export default function ReportsV2Connections() {
       setSelectedAccountId("");
       setNameOverride("");
     },
+    onError: (error) => {
+      const message =
+        error?.data?.error?.message ||
+        error?.message ||
+        "Não foi possível associar a conta.";
+      showToast(message, "error");
+    },
   });
 
   const openDialog = (platform) => {
@@ -166,131 +188,181 @@ export default function ReportsV2Connections() {
   const isBrandSelected = Boolean(brandId);
 
   return (
-    <div className="min-h-screen bg-[var(--background)]">
-      <PageShell>
-        <PageHeader
-          kicker="Relatórios"
-          title="Conexões por marca"
-          subtitle="Associe contas de dados para liberar widgets e plataformas."
-          actions={
-            <Button variant="secondary" onClick={() => navigate("/relatorios/v2")}
-              className="gap-2">
+    <div className="reportei-theme min-h-screen bg-[var(--surface-muted)]">
+      <ReporteiTopbar />
+
+      <div className="border-b border-[#dbe3ed] bg-white">
+        <div className="mx-auto flex h-[48px] max-w-[1760px] items-center justify-between gap-3 px-4 lg:px-6">
+          <div className="flex min-w-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => navigate("/relatorios/v2")}
+              className="inline-flex h-8 items-center rounded-full border border-[#d1dae6] px-3 text-xs font-semibold text-[var(--text-muted)] hover:bg-[var(--surface-muted)]"
+            >
               Voltar
-            </Button>
-          }
-        />
-
-        <div className="mt-8 flex flex-wrap gap-4 rounded-[16px] border border-[var(--border)] bg-white p-4">
-          <div className="min-w-[220px] flex-1">
-            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
-              Marca
-            </label>
-            <Select value={brandId} onValueChange={setBrandId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione a marca" />
-              </SelectTrigger>
-              <SelectContent>
-                {clients.map((client) => (
-                  <SelectItem key={client.id} value={client.id}>
-                    {client.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            </button>
+            <p className="truncate text-[23px] font-extrabold text-[var(--primary)]">
+              Integrações
+            </p>
           </div>
+          <span className="hidden rounded-full border border-[#d1dae6] bg-white px-3 py-1 text-xs font-semibold text-[var(--text-muted)] md:inline-flex">
+            Gestão de conexões
+          </span>
         </div>
+      </div>
 
-        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {!isBrandSelected ? (
-            <div className="col-span-full rounded-[16px] border border-purple-200 bg-purple-50 px-6 py-4 text-sm text-purple-700">
-              Selecione uma marca para habilitar as conexões.
+      <div className="mx-auto w-full max-w-[1760px] px-4 py-5 lg:px-6">
+        <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
+          <aside className="h-fit px-4 py-2">
+            <span className="inline-flex h-14 w-14 items-center justify-center rounded-full border-4 border-emerald-500 bg-white text-lg font-bold text-[var(--primary)]">
+              2/2
+            </span>
+            <h2 className="mt-4 text-[30px] font-extrabold leading-tight text-[var(--primary)] lg:text-[42px]">
+              Integrações
+            </h2>
+            <p className="mt-2 text-[16px] leading-tight text-[var(--text-muted)] lg:text-[24px]">
+              Conecte as plataformas para liberar dados no editor.
+            </p>
+          </aside>
+
+          <main className="space-y-5">
+            <div className="reportei-card p-4">
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
+                Marca
+              </label>
+              <Select value={brandId} onValueChange={setBrandId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione a marca" />
+                </SelectTrigger>
+                <SelectContent>
+                  {clients.map((client) => (
+                    <SelectItem key={client.id} value={client.id}>
+                      {client.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          ) : null}
-          {PLATFORMS.map((platform) => {
-            const items = connectionsByPlatform.get(platform.value) || [];
-            const activeItems = items.filter((item) => item.status === "ACTIVE");
-            const statusLabel = activeItems.length
-              ? `${activeItems.length} conta${activeItems.length > 1 ? "s" : ""}`
-              : "Sem conta";
 
-            return (
-              <Card
-                key={platform.value}
-                ref={(element) => {
-                  if (element) platformRefs.current[platform.value] = element;
-                }}
-                className={cn(
-                  !isBrandSelected && "pointer-events-none opacity-60",
-                  highlightPlatform === platform.value &&
-                    "ring-2 ring-purple-300 ring-offset-2 ring-offset-white"
-                )}
-              >
-                <CardContent className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-[var(--primary-light)] text-[var(--primary)]">
-                      <Link2 className="h-5 w-5" />
-                    </div>
-                    <span
+            <div className="reportei-card p-4">
+              <div className="mb-4">
+                <p className="text-2xl font-extrabold text-[var(--primary)]">
+                  Adicione suas redes
+                </p>
+                <p className="text-sm text-[var(--text-muted)]">
+                  Escolha a plataforma e associe uma conta.
+                </p>
+              </div>
+
+              <Input
+                placeholder="Pesquisar integrações..."
+                value={platformSearch}
+                onChange={(event) => setPlatformSearch(event.target.value)}
+                className="mb-4"
+              />
+
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {!isBrandSelected ? (
+                  <div className="col-span-full rounded-[16px] border border-purple-200 bg-purple-50 px-6 py-4 text-sm text-purple-700">
+                    Selecione uma marca para habilitar as conexões.
+                  </div>
+                ) : null}
+                {visiblePlatforms.map((platform) => {
+                  const items = connectionsByPlatform.get(platform.value) || [];
+                  const activeItems = items.filter((item) => item.status === "ACTIVE");
+                  const statusLabel = activeItems.length
+                    ? `${activeItems.length} conta${activeItems.length > 1 ? "s" : ""}`
+                    : "Sem conta";
+
+                  return (
+                    <Card
+                      key={platform.value}
+                      ref={(element) => {
+                        if (element) platformRefs.current[platform.value] = element;
+                      }}
                       className={cn(
-                        "rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]",
-                        activeItems.length
-                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                          : "border-purple-200 bg-purple-50 text-purple-700"
+                        !isBrandSelected && "pointer-events-none opacity-60",
+                        activeItems.length && PLATFORM_STYLE[platform.value],
+                        highlightPlatform === platform.value &&
+                          "ring-2 ring-[var(--primary)] ring-offset-2 ring-offset-white"
                       )}
                     >
-                      {statusLabel}
-                    </span>
-                  </div>
-                  <div>
-                    <p className="text-base font-semibold text-[var(--text)]">
-                      {platform.label}
-                    </p>
-                    <p className="mt-1 text-sm text-[var(--text-muted)]">
-                      {platform.description}
-                    </p>
-                  </div>
-
-                  {connectionsLoading ? (
-                    <div className="space-y-2">
-                      <div className="h-3 w-32 rounded-full kondor-shimmer" />
-                      <div className="h-3 w-24 rounded-full kondor-shimmer" />
-                    </div>
-                  ) : activeItems.length ? (
-                    <div className="space-y-1">
-                      {activeItems.slice(0, 3).map((item) => (
-                        <div
-                          key={item.id}
-                          className="flex items-center gap-2 text-xs text-[var(--text-muted)]"
-                        >
-                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                          {item.externalAccountName || item.externalAccountId}
+                      <CardContent className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className={cn(
+                            "flex h-10 w-10 items-center justify-center rounded-[14px] bg-[var(--primary-light)] text-[var(--primary)]",
+                            activeItems.length && "bg-white/20 text-current"
+                          )}>
+                            <Link2 className="h-5 w-5" />
+                          </div>
+                          <span
+                            className={cn(
+                              "rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]",
+                              activeItems.length
+                                ? "border-white/30 bg-white/15 text-current"
+                                : "border-slate-200 bg-slate-50 text-slate-600"
+                            )}
+                          >
+                            {statusLabel}
+                          </span>
                         </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
-                      <AlertTriangle className="h-3.5 w-3.5" />
-                      Nenhuma conta vinculada.
-                    </div>
-                  )}
-                </CardContent>
-                <CardFooter className="flex items-center justify-between">
-                  <Button
-                    variant="secondary"
-                    onClick={() => openDialog(platform.value)}
-                    disabled={!brandId}
-                  >
-                    Associar conta
-                  </Button>
-                  <Button variant="ghost" size="sm" disabled className="text-xs">
-                    Resumo da fonte (em breve)
-                  </Button>
-                </CardFooter>
-              </Card>
-            );
-          })}
+                        <div>
+                          <p className={cn("text-base font-semibold text-[var(--text)]", activeItems.length && "text-current")}>
+                            {platform.label}
+                          </p>
+                          <p className={cn("mt-1 text-sm text-[var(--text-muted)]", activeItems.length && "text-white/90")}>
+                            {platform.description}
+                          </p>
+                        </div>
+
+                        {connectionsLoading ? (
+                          <div className="space-y-2">
+                            <div className="h-3 w-32 rounded-full kondor-shimmer" />
+                            <div className="h-3 w-24 rounded-full kondor-shimmer" />
+                          </div>
+                        ) : activeItems.length ? (
+                          <div className="space-y-1">
+                            {activeItems.slice(0, 3).map((item) => (
+                              <div
+                                key={item.id}
+                                className={cn(
+                                  "flex items-center gap-2 text-xs text-[var(--text-muted)]",
+                                  activeItems.length && "text-white/90"
+                                )}
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                                {item.externalAccountName || item.externalAccountId}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className={cn("flex items-center gap-2 text-xs text-[var(--text-muted)]", activeItems.length && "text-white/90")}>
+                            <AlertTriangle className="h-3.5 w-3.5" />
+                            Nenhuma conta vinculada.
+                          </div>
+                        )}
+                      </CardContent>
+                      <CardFooter className="flex items-center justify-between">
+                        <Button
+                          variant="secondary"
+                          onClick={() => openDialog(platform.value)}
+                          disabled={!brandId}
+                          className={cn(activeItems.length && "border-white/35 bg-white/15 text-white hover:bg-white/25")}
+                        >
+                          Associar conta
+                        </Button>
+                        <Button variant="ghost" size="sm" disabled className={cn("text-xs", activeItems.length && "text-white/90")}>
+                          Resumo da fonte
+                        </Button>
+                      </CardFooter>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          </main>
         </div>
-      </PageShell>
+      </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-[520px]">
@@ -376,6 +448,8 @@ export default function ReportsV2Connections() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <Toast toast={toast} />
     </div>
   );
 }

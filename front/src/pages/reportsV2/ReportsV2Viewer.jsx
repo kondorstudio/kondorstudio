@@ -2,7 +2,6 @@ import React from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient, useMutation, useIsFetching } from "@tanstack/react-query";
 import { ArrowLeft, Edit3, Share2, Download, Copy, RefreshCw, Link2Off } from "lucide-react";
-import PageShell from "@/components/ui/page-shell.jsx";
 import { Button } from "@/components/ui/button.jsx";
 import { Input } from "@/components/ui/input.jsx";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select.jsx";
@@ -15,9 +14,12 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog.jsx";
 import Toast from "@/components/ui/toast.jsx";
-import GlobalFiltersBar from "@/components/reportsV2/GlobalFiltersBar.jsx";
 import DashboardRenderer from "@/components/reportsV2/DashboardRenderer.jsx";
 import ThemeProvider from "@/components/reportsV2/ThemeProvider.jsx";
+import ReporteiTopbar from "@/components/reportsV2/ReporteiTopbar.jsx";
+import ReporteiLeftRail from "@/components/reportsV2/ReporteiLeftRail.jsx";
+import ReporteiFiltersCards from "@/components/reportsV2/ReporteiFiltersCards.jsx";
+import ReporteiCoverCard from "@/components/reportsV2/ReporteiCoverCard.jsx";
 import { base44 } from "@/apiClient/base44Client";
 import {
   useDebouncedValue,
@@ -65,6 +67,16 @@ const PLATFORM_LABELS = {
   GA4: "GA4",
   GMB: "Google Meu Negócio",
   FB_IG: "Facebook/Instagram",
+};
+
+const PLATFORM_BADGE = {
+  META_ADS: { short: "M", className: "bg-blue-100 text-blue-700" },
+  GOOGLE_ADS: { short: "G", className: "bg-emerald-100 text-emerald-700" },
+  TIKTOK_ADS: { short: "T", className: "bg-slate-200 text-slate-700" },
+  LINKEDIN_ADS: { short: "In", className: "bg-sky-100 text-sky-700" },
+  GA4: { short: "GA", className: "bg-orange-100 text-orange-700" },
+  GMB: { short: "GMB", className: "bg-lime-100 text-lime-700" },
+  FB_IG: { short: "FB", className: "bg-indigo-100 text-indigo-700" },
 };
 
 function formatPlatform(platform) {
@@ -119,12 +131,11 @@ export default function ReportsV2Viewer() {
   const normalizedLayout = normalizeLayoutFront(layout);
   const pages = normalizedLayout?.pages || [];
   const canExportAllPages = pages.length > 1;
-  const globalFilterControls = normalizedLayout?.globalFilters?.controls;
   const [activePageId, setActivePageId] = React.useState(pages[0]?.id || null);
   const shareStatusQuery = useQuery({
     queryKey: ["reportsV2-public-share", id],
     queryFn: () => base44.reportsV2.getPublicShareStatus(id),
-    enabled: Boolean(id) && shareOpen,
+    enabled: Boolean(id),
   });
 
   const shareStatus = shareStatusQuery.data || null;
@@ -167,6 +178,11 @@ export default function ReportsV2Viewer() {
   React.useEffect(() => {
     setShareUrl("");
   }, [id]);
+
+  React.useEffect(() => {
+    if (!shareStatusQuery.data?.publicUrl) return;
+    setShareUrl(shareStatusQuery.data.publicUrl);
+  }, [shareStatusQuery.data?.publicUrl]);
 
   React.useEffect(() => {
     setWidgetStatusesByPage({});
@@ -263,6 +279,27 @@ export default function ReportsV2Viewer() {
     });
     return statusMap;
   }, [activePageId, activeWidgets, widgetStatusesByPage]);
+
+  const railItems = React.useMemo(() => {
+    const activeConnections = Array.isArray(connections)
+      ? connections.filter((item) => String(item?.status || "").toUpperCase() === "ACTIVE")
+      : [];
+    const uniquePlatforms = Array.from(
+      new Set(activeConnections.map((item) => String(item?.platform || "").toUpperCase()))
+    ).filter(Boolean);
+    return uniquePlatforms.map((platform) => {
+      const badge = PLATFORM_BADGE[platform] || {
+        short: platform.slice(0, 1),
+        className: "bg-slate-100 text-slate-700",
+      };
+      return {
+        value: platform,
+        label: PLATFORM_LABELS[platform] || platform,
+        shortLabel: badge.short,
+        className: badge.className,
+      };
+    });
+  }, [connections]);
 
   const isExportReady = React.useMemo(() => {
     const statuses = Object.values(visibleWidgetStatuses || {});
@@ -484,57 +521,60 @@ export default function ReportsV2Viewer() {
 
   if (isLoading) {
     return (
-      <ThemeProvider theme={normalizedLayout?.theme} className="min-h-screen bg-[var(--bg)]">
-        <PageShell>
+      <ThemeProvider
+        theme={normalizedLayout?.theme}
+        className="reportei-theme min-h-screen bg-[var(--surface-muted)]"
+      >
+        <div className="mx-auto max-w-[1500px] px-5 py-8">
           <div className="h-6 w-40 rounded-full kondor-shimmer" />
           <div className="mt-6 h-32 rounded-[16px] border border-[var(--border)] kondor-shimmer" />
           <div className="mt-6 h-64 rounded-[16px] border border-[var(--border)] kondor-shimmer" />
-        </PageShell>
+        </div>
       </ThemeProvider>
     );
   }
 
   if (error || !dashboard) {
     return (
-      <ThemeProvider theme={normalizedLayout?.theme} className="min-h-screen bg-[var(--bg)]">
-        <PageShell>
+      <ThemeProvider
+        theme={normalizedLayout?.theme}
+        className="reportei-theme min-h-screen bg-[var(--surface-muted)]"
+      >
+        <div className="mx-auto max-w-[1500px] px-5 py-8">
           <div className="rounded-[16px] border border-rose-200 bg-rose-50 px-6 py-5 text-sm text-rose-700">
             Dashboard não encontrado.
           </div>
-        </PageShell>
+        </div>
       </ThemeProvider>
     );
   }
 
   return (
-    <ThemeProvider theme={normalizedLayout?.theme} className="min-h-screen bg-[var(--bg)]">
-      <PageShell>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
+    <ThemeProvider
+      theme={normalizedLayout?.theme}
+      className="reportei-theme min-h-screen bg-[var(--surface-muted)]"
+    >
+      <ReporteiTopbar />
+
+      <div className="border-b border-[#dbe3ed] bg-white">
+        <div className="mx-auto flex h-[48px] max-w-[1760px] items-center justify-between gap-3 px-4 lg:px-6">
+          <div className="min-w-0">
             <button
               type="button"
-              className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]"
+              className="mb-0.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]"
               onClick={() => navigate("/relatorios/v2")}
             >
               <ArrowLeft className="h-3.5 w-3.5" />
               Voltar
             </button>
-            <h1 className="text-2xl font-semibold text-[var(--text)]">
+            <p className="truncate text-[18px] font-extrabold text-[var(--primary)]">
               {dashboard.name}
-            </h1>
-            <p className="text-sm text-[var(--muted)]">
-              {dashboard.status === "PUBLISHED" ? "Publicado" : "Rascunho"}
             </p>
-            {refreshNotice ? (
-              <p className="mt-2 text-xs text-[var(--muted)]">{refreshNotice}</p>
-            ) : null}
-            {isHealthWarn ? (
-              <span className="mt-2 inline-flex rounded-full border border-purple-300 bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-700">
-                Dados parcialmente indisponíveis
-              </span>
-            ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+              {dashboard.status === "PUBLISHED" ? "Publicado" : "Rascunho"}
+            </span>
             <Button
               variant="secondary"
               leftIcon={Share2}
@@ -559,13 +599,36 @@ export default function ReportsV2Viewer() {
             </Button>
           </div>
         </div>
+      </div>
+
+      <div className="mx-auto max-w-[1760px] px-4 py-5 lg:px-6">
+        <ReporteiLeftRail
+          items={railItems}
+          activeItem={Array.isArray(filters?.platforms) ? filters.platforms[0] || "" : ""}
+          onSelect={(platform) =>
+            setFilters((prev) => ({
+              ...(prev || {}),
+              platforms: platform ? [platform] : [],
+            }))
+          }
+          onAdd={() => navigate(buildConnectionsPath(dashboard?.brandId))}
+        />
+
+        {refreshNotice ? (
+          <p className="mb-3 text-xs text-[var(--text-muted)]">{refreshNotice}</p>
+        ) : null}
+        {isHealthWarn ? (
+          <span className="mb-3 inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+            Dados parcialmente indisponíveis
+          </span>
+        ) : null}
 
         {dashboard.status === "PUBLISHED" && (isHealthBlocked || isHealthWarn) ? (
           <div
             className={
               isHealthBlocked
-                ? "mt-5 rounded-[16px] border border-purple-200 bg-purple-50 px-5 py-4"
-                : "mt-5 rounded-[16px] border border-slate-200 bg-slate-50 px-5 py-4"
+                ? "mb-5 rounded-[16px] border border-purple-200 bg-purple-50 px-5 py-4"
+                : "mb-5 rounded-[16px] border border-slate-200 bg-slate-50 px-5 py-4"
             }
           >
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -575,7 +638,7 @@ export default function ReportsV2Viewer() {
                     ? "Configuração inválida"
                     : "Dados parcialmente indisponíveis"}
                 </p>
-                <p className="mt-1 text-sm text-[var(--muted)]">
+                <p className="mt-1 text-sm text-[var(--text-muted)]">
                   {isHealthBlocked
                     ? "Corrija widgets inválidos no editor para habilitar exportação e compartilhamento."
                     : "Alguns widgets não puderam ser carregados por falta de conexão."}
@@ -618,7 +681,7 @@ export default function ReportsV2Viewer() {
                 <summary className="cursor-pointer text-sm font-medium text-[var(--text)]">
                   Ver detalhes
                 </summary>
-                <ul className="mt-2 space-y-2 text-sm text-[var(--muted)]">
+                <ul className="mt-2 space-y-2 text-sm text-[var(--text-muted)]">
                   {invalidWidgets.map((issue, index) => (
                     <li key={`${issue.widgetId || index}-${issue.status}-${issue.platform || ""}`}>
                       <span className="font-semibold text-[var(--text)]">
@@ -636,23 +699,27 @@ export default function ReportsV2Viewer() {
           </div>
         ) : null}
 
-        <div className="mt-6">
-          <GlobalFiltersBar
-            filters={filters}
-            controls={globalFilterControls}
-            onChange={setFilters}
-            connections={connections}
-          />
-        </div>
+        <ReporteiFiltersCards
+          filters={filters}
+          onChange={setFilters}
+          shareUrl={shareUrl}
+          defaultExpanded
+        />
 
-        <div className="mt-8">
+        <div className="mt-6">
           {normalizedLayout ? (
             <>
+              <ReporteiCoverCard
+                title={dashboard.name}
+                subtitle={dashboard.subtitle || "Análise de desempenho"}
+                filters={filters}
+                className="mb-4"
+              />
               {pages.length > 1 ? (
                 <div
                   role="tablist"
                   aria-label="Páginas do dashboard"
-                  className="mb-4 flex flex-wrap gap-2 rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-2"
+                  className="mb-4 flex flex-wrap gap-2 rounded-[16px] border border-[var(--border)] bg-white p-2"
                 >
                   {pages.map((page) => (
                     <button
@@ -662,8 +729,8 @@ export default function ReportsV2Viewer() {
                       aria-selected={page.id === activePageId}
                       className={
                         page.id === activePageId
-                        ? "rounded-[12px] bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white shadow-[var(--shadow-sm)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
-                          : "rounded-[12px] px-4 py-2 text-sm font-semibold text-[var(--muted)] hover:bg-[var(--bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+                          ? "rounded-[12px] bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white shadow-[var(--shadow-sm)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+                          : "rounded-[12px] px-4 py-2 text-sm font-semibold text-[var(--text-muted)] hover:bg-[var(--surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
                       }
                       onClick={() => setActivePageId(page.id)}
                     >
@@ -672,24 +739,24 @@ export default function ReportsV2Viewer() {
                   ))}
                 </div>
               ) : null}
-            <DashboardRenderer
-              layout={normalizedLayout}
-              dashboardId={dashboard.id}
-              brandId={dashboard.brandId}
-              globalFilters={debouncedFilters}
-              activePageId={activePageId}
-              healthIssuesByWidgetId={healthIssuesByWidgetId}
-              fetchReason={fetchReason}
-              onWidgetStatusesChange={handleWidgetStatusesChange}
-            />
+              <DashboardRenderer
+                layout={normalizedLayout}
+                dashboardId={dashboard.id}
+                brandId={dashboard.brandId}
+                globalFilters={debouncedFilters}
+                activePageId={activePageId}
+                healthIssuesByWidgetId={healthIssuesByWidgetId}
+                fetchReason={fetchReason}
+                onWidgetStatusesChange={handleWidgetStatusesChange}
+              />
             </>
           ) : (
-            <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] px-6 py-5 text-sm text-[var(--muted)]">
+            <div className="rounded-[16px] border border-[var(--border)] bg-white px-6 py-5 text-sm text-[var(--text-muted)]">
               Layout não encontrado para este dashboard.
             </div>
           )}
         </div>
-      </PageShell>
+      </div>
 
       <Dialog open={exportOpen} onOpenChange={setExportOpen}>
         <DialogContent className="max-w-[520px]">
