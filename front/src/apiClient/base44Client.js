@@ -53,6 +53,19 @@ function normalizeApiBaseUrl(value) {
 function detectSameOriginApiBaseUrl() {
   const origin = detectWindowOrigin();
   if (!origin) return null;
+
+  try {
+    const parsed = new URL(origin);
+    const host = (parsed.hostname || "").toLowerCase();
+
+    // Fallback explícito para produção do projeto:
+    // se o painel estiver em kondorstudio.app, a API fica em api.kondorstudio.app.
+    if (host === "kondorstudio.app" || host === "www.kondorstudio.app") {
+      const apiOrigin = `${parsed.protocol}//api.kondorstudio.app`;
+      return normalizeApiBaseUrl(apiOrigin);
+    }
+  } catch (_) {}
+
   return normalizeApiBaseUrl(origin);
 }
 
