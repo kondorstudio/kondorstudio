@@ -142,6 +142,8 @@ export default function ReportsV2Templates() {
     queryFn: () => base44.reportsV2.listConnections({ brandId }),
     enabled: Boolean(brandId),
   });
+  const templates = templatesData?.items || [];
+  const connections = connectionsData?.items || [];
 
   React.useEffect(() => {
     if (brandId || !clients.length) return;
@@ -164,9 +166,6 @@ export default function ReportsV2Templates() {
   React.useEffect(() => {
     setPreviewFilters(buildInitialFilters(previewTemplate?.layoutJson));
   }, [previewTemplate]);
-
-  const templates = templatesData?.items || [];
-  const connections = connectionsData?.items || [];
   const activePlatforms = React.useMemo(() => {
     const set = new Set();
     connections.forEach((conn) => {
