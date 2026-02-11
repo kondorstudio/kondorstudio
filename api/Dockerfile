@@ -13,15 +13,15 @@ COPY . .
 # Evita falha do postinstall quando o schema não está no caminho padrão.
 RUN npm install --omit=dev --ignore-scripts
 
-# Caminho preferencial informado para o schema Prisma.
-ENV PRISMA_SCHEMA_PATH=src/prisma/schema.prisma
+# Caminho do schema Prisma neste repositório.
+ENV PRISMA_SCHEMA_PATH=prisma/schema.prisma
 
 # Gera o Prisma Client com schema explícito.
-# Fallback para projetos que ainda usam prisma/schema.prisma.
+# Mantém fallback para estruturas antigas por segurança.
 RUN if [ -f "$PRISMA_SCHEMA_PATH" ]; then \
       npx prisma generate --schema="$PRISMA_SCHEMA_PATH"; \
-    elif [ -f "prisma/schema.prisma" ]; then \
-      npx prisma generate --schema="prisma/schema.prisma"; \
+    elif [ -f "src/prisma/schema.prisma" ]; then \
+      npx prisma generate --schema="src/prisma/schema.prisma"; \
     else \
       echo "Prisma schema não encontrado em src/prisma/schema.prisma nem prisma/schema.prisma" && exit 1; \
     fi
@@ -29,4 +29,5 @@ RUN if [ -f "$PRISMA_SCHEMA_PATH" ]; then \
 ENV NODE_ENV=production
 EXPOSE 4000
 
-CMD ["npm", "start"]
+# Garante migrations aplicadas antes de iniciar o servidor.
+CMD ["npm", "run", "start:migrate"]
