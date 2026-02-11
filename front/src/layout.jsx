@@ -211,16 +211,6 @@ function LayoutContent() {
     return location.pathname === item.to || location.pathname.startsWith(`${item.to}/`);
   });
   const isReportsV2Route = location.pathname.startsWith("/relatorios/v2");
-
-  if (isReportsV2Route) {
-    return (
-      <div className="min-h-screen reportei-theme bg-[var(--background)] text-[var(--text)]">
-        <main className="min-h-screen">
-          <Outlet />
-        </main>
-      </div>
-    );
-  }
   const connections = connectionsStatus?.items || [];
   const activePlatforms = useMemo(() => {
     const platforms = new Set();
@@ -242,7 +232,11 @@ function LayoutContent() {
   const isCheckingConnections = Boolean(activeClientId) && connectionsLoading;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[var(--background)] text-[var(--text)]">
+    <div
+      className={`flex h-screen overflow-hidden bg-[var(--background)] text-[var(--text)] ${
+        isReportsV2Route ? "reportei-theme" : ""
+      }`}
+    >
       <Sidebar className="hidden lg:flex kondor-main-sidebar">
         <SidebarHeader className={`border-[var(--border)] bg-white/80 backdrop-blur ${collapsed ? "px-3" : "px-4"}`}>
             <div className="flex items-center justify-between gap-2">
