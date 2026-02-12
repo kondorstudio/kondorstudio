@@ -190,7 +190,6 @@ export default function ReportsV2Templates() {
     (template) => {
       if (!template?.id) return;
       if (template.id === selectedTemplateId) {
-        showToast("Template já está selecionado.", "info");
         return;
       }
       setSelectedTemplateId(template.id);
@@ -253,6 +252,10 @@ export default function ReportsV2Templates() {
               type="button"
               onClick={(event) => {
                 event.stopPropagation();
+                if (selected) {
+                  handleContinue();
+                  return;
+                }
                 handleSelectTemplate(template);
               }}
               leftIcon={selected ? CheckCircle2 : PlusCircle}
@@ -268,6 +271,7 @@ export default function ReportsV2Templates() {
                   event.stopPropagation();
                   handleContinue();
                 }}
+                disabled={!brandId || instantiate.isPending}
               >
                 Criar agora
               </Button>
