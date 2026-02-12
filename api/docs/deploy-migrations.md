@@ -32,8 +32,18 @@ O script `scripts/prisma-migrate-deploy-safe.js`:
 - `PRISMA_MIGRATE_CONNECTION_LIMIT`: default `1`.
 - `PRISMA_MIGRATE_MAX_RETRIES`: default `8`.
 
+## Pool de runtime (API/worker)
+
+Para evitar erro de conexoes esgotadas no endpoint `/metrics/query`, configure:
+
+- `PRISMA_CONNECTION_LIMIT` (default sugerido: `3`)
+- `PRISMA_POOL_TIMEOUT` (default: `30`)
+- `PRISMA_CONNECT_TIMEOUT` (default: `15`)
+- `PRISMA_PGBOUNCER=true` (somente se estiver usando pooler)
+
+O arquivo `src/prisma.js` injeta esses parametros na `DATABASE_URL` quando eles nao estao presentes na URL.
+
 ## Exemplo (DigitalOcean App Platform)
 
 - **API service start command:** `npm run start`
 - **Job de release:** `npm run prisma:migrate:deploy:safe`
-

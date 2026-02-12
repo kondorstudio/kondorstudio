@@ -12,6 +12,63 @@
 
 const { PrismaClient } = require('@prisma/client');
 
+const DEFAULT_PRISMA_CONNECTION_LIMIT = Math.max(
+  1,
+  Number(
+    process.env.PRISMA_CONNECTION_LIMIT ||
+      (process.env.NODE_ENV === 'production' ? 3 : 5),
+  ),
+);
+const DEFAULT_PRISMA_POOL_TIMEOUT = Math.max(
+  5,
+  Number(process.env.PRISMA_POOL_TIMEOUT || 30),
+);
+const DEFAULT_PRISMA_CONNECT_TIMEOUT = Math.max(
+  5,
+  Number(process.env.PRISMA_CONNECT_TIMEOUT || 15),
+);
+
+function tunePrismaDatabaseUrl(rawUrl) {
+  if (!rawUrl) return rawUrl;
+  try {
+    const parsed = new URL(String(rawUrl));
+    const protocol = String(parsed.protocol || '').toLowerCase();
+    const isPostgres =
+      protocol === 'postgres:' || protocol === 'postgresql:';
+    if (!isPostgres) return rawUrl;
+
+    if (!parsed.searchParams.get('connection_limit')) {
+      parsed.searchParams.set(
+        'connection_limit',
+        String(DEFAULT_PRISMA_CONNECTION_LIMIT),
+      );
+    }
+    if (!parsed.searchParams.get('pool_timeout')) {
+      parsed.searchParams.set('pool_timeout', String(DEFAULT_PRISMA_POOL_TIMEOUT));
+    }
+    if (!parsed.searchParams.get('connect_timeout')) {
+      parsed.searchParams.set(
+        'connect_timeout',
+        String(DEFAULT_PRISMA_CONNECT_TIMEOUT),
+      );
+    }
+    if (
+      process.env.PRISMA_PGBOUNCER === 'true' &&
+      !parsed.searchParams.get('pgbouncer')
+    ) {
+      parsed.searchParams.set('pgbouncer', 'true');
+    }
+
+    return parsed.toString();
+  } catch (_err) {
+    return rawUrl;
+  }
+}
+
+if (process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = tunePrismaDatabaseUrl(process.env.DATABASE_URL);
+}
+
 const defaultLog =
   process.env.NODE_ENV === 'production'
     ? 'warn,error'

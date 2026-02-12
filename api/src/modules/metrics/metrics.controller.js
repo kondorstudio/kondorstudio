@@ -5,7 +5,35 @@ function formatValidationError(error) {
   return error.flatten ? error.flatten() : error.errors || error;
 }
 
+function resolveInfrastructureError(err) {
+  const message = String(err?.message || '').toLowerCase();
+  if (
+    message.includes('remaining connection slots are reserved') ||
+    message.includes('too many clients already') ||
+    message.includes('sorry, too many clients already')
+  ) {
+    return {
+      status: 503,
+      code: 'DB_CONNECTION_LIMIT',
+      message: 'Banco temporariamente sobrecarregado. Tente novamente em instantes.',
+      details: null,
+    };
+  }
+  return null;
+}
+
 function handleError(res, err) {
+  const infra = resolveInfrastructureError(err);
+  if (infra) {
+    return res.status(infra.status).json({
+      error: {
+        code: infra.code,
+        message: infra.message,
+        details: infra.details,
+      },
+    });
+  }
+
   const status = err.status || err.statusCode || 500;
   const code = err.code || 'INTERNAL_ERROR';
   const message = err.message || 'Erro inesperado';
