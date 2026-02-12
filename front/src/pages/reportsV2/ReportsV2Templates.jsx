@@ -140,21 +140,15 @@ export default function ReportsV2Templates() {
   }, [brandId, clients]);
 
   React.useEffect(() => {
-    if (!templates.length) {
-      setSelectedTemplateId("");
-      return;
-    }
-    setSelectedTemplateId((current) => {
-      if (current && templates.some((template) => template.id === current)) {
-        return current;
-      }
-      return templates[0].id;
-    });
-  }, [templates]);
-
-  React.useEffect(() => {
     setPreviewFilters(buildInitialFilters(previewTemplate?.layoutJson));
   }, [previewTemplate]);
+
+  React.useEffect(() => {
+    setSelectedTemplateId((current) => {
+      if (!current) return "";
+      return templates.some((template) => template.id === current) ? current : "";
+    });
+  }, [templates]);
 
   const searchTerm = String(templatesSearch || "").trim().toLowerCase();
   const visibleTemplates = React.useMemo(() => {
@@ -196,11 +190,11 @@ export default function ReportsV2Templates() {
     (template) => {
       if (!template?.id) return;
       if (template.id === selectedTemplateId) {
-        showToast("Template já selecionado.", "info");
+        showToast("Template já está selecionado.", "info");
         return;
       }
       setSelectedTemplateId(template.id);
-      showToast("Template selecionado. Clique em Continuar para criar.", "success");
+      showToast("Template selecionado.", "success");
     },
     [selectedTemplateId, showToast]
   );
@@ -265,6 +259,19 @@ export default function ReportsV2Templates() {
             >
               {selected ? "Selecionado" : "Selecionar"}
             </Button>
+            {selected ? (
+              <Button
+                size="sm"
+                variant="default"
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleContinue();
+                }}
+              >
+                Criar agora
+              </Button>
+            ) : null}
             {selected ? (
               <span className="text-xs text-[var(--text-muted)]">
                 {brandId ? `Marca: ${selectedBrandName}` : "Selecione uma marca"}
