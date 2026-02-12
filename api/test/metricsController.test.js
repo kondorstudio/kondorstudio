@@ -56,3 +56,55 @@ test('metrics controller maps database connection slot pressure to 503', async (
   assert.equal(response.status, 503);
   assert.equal(response.body?.error?.code, 'DB_CONNECTION_LIMIT');
 });
+
+test('metrics controller maps prisma P1001 to 503', async () => {
+  const app = buildAppWithService({
+    queryMetrics: async () => {
+      const err = new Error("Can't reach database server at host:5432");
+      err.code = 'P1001';
+      throw err;
+    },
+    queryMetricsReportei: async () => {
+      throw new Error('not used');
+    },
+  });
+
+  const response = await request(app).post('/metrics/query').send({
+    brandId: randomUUID(),
+    dateRange: { start: '2026-01-01', end: '2026-01-31' },
+    dimensions: [],
+    metrics: ['spend'],
+    filters: [],
+    compareTo: null,
+  });
+
+  assert.equal(response.status, 503);
+  assert.equal(response.body?.error?.code, 'DB_UNAVAILABLE');
+});
+
+test('metrics controller maps prisma P2024 pool timeout to 503', async () => {
+  const app = buildAppWithService({
+    queryMetrics: async () => {
+      const err = new Error(
+        'Timed out fetching a new connection from the connection pool.',
+      );
+      err.code = 'P2024';
+      throw err;
+    },
+    queryMetricsReportei: async () => {
+      throw new Error('not used');
+    },
+  });
+
+  const response = await request(app).post('/metrics/query').send({
+    brandId: randomUUID(),
+    dateRange: { start: '2026-01-01', end: '2026-01-31' },
+    dimensions: [],
+    metrics: ['spend'],
+    filters: [],
+    compareTo: null,
+  });
+
+  assert.equal(response.status, 503);
+  assert.equal(response.body?.error?.code, 'DB_POOL_TIMEOUT');
+});

@@ -6,7 +6,47 @@ function formatValidationError(error) {
 }
 
 function resolveInfrastructureError(err) {
+  const code = String(err?.code || '').toUpperCase();
   const message = String(err?.message || '').toLowerCase();
+
+  if (
+    code === 'P1001' ||
+    message.includes("can't reach database server") ||
+    message.includes('can\'t reach database server')
+  ) {
+    return {
+      status: 503,
+      code: 'DB_UNAVAILABLE',
+      message: 'Banco temporariamente indisponível. Tente novamente em instantes.',
+      details: null,
+    };
+  }
+
+  if (
+    code === 'P1002' ||
+    message.includes('timed out when connecting to the database') ||
+    message.includes('database operation timed out')
+  ) {
+    return {
+      status: 503,
+      code: 'DB_TIMEOUT',
+      message: 'Banco não respondeu a tempo. Tente novamente em instantes.',
+      details: null,
+    };
+  }
+
+  if (
+    code === 'P2024' ||
+    message.includes('timed out fetching a new connection from the connection pool')
+  ) {
+    return {
+      status: 503,
+      code: 'DB_POOL_TIMEOUT',
+      message: 'Banco temporariamente sobrecarregado. Tente novamente em instantes.',
+      details: null,
+    };
+  }
+
   if (
     message.includes('remaining connection slots are reserved') ||
     message.includes('too many clients already') ||

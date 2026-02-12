@@ -46,6 +46,7 @@ const SYNC_TTL_MS = Math.max(
 );
 
 const syncCache = new Map();
+const syncInFlight = new Map();
 
 function normalizeDateKey(value) {
   if (!value) return null;
@@ -120,6 +121,26 @@ function shouldSkipSync(key) {
 function markSynced(key) {
   if (!key) return;
   syncCache.set(key, { expiresAt: Date.now() + SYNC_TTL_MS });
+}
+
+async function withSyncInFlight(key, task) {
+  if (!key || typeof task !== 'function') {
+    return task();
+  }
+
+  const existing = syncInFlight.get(key);
+  if (existing) return existing;
+
+  const promise = Promise.resolve()
+    .then(task)
+    .finally(() => {
+      if (syncInFlight.get(key) === promise) {
+        syncInFlight.delete(key);
+      }
+    });
+
+  syncInFlight.set(key, promise);
+  return promise;
 }
 
 function rangeTouchesToday(dateRange) {
@@ -312,73 +333,77 @@ async function syncConnectionFacts({
   );
   if (shouldSkipSync(cacheKey)) return;
 
-  const hasFacts = await hasFactsForRange({
-    tenantId,
-    brandId,
-    platform,
-    accountId: String(externalAccountId),
-    dateRange,
-  });
+  return withSyncInFlight(cacheKey, async () => {
+    if (shouldSkipSync(cacheKey)) return;
 
-  const shouldRefreshOpenRange = rangeTouchesToday(dateRange);
-  if (hasFacts && !shouldRefreshOpenRange) {
-    markSynced(cacheKey);
-    return;
-  }
-
-  const integration = applyAccountToIntegration(
-    dataConnection.integration,
-    platform,
-    externalAccountId,
-  );
-
-  const metricsRows = await service.fetchAccountMetrics(integration, {
-    range: { since: dateRange.start, until: dateRange.end },
-    metricTypes: filteredMetrics,
-    granularity: 'day',
-  });
-
-  if (!metricsRows || !metricsRows.length) {
-    markSynced(cacheKey);
-    return;
-  }
-
-  const currency = resolveCurrency(dataConnection, integration);
-  const factRows = buildFactRows({
-    tenantId,
-    brandId,
-    platform,
-    accountId: String(externalAccountId),
-    currency,
-    metricsRows,
-  });
-
-  if (!factRows.length) {
-    markSynced(cacheKey);
-    return;
-  }
-
-  await prisma.factKondorMetricsDaily.deleteMany({
-    where: {
+    const hasFacts = await hasFactsForRange({
       tenantId,
       brandId,
       platform,
       accountId: String(externalAccountId),
-      date: {
-        gte: new Date(dateRange.start),
-        lte: new Date(dateRange.end),
-      },
-    },
-  });
-
-  const chunkSize = Math.max(100, Number(process.env.FACT_METRICS_INSERT_CHUNK || 500));
-  for (let i = 0; i < factRows.length; i += chunkSize) {
-    await prisma.factKondorMetricsDaily.createMany({
-      data: factRows.slice(i, i + chunkSize),
+      dateRange,
     });
-  }
 
-  markSynced(cacheKey);
+    const shouldRefreshOpenRange = rangeTouchesToday(dateRange);
+    if (hasFacts && !shouldRefreshOpenRange) {
+      markSynced(cacheKey);
+      return;
+    }
+
+    const integration = applyAccountToIntegration(
+      dataConnection.integration,
+      platform,
+      externalAccountId,
+    );
+
+    const metricsRows = await service.fetchAccountMetrics(integration, {
+      range: { since: dateRange.start, until: dateRange.end },
+      metricTypes: filteredMetrics,
+      granularity: 'day',
+    });
+
+    if (!metricsRows || !metricsRows.length) {
+      markSynced(cacheKey);
+      return;
+    }
+
+    const currency = resolveCurrency(dataConnection, integration);
+    const factRows = buildFactRows({
+      tenantId,
+      brandId,
+      platform,
+      accountId: String(externalAccountId),
+      currency,
+      metricsRows,
+    });
+
+    if (!factRows.length) {
+      markSynced(cacheKey);
+      return;
+    }
+
+    await prisma.factKondorMetricsDaily.deleteMany({
+      where: {
+        tenantId,
+        brandId,
+        platform,
+        accountId: String(externalAccountId),
+        date: {
+          gte: new Date(dateRange.start),
+          lte: new Date(dateRange.end),
+        },
+      },
+    });
+
+    const chunkSize = Math.max(100, Number(process.env.FACT_METRICS_INSERT_CHUNK || 500));
+    for (let i = 0; i < factRows.length; i += chunkSize) {
+      await prisma.factKondorMetricsDaily.createMany({
+        data: factRows.slice(i, i + chunkSize),
+      });
+    }
+
+    markSynced(cacheKey);
+  });
 }
 
 async function ensureFactMetrics({

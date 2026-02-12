@@ -13,7 +13,12 @@ function resetModule(path) {
   delete require.cache[resolved];
 }
 
-function setupService({ hasFacts = true, metricsRows = [] } = {}) {
+function delay(ms) {
+  if (!ms || ms <= 0) return Promise.resolve();
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function setupService({ hasFacts = true, metricsRows = [], fetchDelayMs = 0 } = {}) {
   const calls = {
     fetch: 0,
     count: 0,
@@ -62,6 +67,7 @@ function setupService({ hasFacts = true, metricsRows = [] } = {}) {
   mockModule('../src/services/metaMetricsService', {
     fetchAccountMetrics: async () => {
       calls.fetch += 1;
+      await delay(fetchDelayMs);
       return metricsRows;
     },
   });
@@ -116,6 +122,35 @@ test('ensureFactMetrics refreshes open range (today) even when facts already exi
     filters: [],
     requiredPlatforms: ['META_ADS'],
   });
+
+  assert.equal(calls.count, 1);
+  assert.equal(calls.fetch, 1);
+  assert.equal(calls.deleteMany, 1);
+  assert.equal(calls.createManyRows, 1);
+});
+
+test('ensureFactMetrics deduplicates concurrent sync for same connection/range', async () => {
+  const today = new Date().toISOString().slice(0, 10);
+  const { service, calls } = setupService({
+    hasFacts: false,
+    fetchDelayMs: 50,
+    metricsRows: [{ name: 'impressions', value: 42, collectedAt: today }],
+  });
+
+  const payload = {
+    tenantId: 'tenant-1',
+    brandId: 'brand-1',
+    dateRange: { start: today, end: today },
+    metrics: ['impressions'],
+    filters: [],
+    requiredPlatforms: ['META_ADS'],
+  };
+
+  await Promise.all([
+    service.ensureFactMetrics(payload),
+    service.ensureFactMetrics(payload),
+    service.ensureFactMetrics(payload),
+  ]);
 
   assert.equal(calls.count, 1);
   assert.equal(calls.fetch, 1);
