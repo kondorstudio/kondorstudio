@@ -475,6 +475,18 @@ export default function WidgetRenderer({
   });
   const isRefreshing = isFetching && !isLoading;
   const refreshLabel = resolveRefreshLabel(fetchReason);
+  const normalizedData = React.useMemo(
+    () => resolveReporteiData(data, widget) || data,
+    [data, widget]
+  );
+  const rows = Array.isArray(normalizedData?.rows) ? normalizedData.rows : [];
+  const totals = normalizedData?.totals || {};
+  const meta = normalizedData?.meta || {};
+  const pageInfo = normalizedData?.pageInfo || {
+    limit: pagination?.limit || 0,
+    offset: pagination?.offset || 0,
+    hasMore: false,
+  };
 
   if (widgetType === "text") {
     return (
@@ -644,20 +656,6 @@ export default function WidgetRenderer({
     </>
   );
 }
-
-  const normalizedData = React.useMemo(
-    () => resolveReporteiData(data, widget) || data,
-    [data, widget]
-  );
-
-  const rows = Array.isArray(normalizedData?.rows) ? normalizedData.rows : [];
-  const totals = normalizedData?.totals || {};
-  const meta = normalizedData?.meta || {};
-  const pageInfo = normalizedData?.pageInfo || {
-    limit: pagination?.limit || 0,
-    offset: pagination?.offset || 0,
-    hasMore: false,
-  };
 
   if (!rows.length && widgetType !== "kpi") {
     return (
