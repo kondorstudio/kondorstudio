@@ -8,7 +8,7 @@
   },
   "scripts": {
     "start": "node src/server.js",
-    "start:migrate": "npm run prisma:migrate:deploy && node src/server.js",
+    "start:migrate": "npm run prisma:migrate:deploy:safe && node src/server.js",
     "dev": "nodemon src/server.js",
     "worker": "node src/worker.js",
     "build": "npm run prisma:generate",
@@ -17,7 +17,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
-    "deploy:migrate": "npm run prisma:migrate:deploy",
+    "prisma:migrate:deploy:safe": "node scripts/prisma-migrate-deploy-safe.js",
+    "deploy:migrate": "npm run prisma:migrate:deploy:safe",
     "prisma:studio": "prisma studio",
     "seed": "node prisma/seed.js",
     "validate:filters": "node scripts/validate-report-filters.js"

@@ -29,5 +29,6 @@ RUN if [ -f "$PRISMA_SCHEMA_PATH" ]; then \
 ENV NODE_ENV=production
 EXPOSE 4000
 
-# Garante migrations aplicadas antes de iniciar o servidor.
-CMD ["npm", "run", "start:migrate"]
+# Em produção, rode migrations em release job separado.
+# O serviço web deve iniciar sem bloquear healthcheck.
+CMD ["npm", "run", "start"]
