@@ -6,6 +6,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { encrypt } = require('../utils/crypto');
 const { useTenant } = require('../prisma');
+const { syncAfterConnection } = require('./factMetricsSyncService');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'changeme_local_secret';
 
@@ -90,6 +91,198 @@ function resolveScopes(kind) {
 function buildOwnerKey(clientId, kind) {
   if (!clientId) return 'AGENCY';
   return `${clientId}:${normalizeKind(kind)}`;
+}
+
+async function ensureDataSourceConnection(db, payload) {
+  if (!db || !payload) return null;
+  const brandId = payload.brandId ? String(payload.brandId) : null;
+  const source = payload.source ? String(payload.source) : null;
+  const externalAccountId = payload.externalAccountId
+    ? String(payload.externalAccountId)
+    : null;
+  const displayName = payload.displayName ? String(payload.displayName) : null;
+  const integrationId = payload.integrationId ? String(payload.integrationId) : null;
+  const meta =
+    payload.meta && typeof payload.meta === 'object' && !Array.isArray(payload.meta)
+      ? payload.meta
+      : null;
+
+  if (!brandId || !source || !externalAccountId || !displayName) return null;
+
+  const existing = await db.dataSourceConnection.findFirst({
+    where: {
+      brandId,
+      source,
+      externalAccountId,
+    },
+    select: { id: true },
+  });
+
+  if (existing?.id) {
+    return db.dataSourceConnection.update({
+      where: { id: existing.id },
+      data: {
+        integrationId,
+        displayName,
+        status: 'CONNECTED',
+        meta,
+      },
+    });
+  }
+
+  return db.dataSourceConnection.create({
+    data: {
+      brandId,
+      source,
+      integrationId,
+      externalAccountId,
+      displayName,
+      status: 'CONNECTED',
+      meta,
+    },
+  });
+}
+
+async function ensureBrandSourceConnection(db, payload) {
+  if (!db || !payload) return null;
+  const brandId = payload.brandId ? String(payload.brandId) : null;
+  const platform = payload.platform ? String(payload.platform) : null;
+  const externalAccountId = payload.externalAccountId
+    ? String(payload.externalAccountId)
+    : null;
+  const externalAccountName = payload.externalAccountName
+    ? String(payload.externalAccountName)
+    : null;
+
+  if (!brandId || !platform || !externalAccountId || !externalAccountName) return null;
+
+  return db.brandSourceConnection.upsert({
+    where: {
+      brandId_platform_externalAccountId: {
+        brandId,
+        platform,
+        externalAccountId,
+      },
+    },
+    update: {
+      externalAccountName,
+      status: 'ACTIVE',
+    },
+    create: {
+      brandId,
+      platform,
+      externalAccountId,
+      externalAccountName,
+      status: 'ACTIVE',
+    },
+  });
+}
+
+async function ensureMetaConnectionsFromCallback({
+  tenantId,
+  clientId,
+  kind,
+  integrationId,
+  accounts,
+  settings,
+}) {
+  if (!tenantId || !clientId || !integrationId) return;
+
+  const db = useTenant(String(tenantId));
+  const normalizedKind = normalizeKind(kind);
+
+  if (normalizedKind === 'meta_ads') {
+    const safeAccounts = Array.isArray(accounts) ? accounts : [];
+    for (const account of safeAccounts) {
+      const adAccountId = account?.adAccountId ? String(account.adAccountId) : null;
+      if (!adAccountId) continue;
+      await ensureDataSourceConnection(db, {
+        brandId: clientId,
+        source: 'META_ADS',
+        integrationId,
+        externalAccountId: adAccountId,
+        displayName: account?.name ? String(account.name) : `Ad Account ${adAccountId}`,
+        meta: {
+          currency: account?.currency ? String(account.currency) : null,
+          timezone: account?.timezone ? String(account.timezone) : null,
+          accountStatus: account?.status ?? null,
+        },
+      });
+    }
+
+    const defaultAccountId = settings?.adAccountId || settings?.accountId || null;
+    const defaultAccount =
+      safeAccounts.find((account) => String(account?.adAccountId || '') === String(defaultAccountId)) ||
+      safeAccounts.find((account) => account?.adAccountId) ||
+      null;
+
+    if (defaultAccount?.adAccountId) {
+      const externalAccountId = String(defaultAccount.adAccountId);
+      const externalAccountName =
+        defaultAccount?.name ? String(defaultAccount.name) : `Ad Account ${externalAccountId}`;
+
+      await ensureBrandSourceConnection(db, {
+        brandId: clientId,
+        platform: 'META_ADS',
+        externalAccountId,
+        externalAccountName,
+      });
+
+      // Sync async: evita atrasar o redirect do callback OAuth.
+      syncAfterConnection({
+        tenantId,
+        brandId: clientId,
+        platform: 'META_ADS',
+        externalAccountId,
+      }).catch((err) => {
+        // eslint-disable-next-line no-console
+        console.warn('[metaSocialService] syncAfterConnection(meta_ads) error', err?.message || err);
+      });
+    }
+
+    return;
+  }
+
+  // Meta social (pages/instagram): garante DataSourceConnection para pages e IG Business.
+  const safeAccounts = Array.isArray(accounts) ? accounts : [];
+  for (const account of safeAccounts) {
+    const pageId = account?.pageId ? String(account.pageId) : null;
+    const pageName = account?.pageName ? String(account.pageName) : null;
+    const igId = account?.igBusinessAccountId ? String(account.igBusinessAccountId) : null;
+    const igUsername = account?.igUsername ? String(account.igUsername) : null;
+
+    if (pageId) {
+      await ensureDataSourceConnection(db, {
+        brandId: clientId,
+        source: 'META_SOCIAL',
+        integrationId,
+        externalAccountId: pageId,
+        displayName: pageName || `Page ${pageId}`,
+        meta: {
+          pageId,
+          pageName,
+          igBusinessId: igId,
+          igUsername,
+        },
+      });
+    }
+
+    if (igId) {
+      await ensureDataSourceConnection(db, {
+        brandId: clientId,
+        source: 'META_SOCIAL',
+        integrationId,
+        externalAccountId: igId,
+        displayName: igUsername ? `@${igUsername}` : `Instagram ${igId}`,
+        meta: {
+          pageId,
+          pageName,
+          igBusinessId: igId,
+          igUsername,
+        },
+      });
+    }
+  }
 }
 
 function buildGraphGet(oauthVersion) {
@@ -587,6 +780,8 @@ module.exports = {
       select: { id: true },
     });
 
+    let persistedIntegrationId = null;
+
     if (existing?.id) {
       await db.integration.update({
         where: { id: existing.id },
@@ -601,8 +796,9 @@ module.exports = {
           lastSyncedAt: now,
         },
       });
+      persistedIntegrationId = existing.id;
     } else {
-      await db.integration.create({
+      const created = await db.integration.create({
         data: {
           provider: 'META',
           providerName,
@@ -617,6 +813,24 @@ module.exports = {
           lastSyncedAt: now,
         },
       });
+      persistedIntegrationId = created.id;
+    }
+
+    try {
+      await ensureMetaConnectionsFromCallback({
+        tenantId,
+        clientId,
+        kind,
+        integrationId: persistedIntegrationId,
+        accounts,
+        settings,
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[metaSocialService] ensureMetaConnectionsFromCallback warning',
+        err?.message || err,
+      );
     }
 
     return {
