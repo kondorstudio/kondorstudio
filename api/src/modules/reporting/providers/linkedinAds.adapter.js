@@ -1,4 +1,7 @@
-const { normalizeMetricsPayload } = require('./providerUtils');
+const {
+  getIntegrationSettings,
+  normalizeMetricsPayload,
+} = require('./providerUtils');
 const linkedinMetricsService = require('../../../services/linkedinAdsMetricsService');
 
 async function listSelectableAccounts(integration) {

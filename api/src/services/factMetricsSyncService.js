@@ -122,6 +122,14 @@ function markSynced(key) {
   syncCache.set(key, { expiresAt: Date.now() + SYNC_TTL_MS });
 }
 
+function rangeTouchesToday(dateRange) {
+  const start = normalizeDateKey(dateRange?.start);
+  const end = normalizeDateKey(dateRange?.end);
+  if (!start || !end) return false;
+  const today = new Date().toISOString().slice(0, 10);
+  return start <= today && end >= today;
+}
+
 function resolveCurrency(connection, integration) {
   const fromMeta = connection?.meta?.currency;
   if (fromMeta) return String(fromMeta);
@@ -311,7 +319,9 @@ async function syncConnectionFacts({
     accountId: String(externalAccountId),
     dateRange,
   });
-  if (hasFacts) {
+
+  const shouldRefreshOpenRange = rangeTouchesToday(dateRange);
+  if (hasFacts && !shouldRefreshOpenRange) {
     markSynced(cacheKey);
     return;
   }

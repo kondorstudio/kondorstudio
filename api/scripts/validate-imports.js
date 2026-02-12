@@ -76,6 +76,17 @@ function extractImports(fileContent) {
   const requireRegex = /require\(\s*['"]([^'"]+)['"]\s*\)/;
 
   lines.forEach((line, idx) => {
+    const trimmed = line.trim();
+    if (
+      !trimmed ||
+      trimmed.startsWith('//') ||
+      trimmed.startsWith('/*') ||
+      trimmed.startsWith('*') ||
+      trimmed.startsWith('*/')
+    ) {
+      return;
+    }
+
     let m = line.match(importRegex);
     if (m) imports.push({ raw: m[1], line: idx + 1 });
     // require

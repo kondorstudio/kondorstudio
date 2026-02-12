@@ -1,4 +1,7 @@
-const { normalizeMetricsPayload } = require('./providerUtils');
+const {
+  getIntegrationSettings,
+  normalizeMetricsPayload,
+} = require('./providerUtils');
 const tiktokMetricsService = require('../../../services/tiktokMetricsService');
 
 async function listSelectableAccounts(integration) {
