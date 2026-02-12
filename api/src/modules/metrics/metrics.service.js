@@ -538,7 +538,12 @@ function buildMetricsPlan(requestedMetrics, catalogEntries) {
 }
 
 function buildWhereClause({ tenantId, brandId, dateFrom, dateTo, filters }) {
-  const conditions = ['"tenantId" = $1', '"brandId" = $2', '"date" >= $3', '"date" <= $4'];
+  const conditions = [
+    '"tenantId" = $1',
+    '"brandId" = $2',
+    '"date" >= $3::date',
+    '"date" <= $4::date',
+  ];
   const params = [tenantId, brandId, dateFrom, dateTo];
   let paramIndex = params.length + 1;
 

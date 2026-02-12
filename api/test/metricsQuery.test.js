@@ -234,6 +234,8 @@ test('metrics query builds filter placeholders for eq/in', () => {
     ],
   });
 
+  assert.ok(whereSql.includes('"date" >= $3::date'));
+  assert.ok(whereSql.includes('"date" <= $4::date'));
   assert.ok(whereSql.includes('"accountId" = $5'));
   assert.ok(whereSql.includes('"platform" IN ($6, $7)'));
   assert.equal(params.length, 7);
