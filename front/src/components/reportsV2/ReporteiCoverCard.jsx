@@ -53,15 +53,15 @@ export default function ReporteiCoverCard({
 
   return (
     <section className={`reportei-card overflow-hidden ${className}`.trim()}>
-      <div className="flex min-h-[420px] flex-col items-center justify-center px-6 py-10 text-center">
-        <span className="mb-8 inline-flex h-28 w-28 items-center justify-center rounded-full bg-[#22A6E8] text-6xl font-extrabold text-white">
+      <div className="flex min-h-[360px] flex-col items-center justify-center px-6 py-10 text-center">
+        <span className="mb-6 inline-flex h-24 w-24 items-center justify-center rounded-full bg-[#22A6E8] text-6xl font-extrabold text-white">
           {initial}
         </span>
-        <h1 className="text-[34px] font-extrabold leading-[1.08] text-slate-900 sm:text-[42px] lg:text-[58px]">
+        <h1 className="text-[44px] font-extrabold leading-[1.08] text-slate-900">
           {title}
         </h1>
-        <p className="mt-3 text-[20px] font-semibold text-slate-500 sm:text-[24px] lg:text-[32px]">{subtitle}</p>
-        <p className="mx-auto mt-8 max-w-[980px] text-lg leading-relaxed text-slate-700">
+        <p className="mt-3 text-[26px] font-semibold text-slate-500">{subtitle}</p>
+        <p className="mx-auto mt-8 max-w-[840px] text-[18px] leading-relaxed text-slate-700">
           Relatório gerado dos dados analisados entre {formatDatePtBr(range.start)} e{" "}
           {formatDatePtBr(range.end)}
           {compare
@@ -74,9 +74,10 @@ export default function ReporteiCoverCard({
             variant="secondary"
             onClick={onAddAnalysis}
             disabled={!onAddAnalysis}
-            className="h-9 rounded-full border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-600"
+            data-testid="cover-add-analysis"
+            className="h-8 rounded-full border border-slate-300 bg-white px-3 text-[12px] font-semibold text-slate-600"
           >
-            <Plus className="h-4 w-4" />
+            <Plus className="h-3.5 w-3.5" />
             Clique aqui para adicionar uma análise
           </Button>
         </div>

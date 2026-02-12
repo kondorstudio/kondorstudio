@@ -50,6 +50,10 @@ import {
   DEFAULT_REPORT_THEME,
   DEFAULT_FILTER_CONTROLS,
 } from "@/components/reportsV2/utils.js";
+import {
+  getCatalogForPlatform,
+  getGroupedCatalogForPlatform,
+} from "@/components/reportsV2/editor/reporteiMetricCatalog.js";
 import { Button } from "@/components/ui/button.jsx";
 import { Input } from "@/components/ui/input.jsx";
 import { Checkbox } from "@/components/ui/checkbox.jsx";
@@ -135,20 +139,6 @@ const METRIC_LABELS = METRIC_OPTIONS.reduce((acc, item) => {
   return acc;
 }, {});
 
-const ADS_METRIC_KEYS = [
-  "spend",
-  "cpc",
-  "cpm",
-  "impressions",
-  "clicks",
-  "ctr",
-  "conversions",
-  "cpa",
-  "roas",
-  "revenue",
-];
-const GA4_METRIC_KEYS = ["sessions", "conversions", "leads", "revenue"];
-
 const PLATFORM_LABELS = {
   META_ADS: "Meta Ads",
   GOOGLE_ADS: "Google Ads",
@@ -168,41 +158,14 @@ const PLATFORM_BADGE = {
   GMB: { short: "GMB", className: "bg-lime-100 text-lime-700" },
   FB_IG: { short: "FB", className: "bg-indigo-100 text-indigo-700" },
 };
-
-const METRICS_BY_PLATFORM = {
-  META_ADS: ADS_METRIC_KEYS,
-  GOOGLE_ADS: ADS_METRIC_KEYS,
-  TIKTOK_ADS: ADS_METRIC_KEYS,
-  LINKEDIN_ADS: ADS_METRIC_KEYS,
-  FB_IG: ADS_METRIC_KEYS,
-  GA4: GA4_METRIC_KEYS,
-};
-
-const METRIC_GROUPS = {
-  ADS: [
-    { key: "investimento", label: "Investimento", metrics: ["spend", "cpc", "cpm"] },
-    { key: "alcance", label: "Alcance", metrics: ["impressions", "clicks", "ctr"] },
-    {
-      key: "conversoes",
-      label: "Conversões",
-      metrics: ["conversions", "cpa", "roas", "revenue"],
-    },
-  ],
-  GA4: [
-    { key: "aquisicao", label: "Aquisição", metrics: ["sessions"] },
-    { key: "conversoes", label: "Conversões", metrics: ["conversions", "leads"] },
-    { key: "receita", label: "Receita", metrics: ["revenue"] },
-  ],
-};
-
-const METRIC_GROUPS_BY_PLATFORM = {
-  META_ADS: METRIC_GROUPS.ADS,
-  GOOGLE_ADS: METRIC_GROUPS.ADS,
-  TIKTOK_ADS: METRIC_GROUPS.ADS,
-  LINKEDIN_ADS: METRIC_GROUPS.ADS,
-  FB_IG: METRIC_GROUPS.ADS,
-  GA4: METRIC_GROUPS.GA4,
-};
+const METRICS_CATALOG_PLATFORMS = [
+  "META_ADS",
+  "FB_IG",
+  "GOOGLE_ADS",
+  "TIKTOK_ADS",
+  "LINKEDIN_ADS",
+  "GA4",
+];
 
 const DIMENSION_OPTIONS = [
   { value: "none", label: "Nenhuma" },
@@ -295,8 +258,16 @@ function resolveDropPosition({
   };
 }
 
-function buildMetricWidget({ metricKey, label, platform, position }) {
-  const preset = WIDGET_PRESETS.kpi;
+function buildMetricWidget({
+  metricKey,
+  label,
+  platform,
+  position,
+  widgetType = "kpi",
+  dimensions = [],
+}) {
+  const type = WIDGET_PRESETS[widgetType] ? widgetType : "kpi";
+  const preset = WIDGET_PRESETS[type] || WIDGET_PRESETS.kpi;
   const metric = String(metricKey || "").trim();
   const title = String(label || METRIC_LABELS[metric] || metric || "Métrica");
   const normalizedPlatform = normalizePlatformValue(platform);
@@ -308,9 +279,19 @@ function buildMetricWidget({ metricKey, label, platform, position }) {
   const filters = normalizedPlatform
     ? [{ field: "platform", op: "eq", value: normalizedPlatform }]
     : [];
+  const resolvedDimensions =
+    Array.isArray(dimensions) && dimensions.length
+      ? dimensions
+      : Array.isArray(preset.query?.dimensions)
+      ? preset.query.dimensions
+      : [];
+
+  const vizVariant =
+    type === "donut" ? "donut" : type === "pie" ? "pie" : "default";
+
   return {
     id: generateUuid(),
-    type: "kpi",
+    type,
     title,
     layout: {
       x,
@@ -322,15 +303,25 @@ function buildMetricWidget({ metricKey, label, platform, position }) {
     },
     query: {
       metrics: metric ? [metric] : [],
-      dimensions: [],
+      dimensions: resolvedDimensions,
       filters,
+      ...(type === "table" && metric
+        ? { sort: { field: metric, direction: "desc" }, limit: 25 }
+        : {}),
       ...(normalizedPlatform ? { requiredPlatforms: [normalizedPlatform] } : {}),
     },
     viz: {
-      variant: "default",
-      showLegend: false,
+      variant: vizVariant,
+      showLegend: type !== "kpi",
       format: "auto",
-      options: {},
+      options:
+        type === "pie" || type === "donut"
+          ? {
+              topN: PIE_DEFAULTS.topN,
+              showOthers: PIE_DEFAULTS.showOthers,
+              othersLabel: PIE_DEFAULTS.othersLabel,
+            }
+          : {},
     },
   };
 }
@@ -702,6 +693,7 @@ function EditorWidgetCard({
   return (
     <div
       data-editor-widget-card="true"
+      data-widget-id={widget.id}
       role="button"
       tabIndex={0}
       onClick={() => onSelect(widget.id)}
@@ -811,6 +803,19 @@ export default function ReportsV2Editor() {
   const skipNextLayoutChangeRef = React.useRef(false);
   const guidesRef = React.useRef(null);
   const metricDragCounterRef = React.useRef(0);
+  const scrollToWidgetCard = React.useCallback((widgetId) => {
+    if (!widgetId || typeof document === "undefined") return;
+    const tryScroll = (attempt = 0) => {
+      const node = document.querySelector(`[data-widget-id="${widgetId}"]`);
+      if (node) {
+        node.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+      }
+      if (attempt >= 12) return;
+      window.setTimeout(() => tryScroll(attempt + 1), 80);
+    };
+    tryScroll();
+  }, []);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["reportsV2-dashboard", id],
@@ -858,7 +863,7 @@ export default function ReportsV2Editor() {
         new Set((platforms || []).map(normalizePlatformValue).filter(Boolean))
       );
       return unique
-        .filter((platform) => (METRICS_BY_PLATFORM[platform] || []).length)
+        .filter((platform) => getCatalogForPlatform(platform).length)
         .map((platform) => ({
           value: platform,
           label: PLATFORM_LABELS[platform] || platform,
@@ -866,44 +871,30 @@ export default function ReportsV2Editor() {
     };
     const preferred = buildOptions(connectedPlatforms);
     if (preferred.length) return preferred;
-    return buildOptions(Object.keys(METRICS_BY_PLATFORM));
+    return buildOptions(METRICS_CATALOG_PLATFORMS);
   }, [connectedPlatforms]);
   const metricsForActivePlatform = React.useMemo(() => {
-    const metrics = METRICS_BY_PLATFORM[activeMetricPlatform] || [];
-    return metrics
-      .map((metric) => ({
-        value: metric,
-        label: METRIC_LABELS[metric] || metric,
-      }))
-      .filter((metric) => Boolean(metric.value));
+    const catalog = getCatalogForPlatform(activeMetricPlatform);
+    if (catalog.length) return catalog;
+    return METRIC_OPTIONS.map((metric) => ({
+      value: metric.value,
+      label: metric.label,
+      queryMetric: metric.value,
+      widgetType: "kpi",
+      dimensions: [],
+      group: metric.category || "Metricas",
+    }));
   }, [activeMetricPlatform]);
   const metricGroupsForActivePlatform = React.useMemo(() => {
-    const groups = METRIC_GROUPS_BY_PLATFORM[activeMetricPlatform] || [];
-    if (!groups.length) return [];
-    const metricMap = new Map(
-      metricsForActivePlatform.map((metric) => [metric.value, metric])
-    );
-    const usedKeys = new Set();
-    const mapped = groups
-      .map((group) => {
-        const items = (group.metrics || [])
-          .map((key) => metricMap.get(key))
-          .filter(Boolean);
-        items.forEach((item) => usedKeys.add(item.value));
-        return {
-          key: group.key,
-          label: group.label,
-          metrics: items,
-        };
-      })
-      .filter((group) => group.metrics.length);
-    const leftovers = metricsForActivePlatform.filter(
-      (metric) => !usedKeys.has(metric.value)
-    );
-    if (leftovers.length) {
-      mapped.push({ key: "outros", label: "Outros", metrics: leftovers });
-    }
-    return mapped;
+    const grouped = getGroupedCatalogForPlatform(activeMetricPlatform);
+    if (grouped.length) return grouped;
+    return [
+      {
+        key: "metricas",
+        label: "Metricas",
+        metrics: metricsForActivePlatform,
+      },
+    ];
   }, [activeMetricPlatform, metricsForActivePlatform]);
   const debouncedLayoutJson = useDebouncedValue(layoutJson, 1500);
 
@@ -1449,7 +1440,7 @@ export default function ReportsV2Editor() {
   ]);
 
   const addWidgetToActivePage = React.useCallback(
-    (widget) => {
+    (widget, options = {}) => {
       if (!activePageId || !widget) return;
       commitLayoutChange((prev) => {
         const nextPages = prev.pages.map((page) => {
@@ -1462,8 +1453,12 @@ export default function ReportsV2Editor() {
         return { ...prev, pages: nextPages };
       });
       setSelectedWidgetId(widget.id);
+      if (options.scrollIntoView) {
+        setInspectorOpen(true);
+        scrollToWidgetCard(widget.id);
+      }
     },
-    [activePageId, commitLayoutChange]
+    [activePageId, commitLayoutChange, scrollToWidgetCard]
   );
 
   const handleGlobalFiltersChange = React.useCallback(
@@ -1505,9 +1500,11 @@ export default function ReportsV2Editor() {
     (event, metric) => {
       if (!metric?.value) return;
       const payload = {
-        metric: metric.value,
+        metric: metric.queryMetric || metric.value,
         label: metric.label,
         platform: activeMetricPlatform,
+        widgetType: metric.widgetType || "kpi",
+        dimensions: Array.isArray(metric.dimensions) ? metric.dimensions : [],
       };
       try {
         event.dataTransfer.setData(METRIC_DRAG_TYPE, JSON.stringify(payload));
@@ -1528,10 +1525,12 @@ export default function ReportsV2Editor() {
       if (!metric?.value) return;
       const position = getNextWidgetPosition(activeWidgets);
       const widget = buildMetricWidget({
-        metricKey: metric.value,
+        metricKey: metric.queryMetric || metric.value,
         label: metric.label,
         platform: activeMetricPlatform,
         position,
+        widgetType: metric.widgetType || "kpi",
+        dimensions: metric.dimensions || [],
       });
       addWidgetToActivePage(widget);
     },
@@ -1614,13 +1613,15 @@ export default function ReportsV2Editor() {
         label: payload.label,
         platform: payload.platform,
         position: position || fallback,
+        widgetType: payload.widgetType || "kpi",
+        dimensions: payload.dimensions || [],
       });
       addWidgetToActivePage(widget);
     },
     [activeWidgets, addWidgetToActivePage, containerRef, parseMetricPayload, width]
   );
 
-  const handleAddWidget = (type) => {
+  const handleAddWidget = (type, options = {}) => {
     if (!activePageId) return;
     const preset = WIDGET_PRESETS[type] || WIDGET_PRESETS.kpi;
     const position = getNextWidgetPosition(activeWidgets);
@@ -1650,7 +1651,7 @@ export default function ReportsV2Editor() {
           format: "auto",
           options: {},
         },
-      });
+      }, options);
       return;
     }
     addWidgetToActivePage({
@@ -1675,11 +1676,11 @@ export default function ReportsV2Editor() {
               }
             : {},
       },
-    });
+    }, options);
   };
 
   const handleAddTextWidget = () => {
-    handleAddWidget("text");
+    handleAddWidget("text", { scrollIntoView: true });
   };
 
   const handleDuplicateWidget = (widgetId) => {
@@ -2473,7 +2474,6 @@ export default function ReportsV2Editor() {
             filters={previewFilters}
             onChange={handleGlobalFiltersChange}
             shareUrl={shareUrl}
-            defaultExpanded
           />
         </div>
 
@@ -2609,7 +2609,7 @@ export default function ReportsV2Editor() {
 
             <div
               className="rounded-[16px] border border-slate-200 border-t-[3px] border-t-[#0b5ed7] bg-white p-3 shadow-[0_8px_20px_rgba(15,23,42,0.06)]"
-              style={{ minHeight: "560px" }}
+              style={{ minHeight: "420px" }}
               onMouseDown={(event) => {
                 if (event.target.closest("[data-editor-widget-card='true']")) return;
                 if (event.target.closest("[data-global-filters='true']")) return;

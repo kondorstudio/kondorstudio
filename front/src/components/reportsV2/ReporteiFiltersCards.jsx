@@ -59,8 +59,11 @@ export default function ReporteiFiltersCards({
   className = "",
   collapsible = true,
   defaultExpanded = false,
+  showAdvancedPanel = false,
 }) {
-  const [expanded, setExpanded] = React.useState(Boolean(defaultExpanded));
+  const [expanded, setExpanded] = React.useState(
+    Boolean(showAdvancedPanel && defaultExpanded)
+  );
   const preset = filters?.dateRange?.preset || "last_7_days";
 
   const handleCopyShareLink = async () => {
@@ -139,19 +142,26 @@ export default function ReporteiFiltersCards({
       {collapsible ? (
         <div className="flex items-center gap-3 py-0.5">
           <div className="h-px flex-1 bg-[#d4dee9]" />
-          <button
-            type="button"
-            onClick={() => setExpanded((prev) => !prev)}
-            className="inline-flex items-center gap-1.5 text-[22px] font-semibold text-[#6f879d] hover:text-[#45637f]"
-          >
-            <EyeOff className="h-4 w-4" />
-            {expanded ? "Esconder capa" : "Mostrar capa"}
-          </button>
+          {showAdvancedPanel ? (
+            <button
+              type="button"
+              onClick={() => setExpanded((prev) => !prev)}
+              className="inline-flex items-center gap-1.5 text-[22px] font-semibold text-[#6f879d] hover:text-[#45637f]"
+            >
+              <EyeOff className="h-4 w-4" />
+              {expanded ? "Esconder detalhes" : "Mostrar detalhes"}
+            </button>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-[22px] font-semibold text-[#6f879d]">
+              <EyeOff className="h-4 w-4" />
+              Esconder capa
+            </span>
+          )}
           <div className="h-px flex-1 bg-[#d4dee9]" />
         </div>
       ) : null}
 
-      {(!collapsible || expanded) && onChange ? (
+      {showAdvancedPanel && (!collapsible || expanded) && onChange ? (
         <div className="reportei-card grid gap-3 p-4 lg:grid-cols-4">
           <div>
             <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">

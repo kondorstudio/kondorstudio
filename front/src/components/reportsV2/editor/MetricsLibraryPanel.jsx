@@ -23,6 +23,7 @@ export default function MetricsLibraryPanel({
   mode = "panel",
 }) {
   const [tab, setTab] = React.useState("predefined");
+  const [predefinedTab, setPredefinedTab] = React.useState("network");
   const currentPlatform = platforms.find(
     (platform) => platform.value === activePlatform
   );
@@ -48,7 +49,7 @@ export default function MetricsLibraryPanel({
 
   const filteredGroups = React.useMemo(() => {
     const query = String(searchTerm || "").trim().toLowerCase();
-    const baseGroups =
+    const baseGroupsSource =
       Array.isArray(groups) && groups.length
         ? groups
         : [
@@ -58,6 +59,20 @@ export default function MetricsLibraryPanel({
               metrics,
             },
           ];
+
+    const baseGroups =
+      predefinedTab === "custom"
+        ? baseGroupsSource
+            .map((group) => ({
+              ...group,
+              metrics: (group.metrics || []).filter((metric) =>
+                /convers|lead|compra|receita|roas|cpa|cadastro/i.test(
+                  `${metric.label || ""} ${metric.value || ""}`
+                )
+              ),
+            }))
+            .filter((group) => (group.metrics || []).length)
+        : baseGroupsSource;
 
     if (!query) return baseGroups;
     return baseGroups
@@ -70,7 +85,7 @@ export default function MetricsLibraryPanel({
         return { ...group, metrics: items };
       })
       .filter((group) => group.metrics && group.metrics.length);
-  }, [groups, metrics, searchTerm]);
+  }, [groups, metrics, predefinedTab, searchTerm]);
 
   return (
     <div
@@ -152,6 +167,37 @@ export default function MetricsLibraryPanel({
         </div>
       </div>
 
+      {tab === "predefined" ? (
+        <div className="border-b border-[#d8e1ec] px-4 pb-2">
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setPredefinedTab("network")}
+              className={cn(
+                "rounded-[10px] border-b-2 px-2 py-1.5 text-[12px] font-semibold transition",
+                predefinedTab === "network"
+                  ? "border-[var(--primary)] text-[var(--primary)]"
+                  : "border-transparent text-slate-500 hover:text-slate-700"
+              )}
+            >
+              Métricas da rede
+            </button>
+            <button
+              type="button"
+              onClick={() => setPredefinedTab("custom")}
+              className={cn(
+                "rounded-[10px] border-b-2 px-2 py-1.5 text-[12px] font-semibold transition",
+                predefinedTab === "custom"
+                  ? "border-[var(--primary)] text-[var(--primary)]"
+                  : "border-transparent text-slate-500 hover:text-slate-700"
+              )}
+            >
+              Conversões personalizadas
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {tab === "custom" ? (
         <div className="px-4 pb-4">
           <div className="rounded-[12px] border border-dashed border-[var(--border)] bg-[var(--surface-muted)] px-3 py-4 text-xs text-[var(--text-muted)]">
@@ -180,9 +226,12 @@ export default function MetricsLibraryPanel({
                   >
                     <span className="flex items-center gap-2">
                       <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-slate-500">
-                        {React.createElement(metricIconByValue[metric.value] || CircleDot, {
-                          className: "h-3.5 w-3.5",
-                        })}
+                        {React.createElement(
+                          metricIconByValue[metric.queryMetric || metric.value] || CircleDot,
+                          {
+                            className: "h-3.5 w-3.5",
+                          }
+                        )}
                       </span>
                       <span className="font-semibold">{metric.label}</span>
                     </span>

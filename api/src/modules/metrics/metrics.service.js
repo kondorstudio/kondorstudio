@@ -822,24 +822,38 @@ async function executeQueryMetrics(tenantId, payload = {}) {
     }
   }
 
-  await ensureGa4FactMetrics({
-    tenantId,
-    brandId,
-    dateRange,
-    metrics,
-    dimensions,
-    filters,
-    requiredPlatforms: payload.requiredPlatforms,
-  });
+  try {
+    await ensureGa4FactMetrics({
+      tenantId,
+      brandId,
+      dateRange,
+      metrics,
+      dimensions,
+      filters,
+      requiredPlatforms: payload.requiredPlatforms,
+    });
+  } catch (err) {
+    if (process.env.NODE_ENV !== 'test') {
+      // eslint-disable-next-line no-console
+      console.warn('[metrics.service] ensureGa4FactMetrics warning', err?.message || err);
+    }
+  }
 
-  await ensureFactMetrics({
-    tenantId,
-    brandId,
-    dateRange,
-    metrics: Array.from(plan.baseMetrics || []),
-    filters,
-    requiredPlatforms: payload.requiredPlatforms,
-  });
+  try {
+    await ensureFactMetrics({
+      tenantId,
+      brandId,
+      dateRange,
+      metrics: Array.from(plan.baseMetrics || []),
+      filters,
+      requiredPlatforms: payload.requiredPlatforms,
+    });
+  } catch (err) {
+    if (process.env.NODE_ENV !== 'test') {
+      // eslint-disable-next-line no-console
+      console.warn('[metrics.service] ensureFactMetrics warning', err?.message || err);
+    }
+  }
 
   const baseResult = await runAggregates({
     tenantId,

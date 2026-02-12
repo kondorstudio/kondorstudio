@@ -703,7 +703,6 @@ export default function ReportsV2Viewer() {
           filters={filters}
           onChange={setFilters}
           shareUrl={shareUrl}
-          defaultExpanded
         />
 
         <div className="mt-6">

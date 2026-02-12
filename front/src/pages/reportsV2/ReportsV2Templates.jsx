@@ -119,8 +119,6 @@ export default function ReportsV2Templates() {
   const [templatesSearch, setTemplatesSearch] = React.useState("");
   const [previewTemplate, setPreviewTemplate] = React.useState(null);
   const [previewFilters, setPreviewFilters] = React.useState(buildInitialFilters(null));
-  const [createdDashboardId, setCreatedDashboardId] = React.useState(null);
-  const [showCreatedDialog, setShowCreatedDialog] = React.useState(false);
 
   const { data: templatesData, isLoading, error } = useQuery({
     queryKey: ["reportsV2-templates"],
@@ -193,9 +191,8 @@ export default function ReportsV2Templates() {
         return;
       }
       setSelectedTemplateId(template.id);
-      showToast("Template selecionado.", "success");
     },
-    [selectedTemplateId, showToast]
+    [selectedTemplateId]
   );
 
   const renderTemplateCard = (template) => {
@@ -252,10 +249,7 @@ export default function ReportsV2Templates() {
               type="button"
               onClick={(event) => {
                 event.stopPropagation();
-                if (selected) {
-                  handleContinue();
-                  return;
-                }
+                if (selected) return;
                 handleSelectTemplate(template);
               }}
               leftIcon={selected ? CheckCircle2 : PlusCircle}
@@ -269,7 +263,7 @@ export default function ReportsV2Templates() {
                 type="button"
                 onClick={(event) => {
                   event.stopPropagation();
-                  handleContinue();
+                  handleContinue(template.id);
                 }}
                 disabled={!brandId || instantiate.isPending}
               >
@@ -295,10 +289,10 @@ export default function ReportsV2Templates() {
       }),
     onSuccess: (data) => {
       if (data?.dashboardId) {
-        setCreatedDashboardId(data.dashboardId);
-        setShowCreatedDialog(true);
+        navigate(`/relatorios/v2/${data.dashboardId}/edit`);
         setPreviewTemplate(null);
         setNameOverride("");
+        showToast("Dashboard criado com sucesso.", "success");
       }
     },
     onError: (error) => {
@@ -310,8 +304,9 @@ export default function ReportsV2Templates() {
     },
   });
 
-  const handleContinue = React.useCallback(() => {
-    if (!selectedTemplate) {
+  const handleContinue = React.useCallback((forcedTemplateId) => {
+    const templateId = forcedTemplateId || selectedTemplate?.id;
+    if (!templateId) {
       showToast("Selecione um template para continuar.", "info");
       return;
     }
@@ -319,8 +314,8 @@ export default function ReportsV2Templates() {
       showToast("Selecione uma marca antes de continuar.", "info");
       return;
     }
-    instantiate.mutate({ templateId: selectedTemplate.id });
-  }, [brandId, instantiate, selectedTemplate, showToast]);
+    instantiate.mutate({ templateId });
+  }, [brandId, instantiate, selectedTemplate?.id, showToast]);
 
   return (
     <div className="reportei-theme min-h-screen bg-[var(--surface-muted)]">
@@ -481,43 +476,6 @@ export default function ReportsV2Templates() {
                 {instantiate.isPending ? "Criando..." : "Criar em 1 clique"}
               </Button>
             ) : null}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={showCreatedDialog} onOpenChange={setShowCreatedDialog}>
-        <DialogContent className="max-w-[520px]">
-          <DialogHeader>
-            <DialogTitle>Dashboard criado</DialogTitle>
-            <DialogDescription>
-              Deseja abrir no viewer ou no editor?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="secondary" onClick={() => setShowCreatedDialog(false)}>
-              Fechar
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setShowCreatedDialog(false);
-                if (createdDashboardId) {
-                  navigate(`/relatorios/v2/${createdDashboardId}`);
-                }
-              }}
-            >
-              Abrir viewer
-            </Button>
-            <Button
-              onClick={() => {
-                setShowCreatedDialog(false);
-                if (createdDashboardId) {
-                  navigate(`/relatorios/v2/${createdDashboardId}/edit`);
-                }
-              }}
-            >
-              Abrir editor
-            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
