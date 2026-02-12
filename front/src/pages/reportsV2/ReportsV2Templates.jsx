@@ -1,7 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Sparkles, PlusCircle, Eye, Star } from "lucide-react";
+import { Sparkles, PlusCircle, Eye, CheckCircle2 } from "lucide-react";
 import { Card, CardContent, CardFooter } from "@/components/ui/card.jsx";
 import { Button } from "@/components/ui/button.jsx";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select.jsx";
@@ -34,13 +34,8 @@ const ADS_METRICS = new Set([
   "roas",
 ]);
 const GA4_METRICS = new Set(["sessions", "leads"]);
-const ADS_PLATFORMS = [
-  "META_ADS",
-  "GOOGLE_ADS",
-  "TIKTOK_ADS",
-  "LINKEDIN_ADS",
-  "FB_IG",
-];
+
+const CATEGORY_ORDER = ["Ads", "Executive", "GA4", "Google Ads"];
 
 const PLATFORM_LABELS = {
   META_ADS: "Meta Ads",
@@ -137,13 +132,7 @@ export default function ReportsV2Templates() {
     queryFn: () => base44.entities.Clients.list(),
   });
 
-  const { data: connectionsData } = useQuery({
-    queryKey: ["reportsV2-connections", brandId],
-    queryFn: () => base44.reportsV2.listConnections({ brandId }),
-    enabled: Boolean(brandId),
-  });
   const templates = templatesData?.items || [];
-  const connections = connectionsData?.items || [];
 
   React.useEffect(() => {
     if (brandId || !clients.length) return;
@@ -166,35 +155,6 @@ export default function ReportsV2Templates() {
   React.useEffect(() => {
     setPreviewFilters(buildInitialFilters(previewTemplate?.layoutJson));
   }, [previewTemplate]);
-  const activePlatforms = React.useMemo(() => {
-    const set = new Set();
-    connections.forEach((conn) => {
-      if (conn.status === "ACTIVE") {
-        set.add(conn.platform);
-      }
-    });
-    return set;
-  }, [connections]);
-
-  const recommendedTemplates = React.useMemo(() => {
-    if (!templates.length) return [];
-    return templates.filter((template) => {
-      const { requiredPlatforms, requiresAds } = deriveTemplateRequirements(template);
-      let ok = true;
-      if (requiredPlatforms.length) {
-        ok = requiredPlatforms.every((platform) => activePlatforms.has(platform));
-      }
-      if (requiresAds) {
-        ok = ok && ADS_PLATFORMS.some((platform) => activePlatforms.has(platform));
-      }
-      return ok;
-    });
-  }, [templates, activePlatforms]);
-
-  const recommendedIds = React.useMemo(
-    () => new Set(recommendedTemplates.map((template) => template.id)),
-    [recommendedTemplates]
-  );
 
   const searchTerm = String(templatesSearch || "").trim().toLowerCase();
   const visibleTemplates = React.useMemo(() => {
@@ -214,24 +174,39 @@ export default function ReportsV2Templates() {
       list.push(template);
       grouped.set(category, list);
     });
-    return Array.from(grouped.entries());
+    const rank = new Map(CATEGORY_ORDER.map((item, index) => [item, index]));
+    return Array.from(grouped.entries()).sort(([a], [b]) => {
+      const aRank = rank.has(a) ? rank.get(a) : CATEGORY_ORDER.length + 1;
+      const bRank = rank.has(b) ? rank.get(b) : CATEGORY_ORDER.length + 1;
+      if (aRank !== bRank) return aRank - bRank;
+      return String(a).localeCompare(String(b), "pt-BR");
+    });
   }, [visibleTemplates]);
-
-  const visibleRecommendedTemplates = React.useMemo(() => {
-    if (!searchTerm) return recommendedTemplates;
-    return recommendedTemplates.filter((template) =>
-      visibleTemplates.some((item) => item.id === template.id)
-    );
-  }, [recommendedTemplates, searchTerm, visibleTemplates]);
 
   const selectedTemplate = React.useMemo(
     () => templates.find((template) => template.id === selectedTemplateId) || null,
     [selectedTemplateId, templates]
   );
+  const selectedBrandName = React.useMemo(() => {
+    if (!brandId) return "";
+    return clients.find((client) => client.id === brandId)?.name || "";
+  }, [brandId, clients]);
+
+  const handleSelectTemplate = React.useCallback(
+    (template) => {
+      if (!template?.id) return;
+      if (template.id === selectedTemplateId) {
+        showToast("Template já selecionado.", "info");
+        return;
+      }
+      setSelectedTemplateId(template.id);
+      showToast("Template selecionado. Clique em Continuar para criar.", "success");
+    },
+    [selectedTemplateId, showToast]
+  );
 
   const renderTemplateCard = (template) => {
     const { requiredPlatforms, requiresAds } = deriveTemplateRequirements(template);
-    const isRecommended = recommendedIds.has(template.id);
     const requiredLabel = formatPlatformList(requiredPlatforms);
     const adsLabel = requiresAds ? " + Ads" : "";
     const selected = template.id === selectedTemplateId;
@@ -240,30 +215,22 @@ export default function ReportsV2Templates() {
       <Card
         key={template.id}
         className={cn(
-          "flex h-full cursor-pointer flex-col transition-shadow hover:shadow-[0_12px_24px_rgba(15,23,42,0.1)]",
-          selected && "ring-2 ring-[var(--primary)] ring-offset-2 ring-offset-white"
+          "flex h-full cursor-pointer flex-col overflow-hidden transition-shadow hover:shadow-[0_12px_24px_rgba(15,23,42,0.1)]",
+          selected && "border-[var(--primary)] ring-1 ring-[var(--primary)]"
         )}
-        onClick={() => setSelectedTemplateId(template.id)}
+        onClick={() => handleSelectTemplate(template)}
       >
         <CardContent className="flex flex-1 flex-col gap-3">
           <div className="flex items-center justify-between">
             <div className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-[var(--primary-light)] text-[var(--primary)]">
               <Sparkles className="h-5 w-5" />
             </div>
-            <div className="flex items-center gap-2">
-              {isRecommended ? (
-                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase text-emerald-700">
-                  <Star className="h-3.5 w-3.5" />
-                  Recomendado
-                </span>
-              ) : null}
-              <span className="rounded-full border border-[var(--border)] px-3 py-1 text-[11px] font-semibold uppercase text-[var(--text-muted)]">
-                {template.category}
-              </span>
-            </div>
+            <span className="rounded-full border border-[var(--border)] bg-white px-3 py-1 text-[11px] font-semibold uppercase text-[var(--text-muted)]">
+              {template.category}
+            </span>
           </div>
           <div>
-            <p className="text-base font-semibold text-[var(--text)]">
+            <p className="text-[30px] font-semibold leading-tight text-[var(--text)]">
               {template.name}
             </p>
             <p className="mt-1 text-sm text-[var(--text-muted)]">
@@ -273,36 +240,37 @@ export default function ReportsV2Templates() {
             </p>
           </div>
         </CardContent>
-        <CardFooter className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="secondary"
+        <CardFooter className="min-h-[64px] border-t border-[var(--border)] bg-[#fbfdff] py-3">
+          <div className="flex flex-wrap items-center gap-4">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 text-sm text-[var(--text)] hover:text-[var(--primary)]"
               onClick={(event) => {
                 event.stopPropagation();
                 setPreviewTemplate(template);
               }}
-              leftIcon={Eye}
             >
+              <Eye className="h-3.5 w-3.5" />
               Preview
-            </Button>
+            </button>
             <Button
               size="sm"
               variant={selected ? "default" : "secondary"}
+              type="button"
               onClick={(event) => {
                 event.stopPropagation();
-                setSelectedTemplateId(template.id);
+                handleSelectTemplate(template);
               }}
-              leftIcon={PlusCircle}
+              leftIcon={selected ? CheckCircle2 : PlusCircle}
             >
               {selected ? "Selecionado" : "Selecionar"}
             </Button>
+            {selected ? (
+              <span className="text-xs text-[var(--text-muted)]">
+                {brandId ? `Marca: ${selectedBrandName}` : "Selecione uma marca"}
+              </span>
+            ) : null}
           </div>
-          {!brandId && selected ? (
-            <span className="text-xs text-[var(--text-muted)]">
-              Selecione uma marca
-            </span>
-          ) : null}
         </CardFooter>
       </Card>
     );
@@ -331,6 +299,18 @@ export default function ReportsV2Templates() {
     },
   });
 
+  const handleContinue = React.useCallback(() => {
+    if (!selectedTemplate) {
+      showToast("Selecione um template para continuar.", "info");
+      return;
+    }
+    if (!brandId) {
+      showToast("Selecione uma marca antes de continuar.", "info");
+      return;
+    }
+    instantiate.mutate({ templateId: selectedTemplate.id });
+  }, [brandId, instantiate, selectedTemplate, showToast]);
+
   return (
     <div className="reportei-theme min-h-screen bg-[var(--surface-muted)]">
       <ReporteiTopbar />
@@ -349,153 +329,112 @@ export default function ReportsV2Templates() {
               Nova dashboard
             </p>
           </div>
-          <span className="hidden rounded-full border border-[#d1dae6] bg-white px-3 py-1 text-xs font-semibold text-[var(--text-muted)] md:inline-flex">
+          <span className="hidden text-xs font-semibold text-[var(--text-muted)] md:inline-flex">
             Passo 1 de 2
           </span>
         </div>
       </div>
 
       <div className="mx-auto w-full max-w-[1760px] px-4 py-5 lg:px-6">
-        <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
-          <aside className="h-fit px-4 py-2">
-            <span className="inline-flex h-14 w-14 items-center justify-center rounded-full border-4 border-emerald-500 bg-white text-lg font-bold text-[var(--primary)]">
-              1/2
-            </span>
-            <h2 className="mt-4 text-[30px] font-extrabold leading-tight text-[var(--primary)] lg:text-[42px]">
-              Templates
-            </h2>
-            <p className="mt-2 text-[16px] leading-tight text-[var(--text-muted)] lg:text-[24px]">
-              Escolha um template para iniciar a dashboard com estrutura pronta.
-            </p>
-          </aside>
-
-          <main className="space-y-5">
-            <div className="reportei-card p-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
-                    Marca
-                  </label>
-                  <Select value={brandId} onValueChange={setBrandId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione a marca" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {clients.map((client) => (
-                        <SelectItem key={client.id} value={client.id}>
-                          {client.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
-                    Nome do dashboard (opcional)
-                  </label>
-                  <Input
-                    placeholder="Ex: Ads Overview - Janeiro"
-                    value={nameOverride}
-                    onChange={(event) => setNameOverride(event.target.value)}
-                  />
-                </div>
-              </div>
+        <div className="reportei-card p-4 md:p-5">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-2xl font-semibold text-[var(--primary)]">Templates</p>
+              <p className="text-sm text-[var(--text-muted)]">
+                Selecione o modelo que você quer usar.
+              </p>
             </div>
+            <Button
+              variant="secondary"
+              type="button"
+              onClick={() => showToast("Gerenciamento de templates em breve.", "info")}
+            >
+              Gerenciar templates
+            </Button>
+          </div>
 
-            <div className="reportei-card p-4">
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-2xl font-semibold text-[var(--primary)]">
-                    Templates
-                  </p>
-                  <p className="text-sm text-[var(--text-muted)]">
-                    Selecione o modelo que você quer usar.
-                  </p>
-                </div>
-                <Button variant="secondary">Gerenciar templates</Button>
+          <div className="grid gap-3 md:grid-cols-[1fr_260px]">
+            <Input
+              placeholder="Buscar template..."
+              value={templatesSearch}
+              onChange={(event) => setTemplatesSearch(event.target.value)}
+            />
+            <Select value={brandId} onValueChange={setBrandId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione a marca" />
+              </SelectTrigger>
+              <SelectContent>
+                {clients.map((client) => (
+                  <SelectItem key={client.id} value={client.id}>
+                    {client.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="mt-3">
+            <Input
+              placeholder="Nome do dashboard (opcional)"
+              value={nameOverride}
+              onChange={(event) => setNameOverride(event.target.value)}
+            />
+          </div>
+
+          <div className="mt-6 space-y-8">
+            {isLoading ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <Card key={`skeleton-${index}`}>
+                    <CardContent className="space-y-3">
+                      <div className="h-4 w-32 rounded-full kondor-shimmer" />
+                      <div className="h-3 w-40 rounded-full kondor-shimmer" />
+                      <div className="h-16 w-full rounded-[12px] kondor-shimmer" />
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
-
-              <Input
-                placeholder="Buscar template..."
-                value={templatesSearch}
-                onChange={(event) => setTemplatesSearch(event.target.value)}
-              />
-
-              <div className="mt-5 space-y-8">
-                {isLoading ? (
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    {Array.from({ length: 4 }).map((_, index) => (
-                      <Card key={`skeleton-${index}`}>
-                        <CardContent className="space-y-3">
-                          <div className="h-4 w-32 rounded-full kondor-shimmer" />
-                          <div className="h-3 w-40 rounded-full kondor-shimmer" />
-                          <div className="h-16 w-full rounded-[12px] kondor-shimmer" />
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                ) : error ? (
-                  <div className="rounded-[16px] border border-rose-200 bg-rose-50 px-6 py-4 text-sm text-rose-700">
-                    Falha ao carregar templates.
-                  </div>
-                ) : visibleTemplates.length ? (
-                  <>
-                    {visibleRecommendedTemplates.length ? (
-                      <section>
-                        <div className="mb-3">
-                          <p className="text-sm font-semibold text-[var(--text)]">
-                            Recomendados
-                          </p>
-                          <p className="text-xs text-[var(--text-muted)]">
-                            Baseado nas conexões ativas desta marca.
-                          </p>
-                        </div>
-                        <div className="grid gap-4 sm:grid-cols-2">
-                          {visibleRecommendedTemplates.map(renderTemplateCard)}
-                        </div>
-                      </section>
-                    ) : null}
-
-                    {templatesByCategory.map(([category, items]) => (
-                      <section key={category}>
-                        <div className="mb-3">
-                          <p className="text-sm font-semibold text-[var(--text)]">
-                            {category}
-                          </p>
-                          <p className="text-xs text-[var(--text-muted)]">
-                            Templates organizados por categoria.
-                          </p>
-                        </div>
-                        <div className="grid gap-4 sm:grid-cols-2">
-                          {items.map(renderTemplateCard)}
-                        </div>
-                      </section>
-                    ))}
-                  </>
-                ) : (
-                  <div className="rounded-[16px] border border-[var(--border)] bg-white px-6 py-6 text-sm text-[var(--text-muted)]">
-                    Nenhum template disponível para esta busca.
-                  </div>
-                )}
+            ) : error ? (
+              <div className="rounded-[16px] border border-rose-200 bg-rose-50 px-6 py-4 text-sm text-rose-700">
+                Falha ao carregar templates.
               </div>
-
-              <div className="mt-6 flex items-center justify-between gap-3">
-                <Button variant="secondary" onClick={() => navigate("/relatorios/v2")}>
-                  Voltar
-                </Button>
-                <Button
-                  onClick={() =>
-                    selectedTemplate
-                      ? instantiate.mutate({ templateId: selectedTemplate.id })
-                      : null
-                  }
-                  disabled={!brandId || !selectedTemplate || instantiate.isPending}
-                >
-                  {instantiate.isPending ? "Criando..." : "Continuar"}
-                </Button>
+            ) : visibleTemplates.length ? (
+              <>
+                {templatesByCategory.map(([category, items]) => (
+                  <section key={category}>
+                    <div className="mb-3">
+                      <p className="text-sm font-semibold text-[var(--text)]">
+                        {category}
+                      </p>
+                      <p className="text-xs text-[var(--text-muted)]">
+                        Templates organizados por categoria.
+                      </p>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      {items.map(renderTemplateCard)}
+                    </div>
+                  </section>
+                ))}
+              </>
+            ) : (
+              <div className="rounded-[16px] border border-[var(--border)] bg-white px-6 py-6 text-sm text-[var(--text-muted)]">
+                Nenhum template disponível para esta busca.
               </div>
-            </div>
-          </main>
+            )}
+          </div>
+
+          <div className="mt-6 flex items-center justify-between gap-3">
+            <Button variant="secondary" type="button" onClick={() => navigate("/relatorios/v2")}>
+              Voltar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleContinue}
+              disabled={!brandId || !selectedTemplate || instantiate.isPending}
+            >
+              {instantiate.isPending ? "Criando..." : "Continuar"}
+            </Button>
+          </div>
         </div>
       </div>
 
