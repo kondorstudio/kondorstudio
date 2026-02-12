@@ -107,9 +107,42 @@ function useTenant(tenantId) {
     wrapper.upsert = async (args = {}) => {
       if (!tenantId) return model.upsert(args);
       const where = args.where || {};
-      const scoped = addWhereTenant({ where }, tenantId).where;
-      const existing = await model.findFirst({ where: scoped });
+
+      let existing = null;
+      let resolvedByUniqueLookup = false;
+
+      // Prefer findUnique whenever the caller passes a unique selector
+      // (id/compound unique). This avoids Prisma validation errors on findFirst.
+      if (
+        where &&
+        typeof where === 'object' &&
+        !Array.isArray(where) &&
+        !where.OR &&
+        !where.AND &&
+        !where.NOT
+      ) {
+        try {
+          existing = await model.findUnique({ where });
+          resolvedByUniqueLookup = true;
+        } catch (_err) {
+          resolvedByUniqueLookup = false;
+        }
+      }
+
+      // Legacy fallback for non-unique where selectors
+      if (!resolvedByUniqueLookup) {
+        const scoped = addWhereTenant({ where }, tenantId).where;
+        existing = await model.findFirst({ where: scoped });
+      }
+
       if (existing) {
+        if (
+          Object.prototype.hasOwnProperty.call(existing, 'tenantId') &&
+          existing.tenantId &&
+          String(existing.tenantId) !== String(tenantId)
+        ) {
+          throw notFoundError();
+        }
         return model.update({
           where: args.where,
           data: args.update,
