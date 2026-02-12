@@ -2,9 +2,14 @@ const { prisma } = require('../prisma');
 const ga4OAuthService = require('./ga4OAuthService');
 const ga4MetadataService = require('./ga4MetadataService');
 const ga4QuotaCache = require('./ga4QuotaCacheService');
+const { fetchWithTimeout, isTimeoutError } = require('../lib/fetchWithTimeout');
 
 const DATA_API_BASE =
   process.env.GA4_DATA_API_BASE_URL || 'https://analyticsdata.googleapis.com/v1beta';
+const GA4_HTTP_TIMEOUT_MS = Math.max(
+  1_000,
+  Number(process.env.GA4_HTTP_TIMEOUT_MS || process.env.FETCH_TIMEOUT_MS || 20_000),
+);
 
 const MAX_METRICS = Number(process.env.GA4_MAX_METRICS || 10);
 const MAX_DIMENSIONS = Number(process.env.GA4_MAX_DIMENSIONS || 10);
@@ -93,6 +98,19 @@ function mapError(res, payload) {
     reason,
     violations,
     status: payload?.error?.status || null,
+  };
+  return err;
+}
+
+function mapTimeoutError(error, { endpoint, propertyId }) {
+  if (!isTimeoutError(error)) return error;
+  const err = new Error('Tempo limite ao consultar dados do GA4');
+  err.status = 504;
+  err.code = 'GA4_DATA_TIMEOUT';
+  err.details = {
+    endpoint,
+    propertyId: propertyId ? String(propertyId) : null,
+    timeoutMs: error?.timeoutMs || GA4_HTTP_TIMEOUT_MS,
   };
   return err;
 }
@@ -339,14 +357,26 @@ async function runReport({
     if (normalized.orderBys) body.orderBys = normalized.orderBys;
     if (normalized.limit) body.limit = normalized.limit;
 
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
+    let res;
+    try {
+      res = await fetchWithTimeout(
+        url,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(body),
+        },
+        GA4_HTTP_TIMEOUT_MS,
+      );
+    } catch (error) {
+      throw mapTimeoutError(error, {
+        endpoint: 'runReport',
+        propertyId,
+      });
+    }
 
     const json = await res.json().catch(() => ({}));
     if (!res.ok) throw mapError(res, json);
@@ -454,14 +484,26 @@ async function checkCompatibility({
       body.compatibilityFilter = normalized.compatibilityFilter;
     }
 
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
+    let res;
+    try {
+      res = await fetchWithTimeout(
+        url,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(body),
+        },
+        GA4_HTTP_TIMEOUT_MS,
+      );
+    } catch (error) {
+      throw mapTimeoutError(error, {
+        endpoint: 'checkCompatibility',
+        propertyId,
+      });
+    }
 
     const json = await res.json().catch(() => ({}));
     if (!res.ok) throw mapError(res, json);

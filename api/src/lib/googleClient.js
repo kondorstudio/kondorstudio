@@ -1,6 +1,11 @@
 const { google } = require('googleapis');
+const { fetchWithTimeout, isTimeoutError } = require('./fetchWithTimeout');
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
+const OAUTH_TIMEOUT_MS = Math.max(
+  1_000,
+  Number(process.env.GA4_OAUTH_TIMEOUT_MS || process.env.FETCH_TIMEOUT_MS || 15_000),
+);
 const REQUIRED_SCOPES = [
   'openid',
   'https://www.googleapis.com/auth/userinfo.email',
@@ -127,11 +132,29 @@ async function refreshAccessToken(refreshToken) {
     grant_type: 'refresh_token',
   });
 
-  const res = await fetch(TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
-  });
+  let res;
+  try {
+    res = await fetchWithTimeout(
+      TOKEN_URL,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+      },
+      OAUTH_TIMEOUT_MS,
+    );
+  } catch (error) {
+    if (isTimeoutError(error)) {
+      const err = new Error('OAuth refresh timeout');
+      err.status = 504;
+      err.code = 'GA4_OAUTH_TIMEOUT';
+      err.data = {
+        timeoutMs: error?.timeoutMs || OAUTH_TIMEOUT_MS,
+      };
+      throw err;
+    }
+    throw error;
+  }
 
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {

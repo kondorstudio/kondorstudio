@@ -66,6 +66,14 @@ const METRICS_QUERY_CONCURRENCY_LIMIT = Math.max(
   1,
   Number(process.env.METRICS_QUERY_CONCURRENCY_LIMIT || 4),
 );
+const METRICS_FACT_SYNC_TIMEOUT_MS = Math.max(
+  1_000,
+  Number(process.env.METRICS_FACT_SYNC_TIMEOUT_MS || 20_000),
+);
+const METRICS_QUERY_EXEC_TIMEOUT_MS = Math.max(
+  1_000,
+  Number(process.env.METRICS_QUERY_EXEC_TIMEOUT_MS || 45_000),
+);
 
 const metricsQueryCache = new Map();
 const metricsQueryInFlight = new Map();
@@ -279,6 +287,34 @@ function withDashboardConcurrency(dashboardKey, task) {
     }
     bucket.queue.push(runTask);
   });
+}
+
+async function withTimeout(task, timeoutMs, {
+  code = 'TIMEOUT',
+  message = 'Tempo limite excedido',
+  details = null,
+} = {}) {
+  const effectiveTimeout = Math.max(1, Number(timeoutMs) || 1);
+  let timeoutHandle;
+  try {
+    return await Promise.race([
+      Promise.resolve().then(() => task()),
+      new Promise((_, reject) => {
+        timeoutHandle = setTimeout(() => {
+          const err = new Error(message);
+          err.status = 504;
+          err.code = code;
+          err.details = {
+            ...(details || {}),
+            timeoutMs: effectiveTimeout,
+          };
+          reject(err);
+        }, effectiveTimeout);
+      }),
+    ]);
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+  }
 }
 
 function toNumber(value) {
@@ -823,15 +859,23 @@ async function executeQueryMetrics(tenantId, payload = {}) {
   }
 
   try {
-    await ensureGa4FactMetrics({
-      tenantId,
-      brandId,
-      dateRange,
-      metrics,
-      dimensions,
-      filters,
-      requiredPlatforms: payload.requiredPlatforms,
-    });
+    await withTimeout(
+      () =>
+        ensureGa4FactMetrics({
+          tenantId,
+          brandId,
+          dateRange,
+          metrics,
+          dimensions,
+          filters,
+          requiredPlatforms: payload.requiredPlatforms,
+        }),
+      METRICS_FACT_SYNC_TIMEOUT_MS,
+      {
+        code: 'GA4_FACT_SYNC_TIMEOUT',
+        message: 'Tempo limite ao sincronizar métricas GA4',
+      },
+    );
   } catch (err) {
     if (process.env.NODE_ENV !== 'test') {
       // eslint-disable-next-line no-console
@@ -840,14 +884,22 @@ async function executeQueryMetrics(tenantId, payload = {}) {
   }
 
   try {
-    await ensureFactMetrics({
-      tenantId,
-      brandId,
-      dateRange,
-      metrics: Array.from(plan.baseMetrics || []),
-      filters,
-      requiredPlatforms: payload.requiredPlatforms,
-    });
+    await withTimeout(
+      () =>
+        ensureFactMetrics({
+          tenantId,
+          brandId,
+          dateRange,
+          metrics: Array.from(plan.baseMetrics || []),
+          filters,
+          requiredPlatforms: payload.requiredPlatforms,
+        }),
+      METRICS_FACT_SYNC_TIMEOUT_MS,
+      {
+        code: 'FACT_SYNC_TIMEOUT',
+        message: 'Tempo limite ao sincronizar métricas das integrações',
+      },
+    );
   } catch (err) {
     if (process.env.NODE_ENV !== 'test') {
       // eslint-disable-next-line no-console
@@ -961,7 +1013,15 @@ async function queryMetrics(tenantId, payload = {}) {
 
   const execution = withDashboardConcurrency(
     dashboardKey,
-    () => executeQueryMetrics(tenantId, payload),
+    () =>
+      withTimeout(
+        () => executeQueryMetrics(tenantId, payload),
+        METRICS_QUERY_EXEC_TIMEOUT_MS,
+        {
+          code: 'METRICS_QUERY_TIMEOUT',
+          message: 'Tempo limite ao consultar métricas',
+        },
+      ),
   );
 
   if (!cacheKey) {

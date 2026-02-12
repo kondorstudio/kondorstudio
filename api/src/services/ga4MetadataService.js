@@ -1,8 +1,13 @@
 const ga4OAuthService = require('./ga4OAuthService');
 const ga4QuotaCache = require('./ga4QuotaCacheService');
+const { fetchWithTimeout, isTimeoutError } = require('../lib/fetchWithTimeout');
 
 const DATA_API_BASE =
   process.env.GA4_DATA_API_BASE_URL || 'https://analyticsdata.googleapis.com/v1beta';
+const GA4_METADATA_TIMEOUT_MS = Math.max(
+  1_000,
+  Number(process.env.GA4_METADATA_TIMEOUT_MS || process.env.GA4_HTTP_TIMEOUT_MS || 20_000),
+);
 
 function mapError(res, payload) {
   const message =
@@ -79,10 +84,29 @@ async function fetchMetadata(accessToken, propertyId) {
     propertyId
   )}/metadata`;
 
-  const res = await fetch(url, {
-    method: 'GET',
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  let res;
+  try {
+    res = await fetchWithTimeout(
+      url,
+      {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+      GA4_METADATA_TIMEOUT_MS,
+    );
+  } catch (error) {
+    if (isTimeoutError(error)) {
+      const err = new Error('Tempo limite ao consultar metadados do GA4');
+      err.status = 504;
+      err.code = 'GA4_METADATA_TIMEOUT';
+      err.details = {
+        propertyId: propertyId ? String(propertyId) : null,
+        timeoutMs: error?.timeoutMs || GA4_METADATA_TIMEOUT_MS,
+      };
+      throw err;
+    }
+    throw error;
+  }
 
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw mapError(res, json);
