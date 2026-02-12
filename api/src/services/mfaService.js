@@ -7,6 +7,8 @@ const MAX_ATTEMPTS = Number(process.env.MFA_MAX_ATTEMPTS || 5);
 const ADMIN_MFA_ENABLED = process.env.ADMIN_MFA_ENABLED !== 'false';
 const ALWAYS_MFA_ROLES = new Set(['SUPER_ADMIN', 'ADMIN']);
 const ADMIN_ROLE_SET = new Set(['SUPPORT', 'FINANCE', 'TECH']);
+const MFA_FAIL_OPEN_WHEN_EMAIL_UNAVAILABLE =
+  process.env.MFA_FAIL_OPEN_WHEN_EMAIL_UNAVAILABLE !== 'false';
 
 function generateCode() {
   return String(Math.floor(100000 + Math.random() * 900000));
@@ -25,11 +27,32 @@ function normalizeRole(role) {
 function shouldRequireMfa(user) {
   if (!user) return false;
   const role = normalizeRole(user.role);
-  if (ALWAYS_MFA_ROLES.has(role)) return true;
-  if (!ADMIN_MFA_ENABLED) return false;
-  if (ADMIN_ROLE_SET.has(role)) return true;
-  if (user.mfaEnabled) return true;
-  return false;
+  let requiresMfa = false;
+
+  if (ALWAYS_MFA_ROLES.has(role)) {
+    requiresMfa = true;
+  } else if (ADMIN_MFA_ENABLED && ADMIN_ROLE_SET.has(role)) {
+    requiresMfa = true;
+  } else if (user.mfaEnabled) {
+    requiresMfa = true;
+  }
+
+  if (requiresMfa && !emailService.isConfigured()) {
+    if (MFA_FAIL_OPEN_WHEN_EMAIL_UNAVAILABLE) {
+      if (process.env.NODE_ENV !== 'test') {
+        console.warn(
+          '[mfaService] MFA exigido, mas provedor de email indisponível. Liberando login sem MFA (fail-open).',
+          {
+            userId: user.id,
+            role,
+          },
+        );
+      }
+      return false;
+    }
+  }
+
+  return requiresMfa;
 }
 
 async function createChallenge(user, { purpose = 'admin_login', ip = null, userAgent = null } = {}) {
