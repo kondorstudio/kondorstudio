@@ -285,4 +285,70 @@ module.exports = {
         .json({ error: error.message || 'Failed to run GA4 report' });
     }
   },
+
+  async runRealtimeReport(req, res) {
+    try {
+      const tenantId = req.tenantId;
+      const userId = req.user.id;
+      const payload = req.body || {};
+      const resolvedPropertyId = await resolvePropertyId({
+        tenantId,
+        userId,
+        propertyId: payload.propertyId,
+      });
+
+      if (!resolvedPropertyId) {
+        return res.status(400).json({ error: 'propertyId missing' });
+      }
+
+      const rateKey = [tenantId, userId, resolvedPropertyId].join(':');
+      const response = await ga4DataService.runRealtimeReport({
+        tenantId,
+        userId,
+        propertyId: resolvedPropertyId,
+        payload,
+        rateKey,
+      });
+      return res.json(response);
+    } catch (error) {
+      console.error('runRealtimeReport error:', error);
+      if (respondReauth(res, error)) return;
+      return res
+        .status(error.status || 500)
+        .json({ error: error.message || 'Failed to run GA4 realtime report' });
+    }
+  },
+
+  async batchRunReports(req, res) {
+    try {
+      const tenantId = req.tenantId;
+      const userId = req.user.id;
+      const payload = req.body || {};
+      const resolvedPropertyId = await resolvePropertyId({
+        tenantId,
+        userId,
+        propertyId: payload.propertyId,
+      });
+
+      if (!resolvedPropertyId) {
+        return res.status(400).json({ error: 'propertyId missing' });
+      }
+
+      const rateKey = [tenantId, userId, resolvedPropertyId].join(':');
+      const response = await ga4DataService.batchRunReports({
+        tenantId,
+        userId,
+        propertyId: resolvedPropertyId,
+        payload,
+        rateKey,
+      });
+      return res.json(response);
+    } catch (error) {
+      console.error('batchRunReports error:', error);
+      if (respondReauth(res, error)) return;
+      return res
+        .status(error.status || 500)
+        .json({ error: error.message || 'Failed to run GA4 batch reports' });
+    }
+  },
 };

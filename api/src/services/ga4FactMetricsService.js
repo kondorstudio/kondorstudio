@@ -56,6 +56,36 @@ function normalizeGa4Date(value) {
   return raw || null;
 }
 
+function normalizeDateKey(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString().slice(0, 10);
+}
+
+function rangeTouchesToday(dateRange) {
+  const start = normalizeDateKey(dateRange?.start);
+  const end = normalizeDateKey(dateRange?.end);
+  if (!start || !end) return false;
+  const today = new Date().toISOString().slice(0, 10);
+  return start <= today && end >= today;
+}
+
+function dateOnlyUtc(value) {
+  const key = normalizeDateKey(value);
+  if (!key) return null;
+  const d = new Date(`${key}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return null;
+  return d;
+}
+
+function isFullFactSync(metrics = []) {
+  const set = new Set((metrics || []).map((m) => String(m || '').trim().toLowerCase()));
+  return set.has('sessions') && set.has('leads') && set.has('conversions') && set.has('revenue');
+}
+
 function buildFactCacheKey({ tenantId, brandId, propertyId, dateRange }) {
   if (!tenantId || !brandId || !propertyId || !dateRange?.start || !dateRange?.end) {
     return null;
@@ -283,6 +313,41 @@ function buildFactRows({
   return rows;
 }
 
+async function hasGa4FactsForRange({ tenantId, brandId, propertyId, dateRange }) {
+  if (!tenantId || !brandId || !propertyId || !dateRange?.start || !dateRange?.end) return false;
+  const count = await prisma.factKondorMetricsDaily.count({
+    where: {
+      tenantId: String(tenantId),
+      brandId: String(brandId),
+      platform: 'GA4',
+      accountId: String(propertyId),
+      date: {
+        gte: new Date(dateRange.start),
+        lte: new Date(dateRange.end),
+      },
+    },
+  });
+  return count > 0;
+}
+
+async function hasGa4CampaignFactsForRange({ tenantId, brandId, propertyId, dateRange }) {
+  if (!tenantId || !brandId || !propertyId || !dateRange?.start || !dateRange?.end) return false;
+  const count = await prisma.factKondorMetricsDaily.count({
+    where: {
+      tenantId: String(tenantId),
+      brandId: String(brandId),
+      platform: 'GA4',
+      accountId: String(propertyId),
+      campaignId: { not: null },
+      date: {
+        gte: new Date(dateRange.start),
+        lte: new Date(dateRange.end),
+      },
+    },
+  });
+  return count > 0;
+}
+
 async function fetchGa4Report({
   tenantId,
   userId,
@@ -292,11 +357,15 @@ async function fetchGa4Report({
   dateRange,
   dimensionFilter,
 }) {
+  const factMaxRows = Math.max(0, Number(process.env.GA4_FACT_MAX_ROWS || 50_000));
   return ga4DataService.runReport({
     tenantId,
     userId,
     propertyId,
     skipSelectionCheck: true,
+    autoPaginate: true,
+    maxRows: factMaxRows,
+    cacheTtlMs: 0, // avoid caching large fact sync responses in memory/redis/db
     payload: {
       metrics,
       dimensions,
@@ -364,6 +433,8 @@ async function ensureGa4FactMetrics({
   const wantsCampaign =
     requestedDimensions.includes('campaign_id') ||
     extractFilterValues(filters, 'campaign_id').length > 0;
+  const fullFactSync = isFullFactSync(metrics);
+  const shouldRefreshOpenRange = rangeTouchesToday(dateRange);
 
   for (const connection of connections) {
     const propertyId = normalizeGa4PropertyId(connection.externalAccountId);
@@ -390,7 +461,27 @@ async function ensureGa4FactMetrics({
         throw err;
       }
 
-      let campaignDimension = wantsCampaign ? 'campaignId' : null;
+      const [hasFacts, hasCampaignFacts] = await Promise.all([
+        hasGa4FactsForRange({ tenantId, brandId, propertyId, dateRange }),
+        hasGa4CampaignFactsForRange({ tenantId, brandId, propertyId, dateRange }),
+      ]);
+
+      // Preserve existing granularity: if we already store campaign-level facts,
+      // refresh/update using campaign breakdown even if the current request doesn't ask for it.
+      const effectiveWantsCampaign = Boolean(wantsCampaign || hasCampaignFacts);
+
+      // Skip closed ranges once we have full facts materialized to avoid re-fetching and rewrites.
+      // For campaign dashboards, only skip when campaign-level rows already exist.
+      if (!shouldRefreshOpenRange && fullFactSync) {
+        if (!effectiveWantsCampaign && hasFacts) {
+          return;
+        }
+        if (effectiveWantsCampaign && hasCampaignFacts) {
+          return;
+        }
+      }
+
+      let campaignDimension = effectiveWantsCampaign ? 'campaignId' : null;
       let metricsForRequest = Array.isArray(metricPlan.metrics) ? [...metricPlan.metrics] : [];
       let conversionsMetricName = metricsForRequest.includes('conversions') ? 'conversions' : null;
       let conversionsInvalid = false;
@@ -416,7 +507,7 @@ async function ensureGa4FactMetrics({
         if (
           metricsList.length &&
           dim === 'campaignId' &&
-          wantsCampaign &&
+          effectiveWantsCampaign &&
           result.invalidDimensions.includes('campaignId')
         ) {
           dim = 'campaignName';

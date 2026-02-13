@@ -16,11 +16,13 @@ function resetModule(path) {
 }
 
 function buildApp() {
-  mockModule('../src/middleware/auth', (req, _res, next) => {
-    req.user = { id: 'user-1' };
+  const auth = (req, _res, next) => {
+    req.user = { id: 'user-1', role: 'OWNER' };
     req.tenantId = 'tenant-1';
     next();
-  });
+  };
+  auth.requireRole = () => (_req, _res, next) => next();
+  mockModule('../src/middleware/auth', auth);
 
   mockModule('../src/middleware/tenantGuard', (req, _res, next) => {
     req.db = {};

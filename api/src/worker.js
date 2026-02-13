@@ -10,8 +10,10 @@ const {
   reportGenerateQueue,
   dashboardRefreshQueue,
   reportScheduleQueue,
+  ga4SyncQueue,
 } = require('./queues');
 const { prisma } = require('./prisma');
+const emailService = require('./services/emailService');
 
 const updateMetricsJob = require('./jobs/updateMetricsJob');
 const refreshMetaTokensJob = require('./jobs/refreshMetaTokensJob');
@@ -23,6 +25,8 @@ const automationWhatsAppJob = require('./jobs/automationWhatsAppJob');
 const whatsappApprovalJob = require('./jobs/whatsappApprovalRequestJob');
 const publishScheduledPostsJob = require('./jobs/publishScheduledPostsJob');
 const reportSchedulesService = require('./modules/reporting/reportSchedules.service');
+const ga4FactSyncJob = require('./jobs/ga4FactSyncJob');
+const ga4RealtimeSyncJob = require('./jobs/ga4RealtimeSyncJob');
 
 // ------------------------------------------------------
 // Conexão do BullMQ (usa REDIS_URL da env; em dev cai pro localhost)
@@ -42,6 +46,10 @@ const POSTS_PUBLISH_PERIOD_MS =
   Number(process.env.POSTS_PUBLISH_PERIOD_MS) || 60000; // 1min
 const DASHBOARD_REFRESH_PERIOD_MS =
   Number(process.env.DASHBOARD_REFRESH_PERIOD_MS) || 0;
+const GA4_FACT_SYNC_PERIOD_MS =
+  Number(process.env.GA4_FACT_SYNC_PERIOD_MS) || 3600000; // 1h
+const GA4_REALTIME_SYNC_PERIOD_MS =
+  Number(process.env.GA4_REALTIME_SYNC_PERIOD_MS) || 60000; // 1min
 
 // ------------------------------------------------------
 // Helper genérico para rodar pollOnce() dos módulos de job
@@ -168,6 +176,27 @@ const publishingWorker = publishingQueue
     )
   : null;
 
+const ga4SyncWorker = ga4SyncQueue
+  ? new Worker(
+      ga4SyncQueue.name,
+      async (job) => {
+        console.log('[ga4Sync] processing job', job.id, job.name);
+        if (job.name === 'ga4-realtime-sync') {
+          await runPollOnce(ga4RealtimeSyncJob, 'ga4RealtimeSyncJob');
+          return;
+        }
+        if (job.name === 'ga4-facts-sync') {
+          await runPollOnce(ga4FactSyncJob, 'ga4FactSyncJob');
+          return;
+        }
+
+        // Fallback for unexpected scheduler ids.
+        await runPollOnce(ga4FactSyncJob, 'ga4FactSyncJob');
+      },
+      { connection },
+    )
+  : null;
+
 // ------------------------------------------------------
 // Logs de sucesso
 // ------------------------------------------------------
@@ -213,6 +242,53 @@ if (publishingWorker) {
   });
 }
 
+if (ga4SyncWorker) {
+  ga4SyncWorker.on('completed', (job) => {
+    console.log('[ga4Sync] job completed', job.id, job.name);
+  });
+}
+
+const jobAlertState = new Map();
+
+function canSendJobAlert(key, throttleMs) {
+  if (!key || throttleMs <= 0) return true;
+  const now = Date.now();
+  const lastAt = jobAlertState.get(key) || 0;
+  if (now - lastAt < throttleMs) return false;
+  jobAlertState.set(key, now);
+  return true;
+}
+
+async function maybeSendJobFailureAlert(queueName, job, err) {
+  const to = process.env.JOB_ALERT_EMAIL;
+  if (!to) return;
+
+  const throttleMs = Math.max(0, Number(process.env.JOB_ALERT_THROTTLE_MS || 5 * 60 * 1000));
+  const alertKey = `${queueName || 'unknown'}:${job?.name || 'unknown'}`;
+  if (!canSendJobAlert(alertKey, throttleMs)) return;
+
+  const subject = `[Kondor] Job FAILED: ${queueName || 'unknown'} / ${job?.name || 'unknown'}`;
+  const tenantId = job?.data?.tenantId || null;
+  const jobId = job?.id ? String(job.id) : null;
+  const attempts = job?.attemptsMade || job?.attempts || null;
+  const message = err?.message || 'Erro desconhecido';
+  const stack = err && err.stack ? String(err.stack).slice(0, 4000) : null;
+
+  const text = [
+    `queue: ${queueName || 'unknown'}`,
+    `jobId: ${jobId || 'n/a'}`,
+    `jobName: ${job?.name || 'n/a'}`,
+    `tenantId: ${tenantId || 'n/a'}`,
+    `attempts: ${attempts ?? 'n/a'}`,
+    `error: ${message}`,
+    stack ? `\nstack:\n${stack}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  await emailService.sendEmail({ to, subject, text });
+}
+
 async function logJobFailure(queueName, job, err) {
   try {
     await prisma.jobLog.create({
@@ -227,6 +303,12 @@ async function logJobFailure(queueName, job, err) {
     });
   } catch (logErr) {
     console.error('[worker] Falha ao registrar JobLog', logErr);
+  }
+
+  try {
+    await maybeSendJobFailureAlert(queueName, job, err);
+  } catch (alertErr) {
+    console.error('[worker] Falha ao enviar alerta de job', alertErr?.message || alertErr);
   }
 }
 
@@ -279,6 +361,13 @@ if (publishingWorker) {
   });
 }
 
+if (ga4SyncWorker) {
+  ga4SyncWorker.on('failed', async (job, err) => {
+    console.error('[ga4Sync] job failed', job?.id, job?.name, err);
+    await logJobFailure(ga4SyncQueue?.name || 'ga4-sync', job, err);
+  });
+}
+
 // ------------------------------------------------------
 // Agendamento de jobs recorrentes (repeatable jobs)
 // ------------------------------------------------------
@@ -289,6 +378,8 @@ async function ensureRepeatableJobs() {
     WHATSAPP_AUTOMATION_PERIOD_MS,
     POSTS_PUBLISH_PERIOD_MS,
     DASHBOARD_REFRESH_PERIOD_MS,
+    GA4_FACT_SYNC_PERIOD_MS,
+    GA4_REALTIME_SYNC_PERIOD_MS,
   });
 
   if (metricsSyncQueue) {
@@ -307,6 +398,15 @@ async function ensureRepeatableJobs() {
     await dashboardRefreshQueue.upsertJobScheduler('dashboard-refresh', {
       every: DASHBOARD_REFRESH_PERIOD_MS,
     });
+  }
+
+  if (ga4SyncQueue) {
+    if (GA4_FACT_SYNC_PERIOD_MS > 0) {
+      await ga4SyncQueue.upsertJobScheduler('ga4-facts-sync', { every: GA4_FACT_SYNC_PERIOD_MS });
+    }
+    if (GA4_REALTIME_SYNC_PERIOD_MS > 0) {
+      await ga4SyncQueue.upsertJobScheduler('ga4-realtime-sync', { every: GA4_REALTIME_SYNC_PERIOD_MS });
+    }
   }
 
   console.log('[worker] repeatable jobs registrados com sucesso');

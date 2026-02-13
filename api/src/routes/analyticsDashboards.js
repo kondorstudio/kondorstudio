@@ -6,6 +6,8 @@ const tenantGuard = require('../middleware/tenantGuard');
 const validate = require('../middleware/validate');
 const {
   runReportSchema,
+  runRealtimeReportSchema,
+  batchRunReportsSchema,
   dashboardCreateSchema,
   dashboardUpdateSchema,
   widgetCreateSchema,
@@ -44,5 +46,7 @@ router.delete('/widgets/:widgetId', controller.deleteWidget);
 
 router.post('/widgets/preview', ga4Limiter, validate(runReportSchema), controller.previewWidget);
 router.post('/ga4/run-report', ga4Limiter, validate(runReportSchema), controller.runReport);
+router.post('/ga4/run-realtime-report', ga4Limiter, validate(runRealtimeReportSchema), controller.runRealtimeReport);
+router.post('/ga4/batch-run-reports', ga4Limiter, validate(batchRunReportsSchema), controller.batchRunReports);
 
 module.exports = router;

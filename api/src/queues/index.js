@@ -16,6 +16,7 @@ const publishingQueue = createQueue('posts-publish');
 const reportGenerateQueue = createQueue('report-generate');
 const dashboardRefreshQueue = createQueue('dashboard-refresh');
 const reportScheduleQueue = createQueue('report-schedule');
+const ga4SyncQueue = createQueue('ga4-sync');
 
 module.exports = {
   metricsSyncQueue,
@@ -25,4 +26,5 @@ module.exports = {
   reportGenerateQueue,
   dashboardRefreshQueue,
   reportScheduleQueue,
+  ga4SyncQueue,
 };

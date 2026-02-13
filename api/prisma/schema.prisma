@@ -94,6 +94,14 @@ enum Ga4IntegrationStatus {
   ERROR
 }
 
+enum Ga4ApiCacheKind {
+  REPORT
+  REALTIME
+  METADATA
+  COMPATIBILITY
+  BATCH_REPORT
+}
+
 enum MetricCatalogType {
   METRIC
   DIMENSION
@@ -1444,6 +1452,27 @@ model IntegrationGoogleGa4Property {
   @@index([integrationId])
   @@index([propertyId])
   @@map("integration_google_ga4_properties")
+}
+
+model Ga4ApiCache {
+  id          String         @id @default(uuid())
+  tenantId    String
+  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  propertyId  String
+  kind        Ga4ApiCacheKind
+  requestHash String
+  request     Json
+  response    Json
+  expiresAt   DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, propertyId, kind, requestHash])
+  @@index([tenantId])
+  @@index([tenantId, propertyId])
+  @@index([expiresAt])
+  @@map("ga4_api_cache")
 }
 
 model AnalyticsDashboard {

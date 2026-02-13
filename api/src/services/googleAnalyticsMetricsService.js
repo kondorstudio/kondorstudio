@@ -1,4 +1,13 @@
-const crypto = require('crypto');
+const { google } = require('googleapis');
+const { getServiceAccountAccessToken } = require('../lib/googleServiceAccount');
+
+const DATA_API_VERSION = ['v1beta', 'v1alpha'].includes(process.env.GA4_DATA_API_VERSION)
+  ? process.env.GA4_DATA_API_VERSION
+  : 'v1beta';
+const GA4_HTTP_TIMEOUT_MS = Math.max(
+  1_000,
+  Number(process.env.GA4_HTTP_TIMEOUT_MS || process.env.FETCH_TIMEOUT_MS || 20_000),
+);
 
 function safeLog(...args) {
   if (process.env.NODE_ENV === 'test') return;
@@ -58,73 +67,6 @@ function buildMetricList(metricTypes, credentials) {
     { key: 'conversions', gaName: 'conversions' },
     { key: 'revenue', gaName: 'totalRevenue' },
   ];
-}
-
-function base64UrlEncode(input) {
-  const value = typeof input === 'string' ? input : JSON.stringify(input);
-  return Buffer.from(value)
-    .toString('base64')
-    .replace(/=+$/g, '')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_');
-}
-
-async function fetchServiceAccountToken(serviceAccount, scopes) {
-  if (!serviceAccount || !serviceAccount.client_email || !serviceAccount.private_key) {
-    return null;
-  }
-
-  const tokenUri = serviceAccount.token_uri || 'https://oauth2.googleapis.com/token';
-  const now = Math.floor(Date.now() / 1000);
-  const payload = {
-    iss: serviceAccount.client_email,
-    scope: scopes.join(' '),
-    aud: tokenUri,
-    iat: now,
-    exp: now + 3600,
-  };
-
-  const header = { alg: 'RS256', typ: 'JWT' };
-  const encodedHeader = base64UrlEncode(header);
-  const encodedPayload = base64UrlEncode(payload);
-  const unsignedToken = `${encodedHeader}.${encodedPayload}`;
-
-  const signer = crypto.createSign('RSA-SHA256');
-  signer.update(unsignedToken);
-  signer.end();
-
-  const signature = signer.sign(serviceAccount.private_key, 'base64');
-  const encodedSignature = signature
-    .replace(/=+$/g, '')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_');
-
-  const assertion = `${unsignedToken}.${encodedSignature}`;
-  const body = new URLSearchParams({
-    grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-    assertion,
-  });
-
-  try {
-    /* eslint-disable no-undef */
-    const res = await fetch(tokenUri, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body,
-    });
-
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      safeLog('Falha ao obter token de service account', res.status, text);
-      return null;
-    }
-
-    const json = await res.json();
-    return json.access_token || null;
-  } catch (err) {
-    safeLog('Erro ao obter token de service account', err?.message || err);
-    return null;
-  }
 }
 
 function parseDateRange(options) {
@@ -203,7 +145,7 @@ async function fetchAccountMetrics(integration, options = {}) {
         typeof credentials.serviceAccountJson === 'string'
           ? JSON.parse(credentials.serviceAccountJson)
           : credentials.serviceAccountJson;
-      accessToken = await fetchServiceAccountToken(serviceAccount, [
+      accessToken = await getServiceAccountAccessToken(serviceAccount, [
         'https://www.googleapis.com/auth/analytics.readonly',
       ]);
     } catch (err) {
@@ -216,42 +158,37 @@ async function fetchAccountMetrics(integration, options = {}) {
     return [];
   }
 
-  const url = `https://analyticsdata.googleapis.com/v1beta/properties/${encodeURIComponent(
-    propertyId,
-  )}:runReport`;
-
-  const body = {
-    dateRanges: [
-      {
-        startDate: range.since,
-        endDate: range.until,
-      },
-    ],
-    metrics: metricList.map((metric) => ({ name: metric.gaName })),
-  };
-
-  if (includeDate) {
-    body.dimensions = [{ name: 'date' }];
-  }
-
   try {
-    /* eslint-disable no-undef */
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
+    const client = google.analyticsdata({
+      version: DATA_API_VERSION,
+      auth: oauth2Client,
     });
 
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      safeLog('Resposta não OK do GA Data API', res.status, text);
-      return [];
+    const requestBody = {
+      dateRanges: [
+        {
+          startDate: range.since,
+          endDate: range.until,
+        },
+      ],
+      metrics: metricList.map((metric) => ({ name: metric.gaName })),
+    };
+
+    if (includeDate) {
+      requestBody.dimensions = [{ name: 'date' }];
     }
 
-    const json = await res.json();
+    const response = await client.properties.runReport(
+      {
+        property: `properties/${String(propertyId)}`,
+        requestBody,
+      },
+      { timeout: GA4_HTTP_TIMEOUT_MS },
+    );
+
+    const json = response?.data || {};
     const rows = Array.isArray(json.rows) ? json.rows : [];
 
     if (!rows.length) {

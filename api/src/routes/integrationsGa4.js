@@ -12,12 +12,14 @@ const router = express.Router();
 
 router.use(authMiddleware, tenantGuard);
 
-router.get('/oauth/start', controller.oauthStart);
+const requireGa4Admin = authMiddleware.requireRole('OWNER', 'ADMIN');
+
+router.get('/oauth/start', requireGa4Admin, controller.oauthStart);
 router.get('/status', controller.status);
-router.post('/disconnect', controller.disconnect);
-router.get('/properties/sync', controller.propertiesSync);
+router.post('/disconnect', requireGa4Admin, controller.disconnect);
+router.get('/properties/sync', requireGa4Admin, controller.propertiesSync);
 router.get('/properties', controller.propertiesList);
-router.post('/properties/select', validate(propertySelectSchema), controller.propertiesSelect);
+router.post('/properties/select', requireGa4Admin, validate(propertySelectSchema), controller.propertiesSelect);
 router.post('/demo-report', controller.demoReport);
 router.get('/metadata', controller.metadata);
 

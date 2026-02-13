@@ -72,19 +72,20 @@ async function getCache(key) {
 
 async function setCache(key, value, ttlMs = DEFAULT_TTL_MS) {
   if (CACHE_DISABLED || !key) return null;
-  const ttl = Number(ttlMs) || 0;
-  const expiresAt = ttl > 0 ? Date.now() + ttl : null;
+  const ttl =
+    ttlMs === undefined || ttlMs === null ? DEFAULT_TTL_MS : Number(ttlMs);
+  if (!Number.isFinite(ttl) || ttl <= 0) {
+    // ttl <= 0 means "don't cache" (avoid accidental permanent cache).
+    return value;
+  }
+  const expiresAt = Date.now() + ttl;
   memoryCache.set(key, { value, expiresAt });
 
   const redis = getRedisClient();
   if (redis) {
     try {
       const payload = JSON.stringify(value ?? {});
-      if (ttl > 0) {
-        await redis.set(key, payload, 'PX', ttl);
-      } else {
-        await redis.set(key, payload);
-      }
+      await redis.set(key, payload, 'PX', ttl);
     } catch (_) {
       // ignore redis errors and rely on memory cache
     }
