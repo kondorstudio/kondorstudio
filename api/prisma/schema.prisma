@@ -262,53 +262,55 @@ model Tenant {
   status            TenantStatus @default(TRIAL)
 
   // Relações 1:N
-  users            User[]            @relation("TenantUsers")
-  userPreferences  UserPreference[]
-  teams            Team[]
-  teamMembers      TeamMember[]
-  clients          Client[]
-  projects         Project[]
-  posts            Post[]
-  integrations     Integration[]
-  integrationGoogleGa4 IntegrationGoogleGa4[]
+  users                          User[]                         @relation("TenantUsers")
+  userPreferences                UserPreference[]
+  teams                          Team[]
+  teamMembers                    TeamMember[]
+  clients                        Client[]
+  projects                       Project[]
+  posts                          Post[]
+  integrations                   Integration[]
+  integrationGoogleGa4           IntegrationGoogleGa4[]
   integrationGoogleGa4Properties IntegrationGoogleGa4Property[]
-  analyticsDashboards AnalyticsDashboard[]
-  analyticsDashboardWidgets AnalyticsDashboardWidget[]
-  uploads          Upload[]
-  reports          Report[]
-  brandGroups      BrandGroup[]
-  brandGroupMembers BrandGroupMember[]
-  dataSourceConnections DataSourceConnection[]
-  metricCatalog    MetricCatalog[]
-  reportTemplates  ReportTemplate[]
-  reportWidgets    ReportWidget[]
-  dashboards       Dashboard[]
-  reportDashboardsV2 ReportDashboard[]
-  reportTemplatesV2  ReportTemplateV2[]
-  reportDashboardExports ReportDashboardExport[]
-  reportPublicShares ReportPublicShare[]
-  brandSourceConnections BrandSourceConnection[]
-  factMetricsDaily  FactKondorMetricsDaily[]
-  reportExports    ReportExport[]
-  reportSchedules  ReportSchedule[]
-  reportDeliveries ReportDelivery[]
-  auditLogs        AuditLog[]
-  subscriptions    Subscription[]
-  financialRecords FinancialRecord[]
-  jobQueues        JobQueue[]
-  approvals        Approval[]
-  tasks            Task[]
-  metrics          Metric[]
-  creatives        Creative[]
-  competitors      Competitor[]
-  competitorSnapshots CompetitorSnapshot[]
-  invoices         Invoice[]
-  payments         Payment[]
-  jobHistory       JobHistory[]
-  refreshTokens    RefreshToken[]
-  systemLogs       SystemLog[]
-  jobLogs          JobLog[]
-  supportNotes     TenantNote[]
+  analyticsDashboards            AnalyticsDashboard[]
+  analyticsDashboardWidgets      AnalyticsDashboardWidget[]
+  uploads                        Upload[]
+  reports                        Report[]
+  brandGroups                    BrandGroup[]
+  brandGroupMembers              BrandGroupMember[]
+  dataSourceConnections          DataSourceConnection[]
+  metricCatalog                  MetricCatalog[]
+  reportTemplates                ReportTemplate[]
+  reportWidgets                  ReportWidget[]
+  dashboards                     Dashboard[]
+  reportDashboardsV2             ReportDashboard[]
+  reportTemplatesV2              ReportTemplateV2[]
+  reportDashboardExports         ReportDashboardExport[]
+  reportPublicShares             ReportPublicShare[]
+  brandSourceConnections         BrandSourceConnection[]
+  factMetricsDaily               FactKondorMetricsDaily[]
+  reportExports                  ReportExport[]
+  reportSchedules                ReportSchedule[]
+  reportDeliveries               ReportDelivery[]
+  auditLogs                      AuditLog[]
+  subscriptions                  Subscription[]
+  financialRecords               FinancialRecord[]
+  jobQueues                      JobQueue[]
+  approvals                      Approval[]
+  tasks                          Task[]
+  metrics                        Metric[]
+  creatives                      Creative[]
+  competitors                    Competitor[]
+  competitorSnapshots            CompetitorSnapshot[]
+  invoices                       Invoice[]
+  payments                       Payment[]
+  jobHistory                     JobHistory[]
+  refreshTokens                  RefreshToken[]
+  systemLogs                     SystemLog[]
+  jobLogs                        JobLog[]
+  supportNotes                   TenantNote[]
+  ga4ApiCache                    Ga4ApiCache[]
+  ga4ApiCalls                    Ga4ApiCall[]
 
   createdAtIndex DateTime? @ignore
 
@@ -330,24 +332,24 @@ model User {
   isActive      Boolean @default(true)
   mfaEnabled    Boolean @default(false)
 
-  refreshTokens      RefreshToken[]
-  sessionTokens      SessionToken[]
-  teamMemberships    TeamMember[]
-  createdPosts       Post[]         @relation("AuthorPosts")
-  assignedTasks      Task[]         @relation("AssigneeTasks")
-  tasksCreated       Task[]         @relation("TasksCreated")
-  requestedApprovals Approval[]     @relation("ApprovalRequester")
-  approvalsToReview  Approval[]     @relation("ApprovalApprover")
-  integrationGoogleGa4 IntegrationGoogleGa4[]
-  analyticsDashboards AnalyticsDashboard[]
-  uploads            Upload[]
-  auditLogs          AuditLog[]
-  supportNotes       TenantNote[]   @relation("TenantNoteAuthor")
-  mfaChallenges      MfaChallenge[]
-  preferences        UserPreference[]
-  reportDashboardsCreated ReportDashboard[] @relation("ReportDashboardAuthor")
+  refreshTokens                  RefreshToken[]
+  sessionTokens                  SessionToken[]
+  teamMemberships                TeamMember[]
+  createdPosts                   Post[]                   @relation("AuthorPosts")
+  assignedTasks                  Task[]                   @relation("AssigneeTasks")
+  tasksCreated                   Task[]                   @relation("TasksCreated")
+  requestedApprovals             Approval[]               @relation("ApprovalRequester")
+  approvalsToReview              Approval[]               @relation("ApprovalApprover")
+  integrationGoogleGa4           IntegrationGoogleGa4[]
+  analyticsDashboards            AnalyticsDashboard[]
+  uploads                        Upload[]
+  auditLogs                      AuditLog[]
+  supportNotes                   TenantNote[]             @relation("TenantNoteAuthor")
+  mfaChallenges                  MfaChallenge[]
+  preferences                    UserPreference[]
+  reportDashboardsCreated        ReportDashboard[]        @relation("ReportDashboardAuthor")
   reportDashboardVersionsCreated ReportDashboardVersion[] @relation("ReportDashboardVersionAuthor")
-  reportPublicSharesCreated ReportPublicShare[] @relation("ReportPublicShareCreator")
+  reportPublicSharesCreated      ReportPublicShare[]      @relation("ReportPublicShareCreator")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -359,11 +361,11 @@ model User {
 }
 
 model UserPreference {
-  id        String   @id @default(uuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(uuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   postsViewMode          String?
   kanbanCollapsedColumns Json?
@@ -379,17 +381,17 @@ model UserPreference {
 }
 
 model MfaChallenge {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  purpose   String   @default("admin_login")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purpose   String    @default("admin_login")
   codeHash  String
-  attempts  Int      @default(0)
+  attempts  Int       @default(0)
   expiresAt DateTime
   usedAt    DateTime?
   ip        String?
   userAgent String?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   @@index([userId])
   @@index([expiresAt])
@@ -496,21 +498,21 @@ model Client {
   portalEmail        String?
   portalPasswordHash String?
 
-  projects         Project[]
-  posts            Post[]
-  financialRecords FinancialRecord[]
-  integrations     Integration[]
-  dataSourceConnections DataSourceConnection[]
-  brandGroupMembers BrandGroupMember[]
-  reports          Report[]
-  reportSchedules  ReportSchedule[]
-  dashboards       Dashboard[]
-  reportDashboardsV2 ReportDashboard[]
+  projects               Project[]
+  posts                  Post[]
+  financialRecords       FinancialRecord[]
+  integrations           Integration[]
+  dataSourceConnections  DataSourceConnection[]
+  brandGroupMembers      BrandGroupMember[]
+  reports                Report[]
+  reportSchedules        ReportSchedule[]
+  dashboards             Dashboard[]
+  reportDashboardsV2     ReportDashboard[]
   brandSourceConnections BrandSourceConnection[]
-  factMetricsDaily  FactKondorMetricsDaily[]
-  reportDeliveries ReportDelivery[]
-  metrics          Metric[]   @relation("ClientMetrics")
-  competitors      Competitor[]
+  factMetricsDaily       FactKondorMetricsDaily[]
+  reportDeliveries       ReportDelivery[]
+  metrics                Metric[]                 @relation("ClientMetrics")
+  competitors            Competitor[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -662,22 +664,22 @@ model Task {
 }
 
 model Metric {
-  id          String   @id @default(uuid())
-  tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  postId      String?
-  post        Post?    @relation(fields: [postId], references: [id], onDelete: SetNull)
-  clientId    String?
-  client      Client?  @relation("ClientMetrics", fields: [clientId], references: [id], onDelete: SetNull)
+  id            String       @id @default(uuid())
+  tenantId      String
+  tenant        Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  postId        String?
+  post          Post?        @relation(fields: [postId], references: [id], onDelete: SetNull)
+  clientId      String?
+  client        Client?      @relation("ClientMetrics", fields: [clientId], references: [id], onDelete: SetNull)
   integrationId String?
-  integration Integration? @relation("IntegrationMetrics", fields: [integrationId], references: [id], onDelete: SetNull)
-  name        String
-  value       Float
-  provider    String?
-  rangeFrom   DateTime?
-  rangeTo     DateTime?
-  meta        Json?
-  collectedAt DateTime @default(now())
+  integration   Integration? @relation("IntegrationMetrics", fields: [integrationId], references: [id], onDelete: SetNull)
+  name          String
+  value         Float
+  provider      String?
+  rangeFrom     DateTime?
+  rangeTo       DateTime?
+  meta          Json?
+  collectedAt   DateTime     @default(now())
 
   @@index([tenantId])
   @@index([postId])
@@ -688,19 +690,19 @@ model Metric {
 }
 
 model Competitor {
-  id        String   @id @default(uuid())
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  clientId  String?
-  client    Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  platform  String   @default("instagram")
-  username  String
-  name      String?
+  id         String  @id @default(uuid())
+  tenantId   String
+  tenant     Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clientId   String?
+  client     Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  platform   String  @default("instagram")
+  username   String
+  name       String?
   profileUrl String?
   avatarUrl  String?
-  status    String   @default("ACTIVE")
-  notes     String?
-  metadata  Json?
+  status     String  @default("ACTIVE")
+  notes      String?
+  metadata   Json?
 
   snapshots CompetitorSnapshot[]
 
@@ -715,22 +717,22 @@ model Competitor {
 }
 
 model CompetitorSnapshot {
-  id           String   @id @default(uuid())
-  tenantId     String
-  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  competitorId String
-  competitor   Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
-  platform     String?
-  followers    Int?
-  postsCount   Int?
+  id             String     @id @default(uuid())
+  tenantId       String
+  tenant         Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  competitorId   String
+  competitor     Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+  platform       String?
+  followers      Int?
+  postsCount     Int?
   engagementRate Float?
-  interactions Int?
-  likes        Int?
-  comments     Int?
-  rangeFrom    DateTime?
-  rangeTo      DateTime?
-  collectedAt  DateTime @default(now())
-  meta         Json?
+  interactions   Int?
+  likes          Int?
+  comments       Int?
+  rangeFrom      DateTime?
+  rangeTo        DateTime?
+  collectedAt    DateTime   @default(now())
+  meta           Json?
 
   @@index([tenantId])
   @@index([competitorId])
@@ -779,10 +781,10 @@ model Upload {
   metadata Json?
   versions Json? // optional versions / processing info
 
-  posts     Post[]     @relation("PostUploads")
-  creatives Creative[]
-  reports   Report[]   @relation("ReportFiles")
-  reportExports ReportExport[] @relation("ReportExportFile")
+  posts                  Post[]                  @relation("PostUploads")
+  creatives              Creative[]
+  reports                Report[]                @relation("ReportFiles")
+  reportExports          ReportExport[]          @relation("ReportExportFile")
   reportDashboardExports ReportDashboardExport[] @relation("ReportDashboardExportFile")
 
   createdAt DateTime @default(now())
@@ -793,25 +795,25 @@ model Upload {
 }
 
 model Report {
-  id       String @id @default(uuid())
-  tenantId String
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  name     String
-  type     String // e.g., monthly_metrics, campaign_performance
-  params   Json?
-  status   String @default("pending")
-  scope    ReportScope?
-  brandId  String?
-  brand    Client? @relation(fields: [brandId], references: [id], onDelete: SetNull)
-  groupId  String?
-  group    BrandGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
-  templateId String?
-  template   ReportTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  dateFrom DateTime?
-  dateTo   DateTime?
-  compareMode ReportCompareMode?
-  compareDateFrom DateTime?
-  compareDateTo   DateTime?
+  id               String             @id @default(uuid())
+  tenantId         String
+  tenant           Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name             String
+  type             String // e.g., monthly_metrics, campaign_performance
+  params           Json?
+  status           String             @default("pending")
+  scope            ReportScope?
+  brandId          String?
+  brand            Client?            @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  groupId          String?
+  group            BrandGroup?        @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  templateId       String?
+  template         ReportTemplate?    @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  dateFrom         DateTime?
+  dateTo           DateTime?
+  compareMode      ReportCompareMode?
+  compareDateFrom  DateTime?
+  compareDateTo    DateTime?
   snapshotTemplate Json?
 
   fileId String?
@@ -821,8 +823,8 @@ model Report {
   widgets     ReportWidget[]
   exports     ReportExport[]
   deliveries  ReportDelivery[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
   @@index([tenantId])
   @@index([status])
@@ -833,17 +835,17 @@ model Report {
 }
 
 model BrandGroup {
-  id          String   @id @default(uuid())
+  id          String  @id @default(uuid())
   tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant      Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name        String
   description String?
 
-  members   BrandGroupMember[]
-  reports   Report[]
-  dashboards Dashboard[]
+  members            BrandGroupMember[]
+  reports            Report[]
+  dashboards         Dashboard[]
   reportDashboardsV2 ReportDashboard[]
-  reportSchedules ReportSchedule[]
+  reportSchedules    ReportSchedule[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -853,13 +855,13 @@ model BrandGroup {
 }
 
 model BrandGroupMember {
-  id        String   @id @default(uuid())
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  groupId   String
-  group     BrandGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  brandId   String
-  brand     Client  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  id       String     @id @default(uuid())
+  tenantId String
+  tenant   Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  groupId  String
+  group    BrandGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  brandId  String
+  brand    Client     @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
 
@@ -871,20 +873,20 @@ model BrandGroupMember {
 }
 
 model DataSourceConnection {
-  id        String   @id @default(uuid())
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  brandId   String
-  brand     Client   @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  source    DataSource
-  integrationId String?
-  integration Integration? @relation(fields: [integrationId], references: [id], onDelete: SetNull)
+  id                String                     @id @default(uuid())
+  tenantId          String
+  tenant            Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  brandId           String
+  brand             Client                     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  source            DataSource
+  integrationId     String?
+  integration       Integration?               @relation(fields: [integrationId], references: [id], onDelete: SetNull)
   externalAccountId String?
-  displayName String
-  status    DataSourceConnectionStatus @default(CONNECTED)
-  meta      Json?
+  displayName       String
+  status            DataSourceConnectionStatus @default(CONNECTED)
+  meta              Json?
 
-  widgets   ReportWidget[]
+  widgets ReportWidget[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -897,22 +899,22 @@ model DataSourceConnection {
 }
 
 model MetricCatalog {
-  id        String   @id @default(uuid())
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  source    DataSource
-  level     String
-  metricKey String
-  dimensionKey String?
-  label     String
-  type      MetricCatalogType
-  supportedCharts     String[] @default([])
-  supportedBreakdowns String[] @default([])
-  isDefault Boolean @default(false)
-  isCalculated Boolean @default(false)
-  formula   String?
-  format    String?
-  description String?
+  id                  String            @id @default(uuid())
+  tenantId            String
+  tenant              Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  source              DataSource
+  level               String
+  metricKey           String
+  dimensionKey        String?
+  label               String
+  type                MetricCatalogType
+  supportedCharts     String[]          @default([])
+  supportedBreakdowns String[]          @default([])
+  isDefault           Boolean           @default(false)
+  isCalculated        Boolean           @default(false)
+  formula             String?
+  format              String?
+  description         String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -925,20 +927,20 @@ model MetricCatalog {
 }
 
 model ReportTemplate {
-  id          String   @id @default(uuid())
-  tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  name        String
-  description String?
-  visibility  ReportTemplateVisibility @default(TENANT)
-  layoutSchema  Json?
-  widgetsSchema Json?
-  version     Int @default(1)
+  id               String                   @id @default(uuid())
+  tenantId         String
+  tenant           Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name             String
+  description      String?
+  visibility       ReportTemplateVisibility @default(TENANT)
+  layoutSchema     Json?
+  widgetsSchema    Json?
+  version          Int                      @default(1)
   parentTemplateId String?
-  parentTemplate   ReportTemplate? @relation("ReportTemplateVersions", fields: [parentTemplateId], references: [id], onDelete: SetNull)
-  versions    ReportTemplate[] @relation("ReportTemplateVersions")
+  parentTemplate   ReportTemplate?          @relation("ReportTemplateVersions", fields: [parentTemplateId], references: [id], onDelete: SetNull)
+  versions         ReportTemplate[]         @relation("ReportTemplateVersions")
 
-  reports     Report[]
+  reports         Report[]
   reportSchedules ReportSchedule[]
 
   createdAt DateTime @default(now())
@@ -950,22 +952,22 @@ model ReportTemplate {
 }
 
 model ReportWidget {
-  id        String   @id @default(uuid())
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  reportId  String
-  report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  widgetType ReportWidgetType
-  title     String?
-  source    DataSource
+  id           String                @id @default(uuid())
+  tenantId     String
+  tenant       Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  reportId     String
+  report       Report                @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  widgetType   ReportWidgetType
+  title        String?
+  source       DataSource
   connectionId String?
   connection   DataSourceConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
-  level     String?
-  breakdown String?
-  metrics   Json?
-  filters   Json?
-  options   Json?
-  layout    Json?
+  level        String?
+  breakdown    String?
+  metrics      Json?
+  filters      Json?
+  options      Json?
+  layout       Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -977,17 +979,17 @@ model ReportWidget {
 }
 
 model Dashboard {
-  id        String   @id @default(uuid())
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  name      String
-  scope     DashboardScope
-  brandId   String?
-  brand     Client?  @relation(fields: [brandId], references: [id], onDelete: SetNull)
-  groupId   String?
-  group     BrandGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
-  layoutSchema  Json?
-  widgetsSchema Json?
+  id                  String         @id @default(uuid())
+  tenantId            String
+  tenant              Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name                String
+  scope               DashboardScope
+  brandId             String?
+  brand               Client?        @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  groupId             String?
+  group               BrandGroup?    @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  layoutSchema        Json?
+  widgetsSchema       Json?
   globalFiltersSchema Json?
 
   createdAt DateTime @default(now())
@@ -999,16 +1001,16 @@ model Dashboard {
 }
 
 model ReportExport {
-  id        String   @id @default(uuid())
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  reportId  String
-  report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  status    ReportExportStatus @default(PENDING)
-  format    String @default("PDF")
-  fileId    String?
-  file      Upload? @relation("ReportExportFile", fields: [fileId], references: [id], onDelete: SetNull)
-  meta      Json?
+  id         String             @id @default(uuid())
+  tenantId   String
+  tenant     Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  reportId   String
+  report     Report             @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  status     ReportExportStatus @default(PENDING)
+  format     String             @default("PDF")
+  fileId     String?
+  file       Upload?            @relation("ReportExportFile", fields: [fileId], references: [id], onDelete: SetNull)
+  meta       Json?
   deliveries ReportDelivery[]
 
   createdAt DateTime @default(now())
@@ -1021,23 +1023,23 @@ model ReportExport {
 }
 
 model ReportDelivery {
-  id        String   @id @default(uuid())
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  reportId  String
-  report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  exportId  String?
-  export    ReportExport? @relation(fields: [exportId], references: [id], onDelete: SetNull)
-  brandId   String?
-  brand     Client?  @relation(fields: [brandId], references: [id], onDelete: SetNull)
-  channel   ReportDeliveryChannel
-  status    ReportDeliveryStatus @default(PENDING)
-  to        String?
-  payload   Json?
+  id             String                @id @default(uuid())
+  tenantId       String
+  tenant         Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  reportId       String
+  report         Report                @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  exportId       String?
+  export         ReportExport?         @relation(fields: [exportId], references: [id], onDelete: SetNull)
+  brandId        String?
+  brand          Client?               @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  channel        ReportDeliveryChannel
+  status         ReportDeliveryStatus  @default(PENDING)
+  to             String?
+  payload        Json?
   providerResult Json?
-  error     String?
-  scheduledAt DateTime?
-  sentAt    DateTime?
+  error          String?
+  scheduledAt    DateTime?
+  sentAt         DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1050,21 +1052,21 @@ model ReportDelivery {
 }
 
 model ReportSchedule {
-  id        String   @id @default(uuid())
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  name      String
-  scope     ReportScope
-  brandId   String?
-  brand     Client?  @relation(fields: [brandId], references: [id], onDelete: SetNull)
-  groupId   String?
-  group     BrandGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
-  templateId String?
-  template   ReportTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  frequency ReportScheduleFrequency
-  timezone  String @default("America/Sao_Paulo")
+  id             String                  @id @default(uuid())
+  tenantId       String
+  tenant         Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name           String
+  scope          ReportScope
+  brandId        String?
+  brand          Client?                 @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  groupId        String?
+  group          BrandGroup?             @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  templateId     String?
+  template       ReportTemplate?         @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  frequency      ReportScheduleFrequency
+  timezone       String                  @default("America/Sao_Paulo")
   scheduleConfig Json?
-  isActive  Boolean @default(true)
+  isActive       Boolean                 @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1076,22 +1078,22 @@ model ReportSchedule {
 }
 
 model ReportDashboard {
-  id                 String                 @id @default(uuid())
+  id                 String                   @id @default(uuid())
   tenantId           String
-  tenant             Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant             Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   brandId            String
-  brand              Client                 @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  brand              Client                   @relation(fields: [brandId], references: [id], onDelete: Cascade)
   groupId            String?
-  group              BrandGroup?            @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  group              BrandGroup?              @relation(fields: [groupId], references: [id], onDelete: SetNull)
   name               String
-  status             ReportDashboardStatus  @default(DRAFT)
-  publishedVersionId String? @unique
-  publishedVersion   ReportDashboardVersion? @relation("ReportDashboardPublished", fields: [publishedVersionId], references: [id], onDelete: SetNull)
-  sharedEnabled      Boolean                @default(false)
+  status             ReportDashboardStatus    @default(DRAFT)
+  publishedVersionId String?                  @unique
+  publishedVersion   ReportDashboardVersion?  @relation("ReportDashboardPublished", fields: [publishedVersionId], references: [id], onDelete: SetNull)
+  sharedEnabled      Boolean                  @default(false)
   sharedTokenHash    String?
   sharedAt           DateTime?
   createdByUserId    String
-  createdBy          User                   @relation("ReportDashboardAuthor", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  createdBy          User                     @relation("ReportDashboardAuthor", fields: [createdByUserId], references: [id], onDelete: Restrict)
   versions           ReportDashboardVersion[] @relation("ReportDashboardVersions")
   exports            ReportDashboardExport[]
   publicShares       ReportPublicShare[]
@@ -1107,15 +1109,15 @@ model ReportDashboard {
 }
 
 model ReportDashboardVersion {
-  id              String @id @default(uuid())
-  dashboardId     String
-  dashboard       ReportDashboard @relation("ReportDashboardVersions", fields: [dashboardId], references: [id], onDelete: Cascade)
-  versionNumber   Int
-  layoutJson      Json
-  createdByUserId String
-  createdBy       User   @relation("ReportDashboardVersionAuthor", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  id                   String           @id @default(uuid())
+  dashboardId          String
+  dashboard            ReportDashboard  @relation("ReportDashboardVersions", fields: [dashboardId], references: [id], onDelete: Cascade)
+  versionNumber        Int
+  layoutJson           Json
+  createdByUserId      String
+  createdBy            User             @relation("ReportDashboardVersionAuthor", fields: [createdByUserId], references: [id], onDelete: Restrict)
   publishedInDashboard ReportDashboard? @relation("ReportDashboardPublished")
-  createdAt       DateTime @default(now())
+  createdAt            DateTime         @default(now())
 
   @@unique([dashboardId, versionNumber])
   @@index([dashboardId])
@@ -1123,21 +1125,21 @@ model ReportDashboardVersion {
 }
 
 model ReportDashboardExport {
-  id             String            @id @default(uuid())
-  tenantId       String
-  tenant         Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  dashboardId    String
-  dashboard      ReportDashboard   @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
-  status         ReportExportStatus @default(PENDING)
-  format         String            @default("PDF")
-  fileId         String?
-  file           Upload?           @relation("ReportDashboardExportFile", fields: [fileId], references: [id], onDelete: SetNull)
-  publicTokenHash String?
+  id                   String             @id @default(uuid())
+  tenantId             String
+  tenant               Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  dashboardId          String
+  dashboard            ReportDashboard    @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+  status               ReportExportStatus @default(PENDING)
+  format               String             @default("PDF")
+  fileId               String?
+  file                 Upload?            @relation("ReportDashboardExportFile", fields: [fileId], references: [id], onDelete: SetNull)
+  publicTokenHash      String?
   publicTokenExpiresAt DateTime?
-  publicTokenUsedAt DateTime?
-  meta           Json?
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  publicTokenUsedAt    DateTime?
+  meta                 Json?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
 
   @@index([tenantId])
   @@index([dashboardId])
@@ -1167,11 +1169,11 @@ model ReportPublicShare {
 }
 
 model ReportTemplateV2 {
-  id        String   @id @default(uuid())
-  tenantId  String?
-  tenant    Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  name      String
-  category  String
+  id         String  @id @default(uuid())
+  tenantId   String?
+  tenant     Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name       String
+  category   String
   layoutJson Json
 
   createdAt DateTime @default(now())
@@ -1182,12 +1184,12 @@ model ReportTemplateV2 {
 }
 
 model MetricsCatalog {
-  id            String               @id @default(uuid())
-  key           String               @unique
-  label         String
-  description   String
-  format        MetricsCatalogFormat
-  formula       String?
+  id             String               @id @default(uuid())
+  key            String               @unique
+  label          String
+  description    String
+  format         MetricsCatalogFormat
+  formula        String?
   requiredFields Json?
 
   createdAt DateTime @default(now())
@@ -1218,25 +1220,25 @@ model BrandSourceConnection {
 }
 
 model FactKondorMetricsDaily {
-  id         String             @id @default(uuid())
-  tenantId   String
-  tenant     Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  brandId    String
-  brand      Client             @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  date       DateTime           @db.Date
-  platform   BrandSourcePlatform
-  accountId  String
-  campaignId String?
-  adsetId    String?
-  adId       String?
-  currency   String
+  id          String              @id @default(uuid())
+  tenantId    String
+  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  brandId     String
+  brand       Client              @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  date        DateTime            @db.Date
+  platform    BrandSourcePlatform
+  accountId   String
+  campaignId  String?
+  adsetId     String?
+  adId        String?
+  currency    String
   impressions BigInt
-  clicks     BigInt
-  spend      Decimal            @db.Decimal(18, 6)
-  conversions Decimal           @db.Decimal(18, 6)
-  revenue    Decimal            @db.Decimal(18, 6)
-  sessions   BigInt?
-  leads      BigInt?
+  clicks      BigInt
+  spend       Decimal             @db.Decimal(18, 6)
+  conversions Decimal             @db.Decimal(18, 6)
+  revenue     Decimal             @db.Decimal(18, 6)
+  sessions    BigInt?
+  leads       BigInt?
 
   @@index([tenantId, brandId, date])
   @@index([tenantId, brandId, platform, date])
@@ -1377,9 +1379,9 @@ model Integration {
   ownerType            IntegrationOwnerType @default(AGENCY)
   ownerKey             String               @default("AGENCY")
 
-  integrationJobs IntegrationJob[]
+  integrationJobs       IntegrationJob[]
   dataSourceConnections DataSourceConnection[]
-  metrics         Metric[]   @relation("IntegrationMetrics")
+  metrics               Metric[]               @relation("IntegrationMetrics")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1411,19 +1413,19 @@ model IntegrationJob {
 }
 
 model IntegrationGoogleGa4 {
-  id                String   @id @default(uuid())
-  tenantId          String   @unique
-  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  userId            String
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                 String                         @id @default(uuid())
+  tenantId           String                         @unique
+  tenant             Tenant                         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId             String
+  user               User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
   googleAccountEmail String?
-  accessToken       String?
-  refreshTokenEnc   String?
-  tokenExpiry       DateTime?
-  scope             String
-  status            Ga4IntegrationStatus @default(DISCONNECTED)
-  lastError         String?
-  properties        IntegrationGoogleGa4Property[]
+  accessToken        String?
+  refreshTokenEnc    String?
+  tokenExpiry        DateTime?
+  scope              String
+  status             Ga4IntegrationStatus           @default(DISCONNECTED)
+  lastError          String?
+  properties         IntegrationGoogleGa4Property[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1433,15 +1435,15 @@ model IntegrationGoogleGa4 {
 }
 
 model IntegrationGoogleGa4Property {
-  id            String   @id @default(uuid())
+  id            String               @id @default(uuid())
   tenantId      String
-  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant        Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   integrationId String
   integration   IntegrationGoogleGa4 @relation(fields: [integrationId], references: [id], onDelete: Cascade)
   propertyId    String
   displayName   String
   accountId     String?
-  isSelected    Boolean  @default(false)
+  isSelected    Boolean              @default(false)
   dashboards    AnalyticsDashboard[]
 
   createdAt DateTime @default(now())
@@ -1455,9 +1457,9 @@ model IntegrationGoogleGa4Property {
 }
 
 model Ga4ApiCache {
-  id          String         @id @default(uuid())
+  id          String          @id @default(uuid())
   tenantId    String
-  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   propertyId  String
   kind        Ga4ApiCacheKind
   requestHash String
@@ -1476,9 +1478,9 @@ model Ga4ApiCache {
 }
 
 model Ga4ApiCall {
-  id          String         @id @default(uuid())
+  id          String          @id @default(uuid())
   tenantId    String
-  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   propertyId  String
   kind        Ga4ApiCacheKind
   requestHash String
@@ -1498,11 +1500,11 @@ model Ga4ApiCall {
 }
 
 model AnalyticsDashboard {
-  id                    String   @id @default(uuid())
+  id                    String                       @id @default(uuid())
   tenantId              String
-  tenant                Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant                Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   userId                String
-  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                  User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
   integrationPropertyId String
   integrationProperty   IntegrationGoogleGa4Property @relation(fields: [integrationPropertyId], references: [id], onDelete: Restrict)
   name                  String
@@ -1520,11 +1522,11 @@ model AnalyticsDashboard {
 }
 
 model AnalyticsDashboardWidget {
-  id          String   @id @default(uuid())
+  id          String              @id @default(uuid())
   tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   dashboardId String
-  dashboard   AnalyticsDashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+  dashboard   AnalyticsDashboard  @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
   type        AnalyticsWidgetType
   title       String
   config      Json
