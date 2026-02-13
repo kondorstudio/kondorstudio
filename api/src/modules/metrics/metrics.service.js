@@ -550,17 +550,40 @@ function buildWhereClause({ tenantId, brandId, dateFrom, dateTo, filters }) {
   (filters || []).forEach((filter) => {
     const column = DIMENSION_COLUMN_MAP[filter.field];
     if (!column) return;
+    const isPlatformFilter = filter.field === 'platform';
+    const cast = isPlatformFilter ? '::"BrandSourcePlatform"' : '';
     if (filter.op === 'eq') {
-      conditions.push(`"${column}" = $${paramIndex}`);
-      params.push(filter.value);
+      const value = isPlatformFilter ? normalizePlatform(filter.value) : filter.value;
+      if (isPlatformFilter && !value) {
+        const err = new Error('Filtro de plataforma inválido');
+        err.code = 'INVALID_PLATFORM_FILTER';
+        err.status = 400;
+        err.details = { value: filter.value };
+        throw err;
+      }
+      conditions.push(`"${column}" = $${paramIndex}${cast}`);
+      params.push(value);
       paramIndex += 1;
       return;
     }
 
     if (filter.op === 'in') {
-      const values = Array.isArray(filter.value) ? filter.value : [];
-      if (!values.length) return;
-      const placeholders = values.map(() => `$${paramIndex++}`);
+      const rawValues = Array.isArray(filter.value) ? filter.value : [];
+      if (!rawValues.length) return;
+
+      const values = isPlatformFilter
+        ? rawValues.map((entry) => normalizePlatform(entry)).filter(Boolean)
+        : rawValues;
+
+      if (isPlatformFilter && values.length !== rawValues.length) {
+        const err = new Error('Filtro de plataforma inválido');
+        err.code = 'INVALID_PLATFORM_FILTER';
+        err.status = 400;
+        err.details = { values: rawValues };
+        throw err;
+      }
+
+      const placeholders = values.map(() => `$${paramIndex++}${cast}`);
       params.push(...values);
       conditions.push(`"${column}" IN (${placeholders.join(', ')})`);
     }
