@@ -2,6 +2,7 @@ const ga4OAuthService = require('./ga4OAuthService');
 const { google } = require('googleapis');
 const ga4QuotaCache = require('./ga4QuotaCacheService');
 const ga4DbCache = require('./ga4DbCacheService');
+const ga4ApiCallLogService = require('./ga4ApiCallLogService');
 
 const DATA_API_VERSION = ['v1beta', 'v1alpha'].includes(process.env.GA4_DATA_API_VERSION)
   ? process.env.GA4_DATA_API_VERSION
@@ -190,18 +191,47 @@ async function getMetadata({ tenantId, userId, propertyId }) {
     tenantId,
     userId,
   });
-  const metadata = await fetchMetadata(accessToken, propertyId);
-  await ga4QuotaCache.setMetadataCache(cacheKey, metadata);
-  await ga4DbCache.setCache({
-    tenantId,
-    propertyId,
-    kind: 'METADATA',
-    requestHash,
-    request: requestPayload,
-    response: metadata,
-    ttlMs: METADATA_TTL_MS,
-  });
-  return metadata;
+  const startedAt = Date.now();
+
+  try {
+    const metadata = await fetchMetadata(accessToken, propertyId);
+    await ga4QuotaCache.setMetadataCache(cacheKey, metadata);
+    await ga4DbCache.setCache({
+      tenantId,
+      propertyId,
+      kind: 'METADATA',
+      requestHash,
+      request: requestPayload,
+      response: metadata,
+      ttlMs: METADATA_TTL_MS,
+    });
+
+    await ga4ApiCallLogService.logCall({
+      tenantId,
+      propertyId,
+      kind: 'METADATA',
+      requestHash,
+      request: requestPayload,
+      response: metadata,
+      httpStatus: 200,
+      durationMs: Date.now() - startedAt,
+    });
+
+    return metadata;
+  } catch (err) {
+    await ga4ApiCallLogService.logCall({
+      tenantId,
+      propertyId,
+      kind: 'METADATA',
+      requestHash,
+      request: requestPayload,
+      response: null,
+      httpStatus: err?.status || err?.response?.status || null,
+      error: err,
+      durationMs: Date.now() - startedAt,
+    });
+    throw err;
+  }
 }
 
 module.exports = {

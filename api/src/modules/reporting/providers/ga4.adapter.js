@@ -4,6 +4,7 @@ const {
 } = require('./providerUtils');
 const googleAnalyticsMetricsService = require('../../../services/googleAnalyticsMetricsService');
 const ga4DataService = require('../../../services/ga4DataService');
+const ga4AdminService = require('../../../services/ga4AdminService');
 const { resolveGa4IntegrationContext } = require('../../../services/ga4IntegrationResolver');
 const { getServiceAccountAccessToken } = require('../../../lib/googleServiceAccount');
 
@@ -344,37 +345,6 @@ function buildPie(dimensionHeaders, metricHeaders, rows) {
   }));
 }
 
-async function fetchAccountSummaries(accessToken) {
-  const summaries = [];
-  let pageToken = null;
-  const pageSize = Number(process.env.GA4_ADMIN_PAGE_SIZE || 200);
-
-  do {
-    const url = new URL('https://analyticsadmin.googleapis.com/v1/accountSummaries');
-    if (pageSize) url.searchParams.set('pageSize', String(pageSize));
-    if (pageToken) url.searchParams.set('pageToken', pageToken);
-
-    try {
-      /* eslint-disable no-undef */
-      const res = await fetch(url.toString(), {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      if (!res.ok) return summaries;
-      const json = await res.json();
-      const batch = Array.isArray(json.accountSummaries)
-        ? json.accountSummaries
-        : [];
-      summaries.push(...batch);
-      pageToken = json.nextPageToken || null;
-    } catch (_) {
-      return summaries;
-    }
-  } while (pageToken);
-
-  return summaries;
-}
-
 async function listSelectableAccounts(integration) {
   const settings = getIntegrationSettings(integration);
   const propertyId = settings.propertyId || settings.property_id || null;
@@ -408,23 +378,15 @@ async function listSelectableAccounts(integration) {
   if (!accessToken) return [];
 
   try {
-    const summaries = await fetchAccountSummaries(accessToken);
-    const properties = [];
-    summaries.forEach((summary) => {
-      const props = Array.isArray(summary.propertySummaries)
-        ? summary.propertySummaries
-        : [];
-      props.forEach((prop) => {
-        const id = prop.property ? prop.property.replace('properties/', '') : null;
-        if (!id) return;
-        properties.push({
-          id: String(id),
-          displayName: prop.displayName || `Property ${id}`,
-          meta: { propertyId: String(id), accountId: summary.account || null },
-        });
-      });
-    });
-    return properties;
+    const items = await ga4AdminService.fetchProperties(accessToken);
+    return (items || []).map((prop) => ({
+      id: String(prop.propertyId),
+      displayName: prop.displayName || `Property ${prop.propertyId}`,
+      meta: {
+        propertyId: String(prop.propertyId),
+        accountId: prop.accountId ? `accounts/${prop.accountId}` : null,
+      },
+    }));
   } catch (_) {
     return [];
   }

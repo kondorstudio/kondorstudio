@@ -4,6 +4,7 @@ const ga4OAuthService = require('./ga4OAuthService');
 const ga4MetadataService = require('./ga4MetadataService');
 const ga4QuotaCache = require('./ga4QuotaCacheService');
 const ga4DbCache = require('./ga4DbCacheService');
+const ga4ApiCallLogService = require('./ga4ApiCallLogService');
 
 const DATA_API_VERSION = ['v1beta', 'v1alpha'].includes(process.env.GA4_DATA_API_VERSION)
   ? process.env.GA4_DATA_API_VERSION
@@ -660,109 +661,156 @@ async function runReport({
   }
 
   return ga4QuotaCache.withPropertyLimit(propertyId, async () => {
-    const accessToken = await ga4OAuthService.getValidAccessToken({
-      tenantId,
-      userId,
-    });
+    const startedAt = Date.now();
 
-    const client = createAnalyticsDataClient(accessToken);
+    try {
+      const accessToken = await ga4OAuthService.getValidAccessToken({
+        tenantId,
+        userId,
+      });
 
-    const baseBody = {
-      dateRanges: normalized.dateRanges,
-      metrics: normalized.metrics.map((name) => ({ name })),
-      dimensions: normalized.dimensions.map((name) => ({ name })),
-      returnPropertyQuota: true,
-    };
+      const client = createAnalyticsDataClient(accessToken);
 
-    if (normalized.dimensionFilter) baseBody.dimensionFilter = normalized.dimensionFilter;
-    if (normalized.metricFilter) baseBody.metricFilter = normalized.metricFilter;
-    if (normalized.orderBys) baseBody.orderBys = normalized.orderBys;
+      const baseBody = {
+        dateRanges: normalized.dateRanges,
+        metrics: normalized.metrics.map((name) => ({ name })),
+        dimensions: normalized.dimensions.map((name) => ({ name })),
+        returnPropertyQuota: true,
+      };
 
-    const callPage = async ({ limit, offset }) => {
-      const requestBody = { ...baseBody };
-      if (limit !== null && limit !== undefined) requestBody.limit = String(limit);
-      if (offset !== null && offset !== undefined) requestBody.offset = String(offset);
+      if (normalized.dimensionFilter) baseBody.dimensionFilter = normalized.dimensionFilter;
+      if (normalized.metricFilter) baseBody.metricFilter = normalized.metricFilter;
+      if (normalized.orderBys) baseBody.orderBys = normalized.orderBys;
 
-      const res = await callWithRetry(
-        () =>
-          client.properties.runReport(
-            {
-              property: `properties/${String(propertyId)}`,
-              requestBody,
-            },
-            { timeout: GA4_HTTP_TIMEOUT_MS },
-          ),
-        { endpoint: 'runReport', propertyId },
-      );
-      return normalizeResponse(res?.data || {});
-    };
+      const callPage = async ({ limit, offset }) => {
+        const requestBody = { ...baseBody };
+        if (limit !== null && limit !== undefined) requestBody.limit = String(limit);
+        if (offset !== null && offset !== undefined) requestBody.offset = String(offset);
 
-    const limit = normalized.limit || null;
-    const offset = normalized.offset || 0;
+        const res = await callWithRetry(
+          () =>
+            client.properties.runReport(
+              {
+                property: `properties/${String(propertyId)}`,
+                requestBody,
+              },
+              { timeout: GA4_HTTP_TIMEOUT_MS },
+            ),
+          { endpoint: 'runReport', propertyId },
+        );
+        return normalizeResponse(res?.data || {});
+      };
 
-    if (!paginateAll) {
-      const normalizedResponse = await callPage({ limit, offset });
-      await ga4QuotaCache.setCache(cacheKey, normalizedResponse, effectiveTtlMs);
+      const limit = normalized.limit || null;
+      const offset = normalized.offset || 0;
+
+      if (!paginateAll) {
+        const normalizedResponse = await callPage({ limit, offset });
+        await ga4QuotaCache.setCache(cacheKey, normalizedResponse, effectiveTtlMs);
+        await ga4DbCache.setCache({
+          tenantId,
+          propertyId,
+          kind: 'REPORT',
+          requestHash,
+          request: cachePayload,
+          response: normalizedResponse,
+          ttlMs: effectiveTtlMs,
+        });
+
+        await ga4ApiCallLogService.logCall({
+          tenantId,
+          propertyId,
+          kind: 'REPORT',
+          requestHash,
+          request: cachePayload,
+          response: normalizedResponse,
+          httpStatus: 200,
+          durationMs: Date.now() - startedAt,
+        });
+
+        return normalizedResponse;
+      }
+
+      const pageSize = limit || MAX_LIMIT;
+      const totalLimit = Number.isFinite(Number(maxRows))
+        ? Math.max(0, Number(maxRows))
+        : MAX_TOTAL_ROWS;
+
+      const rows = [];
+      let first = null;
+      let currentOffset = offset;
+      let truncated = false;
+      let pages = 0;
+
+      while (true) {
+        // eslint-disable-next-line no-await-in-loop
+        const page = await callPage({ limit: pageSize, offset: currentOffset });
+        pages += 1;
+        if (!first) first = page;
+        if (Array.isArray(page.rows) && page.rows.length) {
+          rows.push(...page.rows);
+        }
+
+        const rowCount = Number(page.rowCount || 0);
+        if (!page.rows || page.rows.length === 0) break;
+        if (rowCount && rows.length >= rowCount) break;
+        if (totalLimit && rows.length >= totalLimit) {
+          truncated = true;
+          break;
+        }
+
+        currentOffset += pageSize;
+      }
+
+      const result = {
+        ...(first || {}),
+        rows,
+        rowCount: first?.rowCount ?? rows.length,
+        meta: {
+          ...(first?.meta || {}),
+          ...(truncated ? { truncated: true, maxRows: totalLimit } : {}),
+          paginated: true,
+          pages,
+        },
+      };
+
+      await ga4QuotaCache.setCache(cacheKey, result, effectiveTtlMs);
       await ga4DbCache.setCache({
         tenantId,
         propertyId,
         kind: 'REPORT',
         requestHash,
         request: cachePayload,
-        response: normalizedResponse,
+        response: result,
         ttlMs: effectiveTtlMs,
       });
-      return normalizedResponse;
+
+      await ga4ApiCallLogService.logCall({
+        tenantId,
+        propertyId,
+        kind: 'REPORT',
+        requestHash,
+        request: cachePayload,
+        response: result,
+        httpStatus: 200,
+        durationMs: Date.now() - startedAt,
+      });
+
+      return result;
+    } catch (err) {
+      await ga4ApiCallLogService.logCall({
+        tenantId,
+        propertyId,
+        kind: 'REPORT',
+        requestHash,
+        request: cachePayload,
+        response: null,
+        httpStatus: err?.status || err?.response?.status || null,
+        error: err,
+        durationMs: Date.now() - startedAt,
+      });
+      throw err;
     }
-
-    const pageSize = limit || MAX_LIMIT;
-    const totalLimit = Number.isFinite(Number(maxRows))
-      ? Math.max(0, Number(maxRows))
-      : MAX_TOTAL_ROWS;
-
-    const rows = [];
-    let first = null;
-    let currentOffset = offset;
-    let truncated = false;
-
-    while (true) {
-      // eslint-disable-next-line no-await-in-loop
-      const page = await callPage({ limit: pageSize, offset: currentOffset });
-      if (!first) first = page;
-      if (Array.isArray(page.rows) && page.rows.length) {
-        rows.push(...page.rows);
-      }
-
-      const rowCount = Number(page.rowCount || 0);
-      if (!page.rows || page.rows.length === 0) break;
-      if (rowCount && rows.length >= rowCount) break;
-      if (totalLimit && rows.length >= totalLimit) {
-        truncated = true;
-        break;
-      }
-
-      currentOffset += pageSize;
-    }
-
-    const result = {
-      ...(first || {}),
-      rows,
-      rowCount: first?.rowCount ?? rows.length,
-      ...(truncated ? { meta: { truncated: true, maxRows: totalLimit } } : {}),
-    };
-
-    await ga4QuotaCache.setCache(cacheKey, result, effectiveTtlMs);
-    await ga4DbCache.setCache({
-      tenantId,
-      propertyId,
-      kind: 'REPORT',
-      requestHash,
-      request: cachePayload,
-      response: result,
-      ttlMs: effectiveTtlMs,
-    });
-
-    return result;
   });
 }
 
@@ -857,74 +905,103 @@ async function checkCompatibility({
   }
 
   return ga4QuotaCache.withPropertyLimit(propertyId, async () => {
-    const accessToken = await ga4OAuthService.getValidAccessToken({
-      tenantId,
-      userId,
-    });
+    const startedAt = Date.now();
 
-    const client = createAnalyticsDataClient(accessToken);
+    try {
+      const accessToken = await ga4OAuthService.getValidAccessToken({
+        tenantId,
+        userId,
+      });
 
-    const requestBody = {
-      metrics: normalized.metrics.map((name) => ({ name })),
-      dimensions: normalized.dimensions.map((name) => ({ name })),
-    };
+      const client = createAnalyticsDataClient(accessToken);
 
-    if (normalized.dimensionFilter) requestBody.dimensionFilter = normalized.dimensionFilter;
-    if (normalized.metricFilter) requestBody.metricFilter = normalized.metricFilter;
-    if (normalized.compatibilityFilter) {
-      requestBody.compatibilityFilter = normalized.compatibilityFilter;
+      const requestBody = {
+        metrics: normalized.metrics.map((name) => ({ name })),
+        dimensions: normalized.dimensions.map((name) => ({ name })),
+      };
+
+      if (normalized.dimensionFilter) requestBody.dimensionFilter = normalized.dimensionFilter;
+      if (normalized.metricFilter) requestBody.metricFilter = normalized.metricFilter;
+      if (normalized.compatibilityFilter) {
+        requestBody.compatibilityFilter = normalized.compatibilityFilter;
+      }
+
+      const res = await callWithRetry(
+        () =>
+          client.properties.checkCompatibility(
+            {
+              property: `properties/${String(propertyId)}`,
+              requestBody,
+            },
+            { timeout: GA4_HTTP_TIMEOUT_MS },
+          ),
+        { endpoint: 'checkCompatibility', propertyId },
+      );
+
+      const json = res?.data || {};
+
+      const metricCompat = Array.isArray(json.metricCompatibilities)
+        ? json.metricCompatibilities
+        : [];
+      const dimensionCompat = Array.isArray(json.dimensionCompatibilities)
+        ? json.dimensionCompatibilities
+        : [];
+
+      const incompatibleMetrics = metricCompat
+        .filter((item) => item.compatibility && item.compatibility !== 'COMPATIBLE')
+        .map((item) => item.metricMetadata?.apiName)
+        .filter(Boolean);
+
+      const incompatibleDimensions = dimensionCompat
+        .filter((item) => item.compatibility && item.compatibility !== 'COMPATIBLE')
+        .map((item) => item.dimensionMetadata?.apiName)
+        .filter(Boolean);
+
+      const result = {
+        compatible: !incompatibleMetrics.length && !incompatibleDimensions.length,
+        metrics: normalized.metrics,
+        dimensions: normalized.dimensions,
+        incompatibleMetrics,
+        incompatibleDimensions,
+      };
+
+      await ga4QuotaCache.setCache(cacheKey, result, effectiveTtlMs);
+      await ga4DbCache.setCache({
+        tenantId,
+        propertyId,
+        kind: 'COMPATIBILITY',
+        requestHash,
+        request: normalized,
+        response: result,
+        ttlMs: effectiveTtlMs,
+      });
+
+      await ga4ApiCallLogService.logCall({
+        tenantId,
+        propertyId,
+        kind: 'COMPATIBILITY',
+        requestHash,
+        request: normalized,
+        response: result,
+        httpStatus: 200,
+        durationMs: Date.now() - startedAt,
+      });
+
+      return result;
+    } catch (err) {
+      await ga4ApiCallLogService.logCall({
+        tenantId,
+        propertyId,
+        kind: 'COMPATIBILITY',
+        requestHash,
+        request: normalized,
+        response: null,
+        httpStatus: err?.status || err?.response?.status || null,
+        error: err,
+        durationMs: Date.now() - startedAt,
+      });
+      throw err;
     }
-
-    const res = await callWithRetry(
-      () =>
-        client.properties.checkCompatibility(
-          {
-            property: `properties/${String(propertyId)}`,
-            requestBody,
-          },
-          { timeout: GA4_HTTP_TIMEOUT_MS },
-        ),
-      { endpoint: 'checkCompatibility', propertyId },
-    );
-
-    const json = res?.data || {};
-
-    const metricCompat = Array.isArray(json.metricCompatibilities)
-      ? json.metricCompatibilities
-      : [];
-    const dimensionCompat = Array.isArray(json.dimensionCompatibilities)
-      ? json.dimensionCompatibilities
-      : [];
-
-    const incompatibleMetrics = metricCompat
-      .filter((item) => item.compatibility && item.compatibility !== 'COMPATIBLE')
-      .map((item) => item.metricMetadata?.apiName)
-      .filter(Boolean);
-
-    const incompatibleDimensions = dimensionCompat
-      .filter((item) => item.compatibility && item.compatibility !== 'COMPATIBLE')
-      .map((item) => item.dimensionMetadata?.apiName)
-      .filter(Boolean);
-
-    const result = {
-      compatible: !incompatibleMetrics.length && !incompatibleDimensions.length,
-      metrics: normalized.metrics,
-      dimensions: normalized.dimensions,
-      incompatibleMetrics,
-      incompatibleDimensions,
-    };
-
-    await ga4QuotaCache.setCache(cacheKey, result, effectiveTtlMs);
-    await ga4DbCache.setCache({
-      tenantId,
-      propertyId,
-      kind: 'COMPATIBILITY',
-      requestHash,
-      request: normalized,
-      response: result,
-      ttlMs: effectiveTtlMs,
-    });
-    return result;
   });
 }
 
@@ -999,51 +1076,79 @@ async function runRealtimeReport({
   }
 
   return ga4QuotaCache.withPropertyLimit(propertyId, async () => {
-    const accessToken = await ga4OAuthService.getValidAccessToken({
-      tenantId,
-      userId,
-    });
+    const startedAt = Date.now();
 
-    const client = createAnalyticsDataClient(accessToken);
+    try {
+      const accessToken = await ga4OAuthService.getValidAccessToken({
+        tenantId,
+        userId,
+      });
 
-    const requestBody = {
-      minuteRanges: normalized.minuteRanges,
-      metrics: normalized.metrics.map((name) => ({ name })),
-      dimensions: normalized.dimensions.map((name) => ({ name })),
-      returnPropertyQuota: true,
-    };
+      const client = createAnalyticsDataClient(accessToken);
 
-    if (normalized.dimensionFilter) requestBody.dimensionFilter = normalized.dimensionFilter;
-    if (normalized.metricFilter) requestBody.metricFilter = normalized.metricFilter;
-    if (normalized.orderBys) requestBody.orderBys = normalized.orderBys;
-    if (normalized.limit) requestBody.limit = String(normalized.limit);
+      const requestBody = {
+        minuteRanges: normalized.minuteRanges,
+        metrics: normalized.metrics.map((name) => ({ name })),
+        dimensions: normalized.dimensions.map((name) => ({ name })),
+        returnPropertyQuota: true,
+      };
 
-    const res = await callWithRetry(
-      () =>
-        client.properties.runRealtimeReport(
-          {
-            property: `properties/${String(propertyId)}`,
-            requestBody,
-          },
-          { timeout: GA4_HTTP_TIMEOUT_MS },
-        ),
-      { endpoint: 'runRealtimeReport', propertyId },
-    );
+      if (normalized.dimensionFilter) requestBody.dimensionFilter = normalized.dimensionFilter;
+      if (normalized.metricFilter) requestBody.metricFilter = normalized.metricFilter;
+      if (normalized.orderBys) requestBody.orderBys = normalized.orderBys;
+      if (normalized.limit) requestBody.limit = String(normalized.limit);
 
-    const result = normalizeResponse(res?.data || {});
+      const res = await callWithRetry(
+        () =>
+          client.properties.runRealtimeReport(
+            {
+              property: `properties/${String(propertyId)}`,
+              requestBody,
+            },
+            { timeout: GA4_HTTP_TIMEOUT_MS },
+          ),
+        { endpoint: 'runRealtimeReport', propertyId },
+      );
 
-    await ga4QuotaCache.setCache(cacheKey, result, effectiveTtlMs);
-    await ga4DbCache.setCache({
-      tenantId,
-      propertyId,
-      kind: 'REALTIME',
-      requestHash,
-      request: normalized,
-      response: result,
-      ttlMs: effectiveTtlMs,
-    });
+      const result = normalizeResponse(res?.data || {});
 
-    return result;
+      await ga4QuotaCache.setCache(cacheKey, result, effectiveTtlMs);
+      await ga4DbCache.setCache({
+        tenantId,
+        propertyId,
+        kind: 'REALTIME',
+        requestHash,
+        request: normalized,
+        response: result,
+        ttlMs: effectiveTtlMs,
+      });
+
+      await ga4ApiCallLogService.logCall({
+        tenantId,
+        propertyId,
+        kind: 'REALTIME',
+        requestHash,
+        request: normalized,
+        response: result,
+        httpStatus: 200,
+        durationMs: Date.now() - startedAt,
+      });
+
+      return result;
+    } catch (err) {
+      await ga4ApiCallLogService.logCall({
+        tenantId,
+        propertyId,
+        kind: 'REALTIME',
+        requestHash,
+        request: normalized,
+        response: null,
+        httpStatus: err?.status || err?.response?.status || null,
+        error: err,
+        durationMs: Date.now() - startedAt,
+      });
+      throw err;
+    }
   });
 }
 
@@ -1118,57 +1223,85 @@ async function batchRunReports({
   }
 
   return ga4QuotaCache.withPropertyLimit(propertyId, async () => {
-    const accessToken = await ga4OAuthService.getValidAccessToken({
-      tenantId,
-      userId,
-    });
-    const client = createAnalyticsDataClient(accessToken);
+    const startedAt = Date.now();
 
-    const requests = normalized.requests.map((req) => {
-      const requestBody = {
-        dateRanges: req.dateRanges,
-        metrics: req.metrics.map((name) => ({ name })),
-        dimensions: req.dimensions.map((name) => ({ name })),
-        returnPropertyQuota: true,
+    try {
+      const accessToken = await ga4OAuthService.getValidAccessToken({
+        tenantId,
+        userId,
+      });
+      const client = createAnalyticsDataClient(accessToken);
+
+      const requests = normalized.requests.map((req) => {
+        const requestBody = {
+          dateRanges: req.dateRanges,
+          metrics: req.metrics.map((name) => ({ name })),
+          dimensions: req.dimensions.map((name) => ({ name })),
+          returnPropertyQuota: true,
+        };
+        if (req.dimensionFilter) requestBody.dimensionFilter = req.dimensionFilter;
+        if (req.metricFilter) requestBody.metricFilter = req.metricFilter;
+        if (req.orderBys) requestBody.orderBys = req.orderBys;
+        if (req.limit) requestBody.limit = String(req.limit);
+        if (req.offset !== null && req.offset !== undefined) requestBody.offset = String(req.offset);
+        return requestBody;
+      });
+
+      const res = await callWithRetry(
+        () =>
+          client.properties.batchRunReports(
+            {
+              property: `properties/${String(propertyId)}`,
+              requestBody: { requests },
+            },
+            { timeout: GA4_HTTP_TIMEOUT_MS },
+          ),
+        { endpoint: 'batchRunReports', propertyId },
+      );
+
+      const rawReports = Array.isArray(res?.data?.reports) ? res.data.reports : [];
+      const reports = rawReports.map((r) => normalizeResponse(r || {}));
+      const result = {
+        reports,
       };
-      if (req.dimensionFilter) requestBody.dimensionFilter = req.dimensionFilter;
-      if (req.metricFilter) requestBody.metricFilter = req.metricFilter;
-      if (req.orderBys) requestBody.orderBys = req.orderBys;
-      if (req.limit) requestBody.limit = String(req.limit);
-      if (req.offset !== null && req.offset !== undefined) requestBody.offset = String(req.offset);
-      return requestBody;
-    });
 
-    const res = await callWithRetry(
-      () =>
-        client.properties.batchRunReports(
-          {
-            property: `properties/${String(propertyId)}`,
-            requestBody: { requests },
-          },
-          { timeout: GA4_HTTP_TIMEOUT_MS },
-        ),
-      { endpoint: 'batchRunReports', propertyId },
-    );
+      await ga4QuotaCache.setCache(cacheKey, result, effectiveTtlMs);
+      await ga4DbCache.setCache({
+        tenantId,
+        propertyId,
+        kind: 'BATCH_REPORT',
+        requestHash,
+        request: normalized,
+        response: result,
+        ttlMs: effectiveTtlMs,
+      });
 
-    const rawReports = Array.isArray(res?.data?.reports) ? res.data.reports : [];
-    const reports = rawReports.map((r) => normalizeResponse(r || {}));
-    const result = {
-      reports,
-    };
+      await ga4ApiCallLogService.logCall({
+        tenantId,
+        propertyId,
+        kind: 'BATCH_REPORT',
+        requestHash,
+        request: normalized,
+        response: result,
+        httpStatus: 200,
+        durationMs: Date.now() - startedAt,
+      });
 
-    await ga4QuotaCache.setCache(cacheKey, result, effectiveTtlMs);
-    await ga4DbCache.setCache({
-      tenantId,
-      propertyId,
-      kind: 'BATCH_REPORT',
-      requestHash,
-      request: normalized,
-      response: result,
-      ttlMs: effectiveTtlMs,
-    });
-
-    return result;
+      return result;
+    } catch (err) {
+      await ga4ApiCallLogService.logCall({
+        tenantId,
+        propertyId,
+        kind: 'BATCH_REPORT',
+        requestHash,
+        request: normalized,
+        response: null,
+        httpStatus: err?.status || err?.response?.status || null,
+        error: err,
+        durationMs: Date.now() - startedAt,
+      });
+      throw err;
+    }
   });
 }
 

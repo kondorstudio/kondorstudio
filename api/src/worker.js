@@ -27,6 +27,7 @@ const publishScheduledPostsJob = require('./jobs/publishScheduledPostsJob');
 const reportSchedulesService = require('./modules/reporting/reportSchedules.service');
 const ga4FactSyncJob = require('./jobs/ga4FactSyncJob');
 const ga4RealtimeSyncJob = require('./jobs/ga4RealtimeSyncJob');
+const ga4PruneJob = require('./jobs/ga4PruneJob');
 
 // ------------------------------------------------------
 // Conexão do BullMQ (usa REDIS_URL da env; em dev cai pro localhost)
@@ -50,6 +51,8 @@ const GA4_FACT_SYNC_PERIOD_MS =
   Number(process.env.GA4_FACT_SYNC_PERIOD_MS) || 3600000; // 1h
 const GA4_REALTIME_SYNC_PERIOD_MS =
   Number(process.env.GA4_REALTIME_SYNC_PERIOD_MS) || 60000; // 1min
+const GA4_PRUNE_PERIOD_MS =
+  Number(process.env.GA4_PRUNE_PERIOD_MS) || 24 * 60 * 60 * 1000; // 24h
 
 // ------------------------------------------------------
 // Helper genérico para rodar pollOnce() dos módulos de job
@@ -187,6 +190,10 @@ const ga4SyncWorker = ga4SyncQueue
         }
         if (job.name === 'ga4-facts-sync') {
           await runPollOnce(ga4FactSyncJob, 'ga4FactSyncJob');
+          return;
+        }
+        if (job.name === 'ga4-prune') {
+          await runPollOnce(ga4PruneJob, 'ga4PruneJob');
           return;
         }
 
@@ -380,6 +387,7 @@ async function ensureRepeatableJobs() {
     DASHBOARD_REFRESH_PERIOD_MS,
     GA4_FACT_SYNC_PERIOD_MS,
     GA4_REALTIME_SYNC_PERIOD_MS,
+    GA4_PRUNE_PERIOD_MS,
   });
 
   if (metricsSyncQueue) {
@@ -406,6 +414,9 @@ async function ensureRepeatableJobs() {
     }
     if (GA4_REALTIME_SYNC_PERIOD_MS > 0) {
       await ga4SyncQueue.upsertJobScheduler('ga4-realtime-sync', { every: GA4_REALTIME_SYNC_PERIOD_MS });
+    }
+    if (GA4_PRUNE_PERIOD_MS > 0) {
+      await ga4SyncQueue.upsertJobScheduler('ga4-prune', { every: GA4_PRUNE_PERIOD_MS });
     }
   }
 

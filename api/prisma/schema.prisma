@@ -1475,6 +1475,28 @@ model Ga4ApiCache {
   @@map("ga4_api_cache")
 }
 
+model Ga4ApiCall {
+  id          String         @id @default(uuid())
+  tenantId    String
+  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  propertyId  String
+  kind        Ga4ApiCacheKind
+  requestHash String
+  request     Json
+  response    Json?
+  httpStatus  Int?
+  error       String?
+  durationMs  Int?
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([tenantId, propertyId])
+  @@index([kind])
+  @@index([createdAt])
+  @@map("ga4_api_calls")
+}
+
 model AnalyticsDashboard {
   id                    String   @id @default(uuid())
   tenantId              String
