@@ -765,6 +765,21 @@ async function runAggregates({
     filters,
   });
 
+  // GA4 facts can exist in 2 granularities:
+  // - aggregated: campaignId IS NULL
+  // - campaign breakdown: campaignId IS NOT NULL
+  // If we don't scope them, queries without `campaign_id` would double-count totals
+  // once both granularities are materialized.
+  const wantsCampaignFacts =
+    Array.isArray(dimensions) && dimensions.includes('campaign_id') ||
+    Array.isArray(filters) && filters.some((filter) => filter?.field === 'campaign_id');
+
+  const ga4ScopeClause = wantsCampaignFacts
+    ? '("platform" <> \'GA4\'::"BrandSourcePlatform" OR "campaignId" IS NOT NULL)'
+    : '("platform" <> \'GA4\'::"BrandSourcePlatform" OR "campaignId" IS NULL)';
+
+  const scopedWhereSql = `${whereSql} AND ${ga4ScopeClause}`;
+
   const selectClause = buildSelectClause({
     dimensions,
     baseMetrics,
@@ -791,14 +806,14 @@ async function runAggregates({
     nextParams.push(cap);
   }
 
-  const baseQuery = `SELECT ${selectClause} FROM "fact_kondor_metrics_daily" WHERE ${whereSql} ${groupByClause} ${orderByClause} ${paginationClause}`;
+  const baseQuery = `SELECT ${selectClause} FROM "fact_kondor_metrics_daily" WHERE ${scopedWhereSql} ${groupByClause} ${orderByClause} ${paginationClause}`;
 
   const totalsSelect = buildSelectClause({
     dimensions: [],
     baseMetrics,
     derivedMetrics: [],
   });
-  const totalsQuery = `SELECT ${totalsSelect} FROM "fact_kondor_metrics_daily" WHERE ${whereSql}`;
+  const totalsQuery = `SELECT ${totalsSelect} FROM "fact_kondor_metrics_daily" WHERE ${scopedWhereSql}`;
 
   const rows = await prisma.$queryRawUnsafe(baseQuery, ...nextParams);
   const totalsResult = await prisma.$queryRawUnsafe(totalsQuery, ...params);

@@ -3,9 +3,25 @@ const ga4DataService = require('./ga4DataService');
 const { resolveGa4IntegrationContext } = require('./ga4IntegrationResolver');
 
 const DEFAULT_CURRENCY = process.env.DEFAULT_CURRENCY || 'BRL';
+function parseEnvList(value) {
+  if (!value) return [];
+  return String(value)
+    .split(/[,\n;]+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
 // GA4 standard event name for lead generation.
-// You can override it per environment using GA4_LEAD_EVENT_NAME.
-const LEAD_EVENT_NAME = process.env.GA4_LEAD_EVENT_NAME || 'generate_lead';
+// You can override it per environment using:
+// - GA4_LEAD_EVENT_NAME="generate_lead" (single)
+// - GA4_LEAD_EVENT_NAMES="generate_lead,lead" (multiple)
+const LEAD_EVENT_NAMES = (() => {
+  const list = parseEnvList(process.env.GA4_LEAD_EVENT_NAMES);
+  if (list.length) return list;
+  const single = String(process.env.GA4_LEAD_EVENT_NAME || '').trim();
+  if (single) return [single];
+  return ['generate_lead'];
+})();
 const CONVERSION_EVENT_NAME = process.env.GA4_CONVERSION_EVENT_NAME || null;
 const FACT_CACHE_TTL_MS = Number(process.env.GA4_FACT_CACHE_TTL_MS || 30000);
 
@@ -161,7 +177,7 @@ function buildGa4MetricPlan(requestedMetrics = []) {
 
   const wantsLeads = requested.has('leads');
   const wantsConversions = requested.has('conversions');
-  const needsLeadsFromEvent = Boolean(wantsLeads && LEAD_EVENT_NAME);
+  const needsLeadsFromEvent = Boolean(wantsLeads && LEAD_EVENT_NAMES.length);
 
   return {
     metrics: Array.from(metricsSet),
@@ -172,13 +188,24 @@ function buildGa4MetricPlan(requestedMetrics = []) {
 }
 
 function buildDimensionFilterForLeadEvent() {
-  if (!LEAD_EVENT_NAME) return null;
+  if (!LEAD_EVENT_NAMES.length) return null;
+  if (LEAD_EVENT_NAMES.length === 1) {
+    return {
+      filter: {
+        fieldName: 'eventName',
+        stringFilter: {
+          matchType: 'EXACT',
+          value: String(LEAD_EVENT_NAMES[0]),
+          caseSensitive: false,
+        },
+      },
+    };
+  }
   return {
     filter: {
       fieldName: 'eventName',
-      stringFilter: {
-        matchType: 'EXACT',
-        value: String(LEAD_EVENT_NAME),
+      inListFilter: {
+        values: LEAD_EVENT_NAMES.map((name) => String(name)),
         caseSensitive: false,
       },
     },
@@ -313,7 +340,7 @@ function buildFactRows({
   return rows;
 }
 
-async function hasGa4FactsForRange({ tenantId, brandId, propertyId, dateRange }) {
+async function hasGa4AggregatedFactsForRange({ tenantId, brandId, propertyId, dateRange }) {
   if (!tenantId || !brandId || !propertyId || !dateRange?.start || !dateRange?.end) return false;
   const count = await prisma.factKondorMetricsDaily.count({
     where: {
@@ -321,6 +348,7 @@ async function hasGa4FactsForRange({ tenantId, brandId, propertyId, dateRange })
       brandId: String(brandId),
       platform: 'GA4',
       accountId: String(propertyId),
+      campaignId: null,
       date: {
         gte: new Date(dateRange.start),
         lte: new Date(dateRange.end),
@@ -461,27 +489,22 @@ async function ensureGa4FactMetrics({
         throw err;
       }
 
-      const [hasFacts, hasCampaignFacts] = await Promise.all([
-        hasGa4FactsForRange({ tenantId, brandId, propertyId, dateRange }),
+      const [hasAggregatedFacts, hasCampaignFacts] = await Promise.all([
+        hasGa4AggregatedFactsForRange({ tenantId, brandId, propertyId, dateRange }),
         hasGa4CampaignFactsForRange({ tenantId, brandId, propertyId, dateRange }),
       ]);
 
-      // Preserve existing granularity: if we already store campaign-level facts,
-      // refresh/update using campaign breakdown even if the current request doesn't ask for it.
-      const effectiveWantsCampaign = Boolean(wantsCampaign || hasCampaignFacts);
-
       // Skip closed ranges once we have full facts materialized to avoid re-fetching and rewrites.
-      // For campaign dashboards, only skip when campaign-level rows already exist.
       if (!shouldRefreshOpenRange && fullFactSync) {
-        if (!effectiveWantsCampaign && hasFacts) {
+        if (!wantsCampaign && hasAggregatedFacts) {
           return;
         }
-        if (effectiveWantsCampaign && hasCampaignFacts) {
+        if (wantsCampaign && hasCampaignFacts) {
           return;
         }
       }
 
-      let campaignDimension = effectiveWantsCampaign ? 'campaignId' : null;
+      let campaignDimension = wantsCampaign ? 'campaignId' : null;
       let metricsForRequest = Array.isArray(metricPlan.metrics) ? [...metricPlan.metrics] : [];
       let conversionsMetricName = metricsForRequest.includes('conversions') ? 'conversions' : null;
       let conversionsInvalid = false;
@@ -507,7 +530,7 @@ async function ensureGa4FactMetrics({
         if (
           metricsList.length &&
           dim === 'campaignId' &&
-          effectiveWantsCampaign &&
+          wantsCampaign &&
           result.invalidDimensions.includes('campaignId')
         ) {
           dim = 'campaignName';
@@ -539,6 +562,12 @@ async function ensureGa4FactMetrics({
       let fetched = await fetchWithDimensionFallback(metricsForRequest, campaignDimension);
       let attempt = fetched.attempt;
       campaignDimension = fetched.campaignDimension;
+
+      // If the widget requires campaign breakdown but the property doesn't support campaign dimensions,
+      // skip mutating facts to avoid mixing scopes (campaign vs aggregated).
+      if (wantsCampaign && !campaignDimension) {
+        return;
+      }
 
       if (metricsForRequest.length && attempt.invalidMetrics.length) {
         if (conversionsMetricName && attempt.invalidMetrics.includes(conversionsMetricName)) {
@@ -576,6 +605,10 @@ async function ensureGa4FactMetrics({
           attempt = fetched.attempt;
           campaignDimension = fetched.campaignDimension;
         }
+      }
+
+      if (wantsCampaign && !campaignDimension) {
+        return;
       }
 
       if (attempt.error && !attempt.response) {
@@ -651,7 +684,12 @@ async function ensureGa4FactMetrics({
         rowsMap,
       });
 
-      if (!factRows.length) {
+      const writingCampaignFacts = Boolean(campaignDimension);
+      const scopedFactRows = writingCampaignFacts
+        ? factRows.filter((row) => row.campaignId !== null)
+        : factRows.filter((row) => row.campaignId === null);
+
+      if (!scopedFactRows.length) {
         return;
       }
 
@@ -661,6 +699,7 @@ async function ensureGa4FactMetrics({
           brandId,
           platform: 'GA4',
           accountId: propertyId,
+          campaignId: writingCampaignFacts ? { not: null } : null,
           date: {
             gte: new Date(dateRange.start),
             lte: new Date(dateRange.end),
@@ -669,9 +708,9 @@ async function ensureGa4FactMetrics({
       });
 
       const chunkSize = Math.max(100, Number(process.env.GA4_FACT_INSERT_CHUNK || 500));
-      for (let i = 0; i < factRows.length; i += chunkSize) {
+      for (let i = 0; i < scopedFactRows.length; i += chunkSize) {
         await prisma.factKondorMetricsDaily.createMany({
-          data: factRows.slice(i, i + chunkSize),
+          data: scopedFactRows.slice(i, i + chunkSize),
         });
       }
     });
