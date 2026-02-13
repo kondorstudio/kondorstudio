@@ -36,6 +36,10 @@ const GA4_METRIC_KEYS = new Set([
   'leads',
   'conversions',
 ]);
+
+// We materialize a consistent daily fact row shape for GA4 so that multiple widgets
+// (sessions/leads/conversions/revenue) don't race and overwrite each other with partial data.
+const FULL_FACT_METRICS = ['sessions', 'leads', 'conversions', 'revenue'];
 const factCache = new Map();
 
 function normalizePlatform(value) {
@@ -102,7 +106,7 @@ function isFullFactSync(metrics = []) {
   return set.has('sessions') && set.has('leads') && set.has('conversions') && set.has('revenue');
 }
 
-function buildFactCacheKey({ tenantId, brandId, propertyId, dateRange }) {
+function buildFactCacheKey({ tenantId, brandId, propertyId, dateRange, scope }) {
   if (!tenantId || !brandId || !propertyId || !dateRange?.start || !dateRange?.end) {
     return null;
   }
@@ -111,6 +115,7 @@ function buildFactCacheKey({ tenantId, brandId, propertyId, dateRange }) {
     tenantId,
     brandId,
     propertyId,
+    scope || 'agg',
     dateRange.start,
     dateRange.end,
   ].join(':');
@@ -448,10 +453,12 @@ async function ensureGa4FactMetrics({
     return { skipped: true, reason: 'no_connections' };
   }
 
-  const metricPlan = buildGa4MetricPlan(metrics);
-  if (!metricPlan.metrics.length && !metricPlan.needsLeadsFromEvent) {
+  const requestedMetricPlan = buildGa4MetricPlan(metrics);
+  if (!requestedMetricPlan.metrics.length && !requestedMetricPlan.needsLeadsFromEvent) {
     return { skipped: true, reason: 'no_ga4_metrics' };
   }
+
+  const metricPlan = buildGa4MetricPlan(FULL_FACT_METRICS);
 
   if (!platformAllowsGa4) {
     return { skipped: true, reason: 'platform_excludes_ga4' };
@@ -461,14 +468,21 @@ async function ensureGa4FactMetrics({
   const wantsCampaign =
     requestedDimensions.includes('campaign_id') ||
     extractFilterValues(filters, 'campaign_id').length > 0;
-  const fullFactSync = isFullFactSync(metrics);
+  const cacheScope = wantsCampaign ? 'campaign' : 'agg';
+  const fullFactSync = isFullFactSync(FULL_FACT_METRICS);
   const shouldRefreshOpenRange = rangeTouchesToday(dateRange);
 
   for (const connection of connections) {
     const propertyId = normalizeGa4PropertyId(connection.externalAccountId);
     if (!propertyId) continue;
 
-    const cacheKey = buildFactCacheKey({ tenantId, brandId, propertyId, dateRange });
+    const cacheKey = buildFactCacheKey({
+      tenantId,
+      brandId,
+      propertyId,
+      dateRange,
+      scope: cacheScope,
+    });
 
     await withFactCache(cacheKey, async () => {
       let resolved = null;
