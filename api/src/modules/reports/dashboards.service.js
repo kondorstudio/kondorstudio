@@ -5,6 +5,7 @@ const {
   normalizeLayout,
 } = require('../../shared/validators/reportLayout');
 const { computeDashboardHealth } = require('./dashboardHealth.service');
+const { applyDefaultGa4AccountIfMissing } = require('./layoutDefaults.service');
 
 const DEFAULT_LAYOUT = {
   theme: {
@@ -144,7 +145,8 @@ async function createDashboard(tenantId, userId, payload) {
     }
   }
 
-  const layout = payload.layoutJson ? ensureLayoutValid(payload.layoutJson) : DEFAULT_LAYOUT;
+  let layout = payload.layoutJson ? ensureLayoutValid(payload.layoutJson) : DEFAULT_LAYOUT;
+  layout = await applyDefaultGa4AccountIfMissing(tenantId, payload.brandId, layout);
 
   return prisma.$transaction(async (tx) => {
     const dashboard = await tx.reportDashboard.create({
@@ -220,12 +222,19 @@ async function getDashboard(tenantId, id, role) {
   }
 
   if (role === 'viewer') {
+    const publishedLayout = dashboard.publishedVersion
+      ? await applyDefaultGa4AccountIfMissing(
+          tenantId,
+          dashboard.brandId,
+          normalizeLayoutForRead(dashboard.publishedVersion.layoutJson),
+        )
+      : null;
     return {
       ...dashboard,
       publishedVersion: dashboard.publishedVersion
         ? {
             ...dashboard.publishedVersion,
-            layoutJson: normalizeLayoutForRead(dashboard.publishedVersion.layoutJson),
+            layoutJson: publishedLayout,
           }
         : null,
       latestVersion: null,
@@ -236,19 +245,34 @@ async function getDashboard(tenantId, id, role) {
     ? dashboard.versions[0] || null
     : null;
 
+  const latestLayout = latestVersion
+    ? await applyDefaultGa4AccountIfMissing(
+        tenantId,
+        dashboard.brandId,
+        normalizeLayoutForRead(latestVersion.layoutJson),
+      )
+    : null;
+  const publishedLayout = dashboard.publishedVersion
+    ? await applyDefaultGa4AccountIfMissing(
+        tenantId,
+        dashboard.brandId,
+        normalizeLayoutForRead(dashboard.publishedVersion.layoutJson),
+      )
+    : null;
+
   const { versions, ...rest } = dashboard;
   return {
     ...rest,
     latestVersion: latestVersion
       ? {
           ...latestVersion,
-          layoutJson: normalizeLayoutForRead(latestVersion.layoutJson),
+          layoutJson: latestLayout,
         }
       : null,
     publishedVersion: rest.publishedVersion
       ? {
           ...rest.publishedVersion,
-          layoutJson: normalizeLayoutForRead(rest.publishedVersion.layoutJson),
+          layoutJson: publishedLayout,
         }
       : null,
   };
@@ -308,7 +332,8 @@ async function createVersion(tenantId, userId, dashboardId, layoutJson) {
   });
   if (!dashboard) return null;
 
-  const layout = ensureLayoutValid(layoutJson);
+  let layout = ensureLayoutValid(layoutJson);
+  layout = await applyDefaultGa4AccountIfMissing(tenantId, dashboard.brandId, layout);
 
   return prisma.$transaction(async (tx) => {
     const latest = await tx.reportDashboardVersion.findFirst({
@@ -419,7 +444,8 @@ async function cloneDashboard(tenantId, userId, dashboardId) {
     : null;
 
   const baseLayout = latestVersion?.layoutJson || publishedVersion?.layoutJson || DEFAULT_LAYOUT;
-  const layout = ensureLayoutValid(baseLayout);
+  let layout = ensureLayoutValid(baseLayout);
+  layout = await applyDefaultGa4AccountIfMissing(tenantId, dashboard.brandId, layout);
 
   return prisma.$transaction(async (tx) => {
     const cloned = await tx.reportDashboard.create({

@@ -6,6 +6,7 @@ const {
   normalizeLayout,
 } = require('../../shared/validators/reportLayout');
 const { computeDashboardHealth } = require('./dashboardHealth.service');
+const { applyDefaultGa4AccountIfMissing } = require('./layoutDefaults.service');
 
 function hashToken(token) {
   return crypto.createHash('sha256').update(String(token)).digest('hex');
@@ -73,9 +74,14 @@ async function getPublicReport(token) {
   }
 
   const parsedLayout = reportLayoutSchema.safeParse(dashboard.publishedVersion.layoutJson);
-  const layoutJson = parsedLayout.success
+  let layoutJson = parsedLayout.success
     ? normalizeLayout(parsedLayout.data)
     : dashboard.publishedVersion.layoutJson;
+  layoutJson = await applyDefaultGa4AccountIfMissing(
+    dashboard.tenantId,
+    dashboard.brandId,
+    layoutJson,
+  );
 
   return {
     dashboard: {

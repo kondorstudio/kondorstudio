@@ -3,7 +3,9 @@ const ga4DataService = require('./ga4DataService');
 const { resolveGa4IntegrationContext } = require('./ga4IntegrationResolver');
 
 const DEFAULT_CURRENCY = process.env.DEFAULT_CURRENCY || 'BRL';
-const LEAD_EVENT_NAME = process.env.GA4_LEAD_EVENT_NAME || null;
+// GA4 standard event name for lead generation.
+// You can override it per environment using GA4_LEAD_EVENT_NAME.
+const LEAD_EVENT_NAME = process.env.GA4_LEAD_EVENT_NAME || 'generate_lead';
 const CONVERSION_EVENT_NAME = process.env.GA4_CONVERSION_EVENT_NAME || null;
 const FACT_CACHE_TTL_MS = Number(process.env.GA4_FACT_CACHE_TTL_MS || 30000);
 
@@ -118,7 +120,6 @@ function buildGa4MetricPlan(requestedMetrics = []) {
       wantsLeads: false,
       wantsConversions: false,
       needsLeadsFromEvent: false,
-      fallbackLeadsToConversions: false,
     };
   }
 
@@ -131,18 +132,12 @@ function buildGa4MetricPlan(requestedMetrics = []) {
   const wantsLeads = requested.has('leads');
   const wantsConversions = requested.has('conversions');
   const needsLeadsFromEvent = Boolean(wantsLeads && LEAD_EVENT_NAME);
-  const fallbackLeadsToConversions = Boolean(wantsLeads && !LEAD_EVENT_NAME);
-
-  if (fallbackLeadsToConversions && !metricsSet.has('conversions')) {
-    metricsSet.add('conversions');
-  }
 
   return {
     metrics: Array.from(metricsSet),
     wantsLeads,
     wantsConversions,
     needsLeadsFromEvent,
-    fallbackLeadsToConversions,
   };
 }
 
@@ -257,18 +252,14 @@ function buildFactRows({
   brandId,
   propertyId,
   rowsMap,
-  fallbackLeadsToConversions,
 }) {
   const rows = [];
   rowsMap.forEach((entry) => {
     const conversions = toNumber(entry.metrics.conversions);
     const revenue = toNumber(entry.metrics.revenue);
     const sessions = toBigInt(entry.metrics.sessions);
-    const leadsValue = entry.metrics.leads !== undefined
-      ? toBigInt(entry.metrics.leads)
-      : fallbackLeadsToConversions
-        ? toBigInt(conversions)
-        : BigInt(0);
+    const leadsValue =
+      entry.metrics.leads !== undefined ? toBigInt(entry.metrics.leads) : BigInt(0);
 
     rows.push({
       tenantId,
@@ -401,64 +392,98 @@ async function ensureGa4FactMetrics({
 
       let campaignDimension = wantsCampaign ? 'campaignId' : null;
       let metricsForRequest = Array.isArray(metricPlan.metrics) ? [...metricPlan.metrics] : [];
+      let conversionsMetricName = metricsForRequest.includes('conversions') ? 'conversions' : null;
       let conversionsInvalid = false;
 
-      let attempt = metricsForRequest.length
-        ? await tryFetchReport({
+      const fetchWithDimensionFallback = async (metricsList, initialCampaignDimension) => {
+        let dim = initialCampaignDimension || null;
+        let result = metricsList.length
+          ? await tryFetchReport({
+              tenantId,
+              userId: resolved.userId,
+              propertyId,
+              metrics: metricsList,
+              campaignDimension: dim,
+              dateRange,
+            })
+          : {
+              response: null,
+              invalidMetrics: [],
+              invalidDimensions: [],
+              error: null,
+            };
+
+        if (
+          metricsList.length &&
+          dim === 'campaignId' &&
+          wantsCampaign &&
+          result.invalidDimensions.includes('campaignId')
+        ) {
+          dim = 'campaignName';
+          result = await tryFetchReport({
             tenantId,
             userId: resolved.userId,
             propertyId,
-            metrics: metricsForRequest,
-            campaignDimension,
+            metrics: metricsList,
+            campaignDimension: dim,
             dateRange,
-          })
-        : {
-            response: null,
-            invalidMetrics: [],
-            invalidDimensions: [],
-            error: null,
-          };
+          });
+        }
 
-      if (metricsForRequest.length && attempt.invalidDimensions.includes('campaignId') && wantsCampaign) {
-        campaignDimension = 'campaignName';
-        attempt = await tryFetchReport({
-          tenantId,
-          userId: resolved.userId,
-          propertyId,
-          metrics: metricsForRequest,
-          campaignDimension,
-          dateRange,
-        });
-      }
+        if (metricsList.length && result.invalidDimensions.length) {
+          dim = null;
+          result = await tryFetchReport({
+            tenantId,
+            userId: resolved.userId,
+            propertyId,
+            metrics: metricsList,
+            campaignDimension: dim,
+            dateRange,
+          });
+        }
 
-      if (metricsForRequest.length && attempt.invalidDimensions.length) {
-        campaignDimension = null;
-        attempt = await tryFetchReport({
-          tenantId,
-          userId: resolved.userId,
-          propertyId,
-          metrics: metricsForRequest,
-          campaignDimension,
-          dateRange,
-        });
-      }
+        return { attempt: result, campaignDimension: dim };
+      };
+
+      let fetched = await fetchWithDimensionFallback(metricsForRequest, campaignDimension);
+      let attempt = fetched.attempt;
+      campaignDimension = fetched.campaignDimension;
 
       if (metricsForRequest.length && attempt.invalidMetrics.length) {
-        if (attempt.invalidMetrics.includes('conversions')) {
-          conversionsInvalid = true;
+        if (conversionsMetricName && attempt.invalidMetrics.includes(conversionsMetricName)) {
+          // GA4 renamed "conversions" to "keyEvents" in some properties. Try the new metric.
+          if (conversionsMetricName === 'conversions') {
+            const swapped = metricsForRequest.map((metric) =>
+              metric === 'conversions' ? 'keyEvents' : metric,
+            );
+            const swappedFetched = await fetchWithDimensionFallback(swapped, campaignDimension);
+            const swappedAttempt = swappedFetched.attempt;
+            if (!swappedAttempt.invalidMetrics.includes('keyEvents')) {
+              metricsForRequest = swapped;
+              attempt = swappedAttempt;
+              campaignDimension = swappedFetched.campaignDimension;
+              conversionsMetricName = 'keyEvents';
+            } else {
+              conversionsInvalid = true;
+            }
+          } else {
+            conversionsInvalid = true;
+          }
         }
+
+        if (conversionsMetricName && attempt.invalidMetrics.includes(conversionsMetricName)) {
+          conversionsInvalid = true;
+          conversionsMetricName = null;
+        }
+
         metricsForRequest = metricsForRequest.filter(
           (metric) => !attempt.invalidMetrics.includes(metric),
         );
+
         if (metricsForRequest.length) {
-          attempt = await tryFetchReport({
-            tenantId,
-            userId: resolved.userId,
-            propertyId,
-            metrics: metricsForRequest,
-            campaignDimension,
-            dateRange,
-          });
+          fetched = await fetchWithDimensionFallback(metricsForRequest, campaignDimension);
+          attempt = fetched.attempt;
+          campaignDimension = fetched.campaignDimension;
         }
       }
 
@@ -482,11 +507,15 @@ async function ensureGa4FactMetrics({
 
       const rowsMap = new Map();
       const metricMap = {};
-      Object.entries(GA4_METRIC_MAP).forEach(([target, gaName]) => {
-        if (metricPlan.metrics.includes(gaName)) {
-          metricMap[target] = gaName;
-        }
-      });
+      if (metricsForRequest.includes(GA4_METRIC_MAP.sessions)) {
+        metricMap.sessions = GA4_METRIC_MAP.sessions;
+      }
+      if (conversionsMetricName && metricsForRequest.includes(conversionsMetricName)) {
+        metricMap.conversions = conversionsMetricName;
+      }
+      if (metricsForRequest.includes(GA4_METRIC_MAP.revenue)) {
+        metricMap.revenue = GA4_METRIC_MAP.revenue;
+      }
       applyGa4Response(rowsMap, response, metricMap, { campaignDimension });
 
       if (metricPlan.needsLeadsFromEvent) {
@@ -504,7 +533,7 @@ async function ensureGa4FactMetrics({
 
       if (
         metricPlan.wantsConversions &&
-        (conversionsInvalid || !metricsForRequest.includes('conversions')) &&
+        (conversionsInvalid || !conversionsMetricName) &&
         CONVERSION_EVENT_NAME
       ) {
         const conversionResponse = await fetchGa4Report({
@@ -529,7 +558,6 @@ async function ensureGa4FactMetrics({
         brandId,
         propertyId,
         rowsMap,
-        fallbackLeadsToConversions: metricPlan.fallbackLeadsToConversions,
       });
 
       if (!factRows.length) {
