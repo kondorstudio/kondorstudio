@@ -13,7 +13,7 @@ export function useSubscription() {
 function isSubscriptionError(reason) {
   if (!reason) return false;
   const status = reason.status || reason?.response?.status;
-  if (status === 402 || status === 403) return true;
+  if (status === 402) return true;
   const code =
     reason?.data?.code ||
     reason?.code ||

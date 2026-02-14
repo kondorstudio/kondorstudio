@@ -328,7 +328,7 @@ async function _jsonFetchInternal(path, options = {}) {
   if (!res.ok) {
     if (
       typeof window !== "undefined" &&
-      (res.status === 402 || res.status === 403)
+      res.status === 402
     ) {
       try {
         window.dispatchEvent(

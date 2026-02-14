@@ -24,12 +24,12 @@ const queryClient = new QueryClient({
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <SubscriptionProvider>
-      <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <SubscriptionProvider>
           <App />
-        </BrowserRouter>
-      </QueryClientProvider>
-    </SubscriptionProvider>
+        </SubscriptionProvider>
+      </BrowserRouter>
+    </QueryClientProvider>
   </React.StrictMode>
 );
