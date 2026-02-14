@@ -77,7 +77,7 @@ async function processJob(payload = {}) {
     const dateRange = { start: rolling.start, end: rolling.end };
     const metrics = ['sessions', 'leads', 'conversions', 'revenue'];
 
-    await ensureGa4FactMetrics({
+    const aggregatedSync = await ensureGa4FactMetrics({
       tenantId,
       brandId,
       dateRange,
@@ -87,8 +87,9 @@ async function processJob(payload = {}) {
       requiredPlatforms: ['GA4'],
     });
 
+    let campaignSync = null;
     if (includeCampaigns) {
-      await ensureGa4FactMetrics({
+      campaignSync = await ensureGa4FactMetrics({
         tenantId,
         brandId,
         dateRange,
@@ -98,6 +99,12 @@ async function processJob(payload = {}) {
         requiredPlatforms: ['GA4'],
       });
     }
+
+    const truncated = Boolean(
+      aggregatedSync?.meta?.truncated || campaignSync?.meta?.truncated,
+    );
+    const maxRows =
+      campaignSync?.meta?.maxRows ?? aggregatedSync?.meta?.maxRows ?? null;
 
     const [aggCount, campaignCount, aggSum] = await Promise.all([
       prisma.factKondorMetricsDaily.count({
@@ -155,6 +162,8 @@ async function processJob(payload = {}) {
       timezone: rolling.timeZone || timezone || 'UTC',
       dateRange,
       includeCampaigns,
+      truncated,
+      maxRows,
       counts: {
         aggregatedFacts: aggCount,
         campaignFacts: campaignCount,
@@ -180,13 +189,15 @@ async function processJob(payload = {}) {
             status: 'OK',
             finishedAt: new Date().toISOString(),
             includeCampaigns,
-            days,
-            dateRange,
-            counts: result.counts,
-            totals: result.totals,
-            durationMs: result.durationMs,
-          },
+          days,
+          dateRange,
+          truncated,
+          maxRows,
+          counts: result.counts,
+          totals: result.totals,
+          durationMs: result.durationMs,
         },
+      },
         { db: prisma },
       );
     } catch (_err) {}
@@ -225,4 +236,3 @@ async function processJob(payload = {}) {
 module.exports = {
   processJob,
 };
-

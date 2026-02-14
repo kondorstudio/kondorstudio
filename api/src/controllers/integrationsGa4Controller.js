@@ -792,7 +792,7 @@ module.exports = {
         });
       }
 
-      await ensureGa4FactMetrics({
+      const syncResult = await ensureGa4FactMetrics({
         tenantId,
         brandId,
         dateRange,
@@ -891,6 +891,8 @@ module.exports = {
         timezone: rolling.timeZone || timezone || 'UTC',
         dateRange,
         includeCampaigns: wantsCampaigns,
+        truncated: Boolean(syncResult?.meta?.truncated),
+        maxRows: syncResult?.meta?.maxRows ?? null,
         counts: {
           aggregatedFacts: aggCount,
           campaignFacts: campaignCount,

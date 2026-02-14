@@ -503,15 +503,28 @@ async function ensureGa4FactMetrics({
 
   const propertyId = String(activePropertyId);
 
-    const cacheKey = buildFactCacheKey({
-      tenantId,
-      brandId,
-      propertyId,
-      dateRange,
-      scope: cacheScope,
-    });
+  const cacheKey = buildFactCacheKey({
+    tenantId,
+    brandId,
+    propertyId,
+    dateRange,
+    scope: cacheScope,
+  });
 
-  await withFactCache(cacheKey, async () => {
+  const syncResult = await withFactCache(cacheKey, async () => {
+    const meta = { truncated: false, maxRows: null };
+    const noteTruncation = (response) => {
+      if (!response || typeof response !== 'object') return;
+      if (response?.meta?.truncated) {
+        meta.truncated = true;
+      }
+      const maxRowsValue = response?.meta?.maxRows;
+      const maxRowsNum = Number(maxRowsValue);
+      if (Number.isFinite(maxRowsNum) && maxRowsNum > 0) {
+        meta.maxRows = Math.trunc(maxRowsNum);
+      }
+    };
+
       let resolved = null;
       try {
         resolved = await resolveGa4IntegrationContext({
@@ -671,6 +684,7 @@ async function ensureGa4FactMetrics({
       }
 
       const response = attempt.response;
+      noteTruncation(response);
 
       const rowsMap = new Map();
       const metricMap = {};
@@ -695,6 +709,7 @@ async function ensureGa4FactMetrics({
           dateRange,
           dimensionFilter: buildDimensionFilterForEvents(metricPlan.leadEvents),
         });
+        noteTruncation(leadResponse);
         applyGa4Response(rowsMap, leadResponse, { leads: 'eventCount' }, { campaignDimension });
       }
 
@@ -708,6 +723,7 @@ async function ensureGa4FactMetrics({
           dateRange,
           dimensionFilter: buildDimensionFilterForEvents(metricPlan.conversionEvents),
         });
+        noteTruncation(conversionResponse);
         applyGa4Response(
           rowsMap,
           conversionResponse,
@@ -778,9 +794,29 @@ async function ensureGa4FactMetrics({
         },
         { timeout: FACT_WRITE_TX_TIMEOUT_MS, maxWait: 10_000 },
       );
+
+      if (meta.truncated && process.env.NODE_ENV !== 'test') {
+        // eslint-disable-next-line no-console
+        console.warn('[ga4FactMetrics] truncated GA4 report while materializing facts', {
+          tenantId,
+          brandId,
+          propertyId,
+          scope: cacheScope,
+          dateRange,
+          maxRows: meta.maxRows,
+        });
+      }
+
+      return { ok: true, meta };
     });
 
-  return { ok: true };
+  return (
+    syncResult || {
+      ok: true,
+      skipped: true,
+      meta: { truncated: false, maxRows: null },
+    }
+  );
 }
 
 module.exports = {
