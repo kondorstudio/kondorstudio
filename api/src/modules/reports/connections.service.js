@@ -1,5 +1,9 @@
 const { prisma } = require('../../prisma');
 const { syncAfterConnection } = require('../../services/factMetricsSyncService');
+const {
+  normalizeGa4PropertyId,
+  upsertBrandGa4Settings,
+} = require('../../services/brandGa4SettingsService');
 
 const PLATFORM_SOURCE_MAP = {
   META_ADS: 'META_ADS',
@@ -153,36 +157,120 @@ async function linkConnection(tenantId, userId, payload) {
     throw err;
   }
 
+  const normalizedExternalAccountId =
+    platform === 'GA4'
+      ? normalizeGa4PropertyId(externalAccountId)
+      : String(externalAccountId);
   const name =
-    externalAccountName || available.displayName || String(externalAccountId);
+    externalAccountName || available.displayName || String(normalizedExternalAccountId);
 
-  const result = await prisma.brandSourceConnection.upsert({
-    where: {
-      brandId_platform_externalAccountId: {
+  // Non-GA4 platforms are a simple upsert (kept outside transactions to simplify unit tests stubs).
+  if (platform !== 'GA4') {
+    const result = await prisma.brandSourceConnection.upsert({
+      where: {
+        brandId_platform_externalAccountId: {
+          brandId,
+          platform,
+          externalAccountId: String(normalizedExternalAccountId),
+        },
+      },
+      update: {
+        externalAccountName: name,
+        status: 'ACTIVE',
+      },
+      create: {
+        tenantId,
         brandId,
         platform,
-        externalAccountId: String(externalAccountId),
+        externalAccountId: String(normalizedExternalAccountId),
+        externalAccountName: name,
+        status: 'ACTIVE',
       },
-    },
-    update: {
-      externalAccountName: name,
-      status: 'ACTIVE',
-    },
-    create: {
+    });
+
+    syncAfterConnection({
       tenantId,
       brandId,
       platform,
-      externalAccountId: String(externalAccountId),
-      externalAccountName: name,
-      status: 'ACTIVE',
-    },
+      externalAccountId: String(normalizedExternalAccountId),
+    });
+
+    return result;
+  }
+
+  const runInTransaction = typeof prisma.$transaction === 'function'
+    ? prisma.$transaction.bind(prisma)
+    : async (fn) => fn(prisma);
+
+  const result = await runInTransaction(async (tx) => {
+    // Enforce: 1 GA4 property per brand.
+    if (typeof tx.brandSourceConnection?.updateMany === 'function') {
+      await tx.brandSourceConnection.updateMany({
+        where: {
+          tenantId,
+          brandId,
+          platform: 'GA4',
+          status: 'ACTIVE',
+          externalAccountId: { not: String(normalizedExternalAccountId) },
+        },
+        data: { status: 'DISCONNECTED' },
+      });
+    }
+
+    const linked = await tx.brandSourceConnection.upsert({
+      where: {
+        brandId_platform_externalAccountId: {
+          brandId,
+          platform,
+          externalAccountId: String(normalizedExternalAccountId),
+        },
+      },
+      update: {
+        externalAccountName: name,
+        status: 'ACTIVE',
+      },
+      create: {
+        tenantId,
+        brandId,
+        platform,
+        externalAccountId: String(normalizedExternalAccountId),
+        externalAccountName: name,
+        status: 'ACTIVE',
+      },
+    });
+
+    // Canonical per-brand GA4 settings (used to keep historical facts consistent with GA4 UI).
+    if (tx.brandGa4Settings) {
+      await upsertBrandGa4Settings(
+        {
+          tenantId,
+          brandId,
+          propertyId: normalizedExternalAccountId,
+        },
+        { db: tx },
+      );
+    }
+
+    // Prevent mixing historical facts from previous properties into the current brand's KPIs.
+    if (tx.factKondorMetricsDaily) {
+      await tx.factKondorMetricsDaily.deleteMany({
+        where: {
+          tenantId,
+          brandId,
+          platform: 'GA4',
+          accountId: { not: String(normalizedExternalAccountId) },
+        },
+      });
+    }
+
+    return linked;
   });
 
   syncAfterConnection({
     tenantId,
     brandId,
     platform,
-    externalAccountId: String(externalAccountId),
+    externalAccountId: String(normalizedExternalAccountId),
   });
 
   return result;

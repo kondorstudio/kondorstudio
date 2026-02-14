@@ -1,6 +1,9 @@
 const { prisma } = require('../prisma');
 const ga4DataService = require('./ga4DataService');
 const { resolveGa4IntegrationContext } = require('./ga4IntegrationResolver');
+const {
+  resolveBrandGa4ActivePropertyId,
+} = require('./brandGa4SettingsService');
 
 const DEFAULT_CURRENCY = process.env.DEFAULT_CURRENCY || 'BRL';
 function parseEnvList(value) {
@@ -434,23 +437,12 @@ async function ensureGa4FactMetrics({
   const hasPlatformFilter = platformFilters.length > 0;
   const platformAllowsGa4 = !hasPlatformFilter || platformFilters.includes('GA4');
 
-  let connections = await prisma.brandSourceConnection.findMany({
-    where: {
-      tenantId,
-      brandId,
-      platform: 'GA4',
-      status: 'ACTIVE',
-    },
-  });
-
-  if (accountFilter.length) {
-    connections = connections.filter((conn) =>
-      accountFilter.includes(normalizeGa4PropertyId(conn.externalAccountId))
-    );
-  }
-
-  if (!connections.length) {
+  const activePropertyId = await resolveBrandGa4ActivePropertyId({ tenantId, brandId });
+  if (!activePropertyId) {
     return { skipped: true, reason: 'no_connections' };
+  }
+  if (accountFilter.length && !accountFilter.includes(String(activePropertyId))) {
+    return { skipped: true, reason: 'account_filter_excludes_active_property' };
   }
 
   const requestedMetricPlan = buildGa4MetricPlan(metrics);
@@ -472,9 +464,7 @@ async function ensureGa4FactMetrics({
   const fullFactSync = isFullFactSync(FULL_FACT_METRICS);
   const shouldRefreshOpenRange = rangeTouchesToday(dateRange);
 
-  for (const connection of connections) {
-    const propertyId = normalizeGa4PropertyId(connection.externalAccountId);
-    if (!propertyId) continue;
+  const propertyId = String(activePropertyId);
 
     const cacheKey = buildFactCacheKey({
       tenantId,
@@ -484,7 +474,7 @@ async function ensureGa4FactMetrics({
       scope: cacheScope,
     });
 
-    await withFactCache(cacheKey, async () => {
+  await withFactCache(cacheKey, async () => {
       let resolved = null;
       try {
         resolved = await resolveGa4IntegrationContext({
@@ -727,8 +717,7 @@ async function ensureGa4FactMetrics({
           data: scopedFactRows.slice(i, i + chunkSize),
         });
       }
-    });
-  }
+  });
 
   return { ok: true };
 }

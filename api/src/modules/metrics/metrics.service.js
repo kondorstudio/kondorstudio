@@ -1,5 +1,8 @@
 const { prisma } = require('../../prisma');
 const { ensureGa4FactMetrics } = require('../../services/ga4FactMetricsService');
+const {
+  resolveBrandGa4ActivePropertyId,
+} = require('../../services/brandGa4SettingsService');
 const { ensureFactMetrics } = require('../../services/factMetricsSyncService');
 
 const SUPPORTED_PLATFORMS = new Set([
@@ -752,18 +755,20 @@ async function runAggregates({
   dimensions,
   baseMetrics,
   filters,
+  ga4PropertyId,
   derivedMetrics,
   sort,
   pagination,
   limit,
 }) {
-  const { whereSql, params } = buildWhereClause({
+  const { whereSql, params: rawParams } = buildWhereClause({
     tenantId,
     brandId,
     dateFrom,
     dateTo,
     filters,
   });
+  const params = [...rawParams];
 
   // GA4 facts can exist in 2 granularities:
   // - aggregated: campaignId IS NULL
@@ -778,7 +783,15 @@ async function runAggregates({
     ? '("platform" <> \'GA4\'::"BrandSourcePlatform" OR "campaignId" IS NOT NULL)'
     : '("platform" <> \'GA4\'::"BrandSourcePlatform" OR "campaignId" IS NULL)';
 
-  const scopedWhereSql = `${whereSql} AND ${ga4ScopeClause}`;
+  // Historical GA4 facts must always be scoped to the active propertyId for the brand.
+  // If the brand is not connected to GA4, we exclude GA4 facts entirely to avoid leaking old data.
+  let ga4PropertyClause = '("platform" <> \'GA4\'::"BrandSourcePlatform")';
+  if (ga4PropertyId) {
+    ga4PropertyClause = `("platform" <> 'GA4'::"BrandSourcePlatform" OR "accountId" = $${params.length + 1})`;
+    params.push(String(ga4PropertyId));
+  }
+
+  const scopedWhereSql = `${whereSql} AND ${ga4ScopeClause} AND ${ga4PropertyClause}`;
 
   const selectClause = buildSelectClause({
     dimensions,
@@ -858,12 +871,33 @@ async function executeQueryMetrics(tenantId, payload = {}) {
     throw err;
   }
 
-  await assertRequiredPlatformsConnected({
+  const requiredConnections = await assertRequiredPlatformsConnected({
     tenantId,
     brandId,
     requiredPlatforms: payload.requiredPlatforms,
     filters,
   });
+
+  const wantsGa4 = Array.isArray(requiredConnections.required)
+    ? requiredConnections.required.includes('GA4')
+    : false;
+
+  let ga4PropertyId = null;
+  try {
+    ga4PropertyId = await resolveBrandGa4ActivePropertyId({ tenantId, brandId });
+  } catch (err) {
+    if (process.env.NODE_ENV !== 'test') {
+      // eslint-disable-next-line no-console
+      console.warn('[metrics.service] resolveBrandGa4ActivePropertyId warning', err?.message || err);
+    }
+  }
+
+  if (wantsGa4 && !ga4PropertyId) {
+    const err = new Error('GA4 property não configurada para esta marca');
+    err.code = 'GA4_PROPERTY_REQUIRED';
+    err.status = 409;
+    throw err;
+  }
 
   const catalogEntries = await prisma.metricsCatalog.findMany({
     where: { key: { in: metrics } },
@@ -950,19 +984,20 @@ async function executeQueryMetrics(tenantId, payload = {}) {
     }
   }
 
-  const baseResult = await runAggregates({
-    tenantId,
-    brandId,
-    dateFrom: dateRange.start,
-    dateTo: dateRange.end,
-    dimensions,
-    baseMetrics: plan.baseMetrics,
-    derivedMetrics: derivedForSelect,
-    filters,
-    sort: resolvedSort,
-    pagination: payload.pagination,
-    limit,
-  });
+	  const baseResult = await runAggregates({
+	    tenantId,
+	    brandId,
+	    dateFrom: dateRange.start,
+	    dateTo: dateRange.end,
+	    dimensions,
+	    baseMetrics: plan.baseMetrics,
+	    derivedMetrics: derivedForSelect,
+	    filters,
+	    ga4PropertyId,
+	    sort: resolvedSort,
+	    pagination: payload.pagination,
+	    limit,
+	  });
 
   const rows = buildRows(
     {
@@ -987,19 +1022,20 @@ async function executeQueryMetrics(tenantId, payload = {}) {
   if (compareTo?.mode) {
     const range = buildCompareRange(dateRange.start, dateRange.end, compareTo.mode);
     if (range) {
-      const compareResult = await runAggregates({
-        tenantId,
-        brandId,
-        dateFrom: range.start,
-        dateTo: range.end,
-        dimensions,
-        baseMetrics: plan.baseMetrics,
-        derivedMetrics: derivedForSelect,
-        filters,
-        sort: resolvedSort,
-        pagination: payload.pagination,
-        limit,
-      });
+	      const compareResult = await runAggregates({
+	        tenantId,
+	        brandId,
+	        dateFrom: range.start,
+	        dateTo: range.end,
+	        dimensions,
+	        baseMetrics: plan.baseMetrics,
+	        derivedMetrics: derivedForSelect,
+	        filters,
+	        ga4PropertyId,
+	        sort: resolvedSort,
+	        pagination: payload.pagination,
+	        limit,
+	      });
 
       compare = {
         rows: buildRows(
