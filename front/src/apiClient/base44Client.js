@@ -390,6 +390,8 @@ function shouldRetryWithoutDateRangePreset(err) {
   return joined.includes("unrecognized key") && joined.includes("preset");
 }
 
+let supportsMetricsDateRangePreset = true;
+
 function extractFilenameFromDisposition(disposition) {
   if (!disposition) return null;
   const utf8Match = disposition.match(/filename\*\s*=\s*UTF-8''([^;]+)/i);
@@ -918,12 +920,16 @@ const ReportsV2 = {
 
   async queryMetrics(payload = {}) {
     try {
+      const effectivePayload = supportsMetricsDateRangePreset
+        ? payload || {}
+        : stripDateRangePreset(payload || {});
       return await jsonFetch("/metrics/query", {
         method: "POST",
-        body: JSON.stringify(payload || {}),
+        body: JSON.stringify(effectivePayload),
       });
     } catch (err) {
       if (!shouldRetryWithoutDateRangePreset(err)) throw err;
+      supportsMetricsDateRangePreset = false;
       const stripped = stripDateRangePreset(payload || {});
       return jsonFetch("/metrics/query", {
         method: "POST",
@@ -968,12 +974,16 @@ const PublicReports = {
 
   async queryMetrics(payload = {}) {
     try {
+      const effectivePayload = supportsMetricsDateRangePreset
+        ? payload || {}
+        : stripDateRangePreset(payload || {});
       return await jsonFetch("/public/metrics/query", {
         method: "POST",
-        body: JSON.stringify(payload || {}),
+        body: JSON.stringify(effectivePayload),
       });
     } catch (err) {
       if (!shouldRetryWithoutDateRangePreset(err)) throw err;
+      supportsMetricsDateRangePreset = false;
       const stripped = stripDateRangePreset(payload || {});
       return jsonFetch("/public/metrics/query", {
         method: "POST",
