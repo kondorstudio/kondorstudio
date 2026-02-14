@@ -364,6 +364,32 @@ async function _jsonFetchInternal(path, options = {}) {
   return data;
 }
 
+function stripDateRangePreset(payload) {
+  if (!payload || typeof payload !== "object") return payload;
+  const dateRange = payload.dateRange;
+  if (!dateRange || typeof dateRange !== "object") return payload;
+  if (!Object.prototype.hasOwnProperty.call(dateRange, "preset")) return payload;
+  const nextDateRange = { ...dateRange };
+  delete nextDateRange.preset;
+  return { ...payload, dateRange: nextDateRange };
+}
+
+function shouldRetryWithoutDateRangePreset(err) {
+  if (!err || Number(err.status) !== 400) return false;
+  const code = String(err?.data?.error?.code || err?.data?.code || "").toUpperCase();
+  if (code !== "VALIDATION_ERROR") return false;
+
+  const fieldErrors = err?.data?.error?.details?.fieldErrors || {};
+  const dateRangeErrors = Array.isArray(fieldErrors?.dateRange)
+    ? fieldErrors.dateRange
+    : [];
+  if (!dateRangeErrors.length) return false;
+
+  // Zod strict() default message for unknown keys is `Unrecognized key: "preset"`.
+  const joined = dateRangeErrors.join(" ").toLowerCase();
+  return joined.includes("unrecognized key") && joined.includes("preset");
+}
+
 function extractFilenameFromDisposition(disposition) {
   if (!disposition) return null;
   const utf8Match = disposition.match(/filename\*\s*=\s*UTF-8''([^;]+)/i);
@@ -891,10 +917,19 @@ const ReportsV2 = {
   },
 
   async queryMetrics(payload = {}) {
-    return jsonFetch("/metrics/query", {
-      method: "POST",
-      body: JSON.stringify(payload || {}),
-    });
+    try {
+      return await jsonFetch("/metrics/query", {
+        method: "POST",
+        body: JSON.stringify(payload || {}),
+      });
+    } catch (err) {
+      if (!shouldRetryWithoutDateRangePreset(err)) throw err;
+      const stripped = stripDateRangePreset(payload || {});
+      return jsonFetch("/metrics/query", {
+        method: "POST",
+        body: JSON.stringify(stripped || {}),
+      });
+    }
   },
 
   async listConnections(params = {}) {
@@ -932,10 +967,19 @@ const PublicReports = {
   },
 
   async queryMetrics(payload = {}) {
-    return jsonFetch("/public/metrics/query", {
-      method: "POST",
-      body: JSON.stringify(payload || {}),
-    });
+    try {
+      return await jsonFetch("/public/metrics/query", {
+        method: "POST",
+        body: JSON.stringify(payload || {}),
+      });
+    } catch (err) {
+      if (!shouldRetryWithoutDateRangePreset(err)) throw err;
+      const stripped = stripDateRangePreset(payload || {});
+      return jsonFetch("/public/metrics/query", {
+        method: "POST",
+        body: JSON.stringify(stripped || {}),
+      });
+    }
   },
 };
 
