@@ -311,6 +311,7 @@ model Tenant {
   supportNotes                   TenantNote[]
   ga4ApiCache                    Ga4ApiCache[]
   ga4ApiCalls                    Ga4ApiCall[]
+  brandGa4Settings               BrandGa4Settings[]
 
   createdAtIndex DateTime? @ignore
 
@@ -509,6 +510,7 @@ model Client {
   dashboards             Dashboard[]
   reportDashboardsV2     ReportDashboard[]
   brandSourceConnections BrandSourceConnection[]
+  ga4Settings            BrandGa4Settings?
   factMetricsDaily       FactKondorMetricsDaily[]
   reportDeliveries       ReportDelivery[]
   metrics                Metric[]                 @relation("ClientMetrics")
@@ -1217,6 +1219,34 @@ model BrandSourceConnection {
   @@index([brandId])
   @@index([platform])
   @@map("brand_source_connection")
+}
+
+model BrandGa4Settings {
+  id         String  @id @default(uuid())
+  tenantId   String
+  tenant     Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  brandId    String  @unique
+  brand      Client  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  propertyId String
+  timezone   String?
+
+  leadEvents       String[] @default([])
+  conversionEvents String[] @default([])
+  revenueEvent     String?
+  dedupRule        Json?
+
+  lastHistoricalSyncAt DateTime?
+  lastSuccessAt        DateTime?
+  lastError            Json?
+  backfillCursor       Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([tenantId, brandId])
+  @@index([tenantId, propertyId])
+  @@map("brand_ga4_settings")
 }
 
 model FactKondorMetricsDaily {
