@@ -64,7 +64,12 @@ export function normalizeThemeFront(theme) {
 
 export function toDateKey(date) {
   if (!(date instanceof Date)) return "";
-  return date.toISOString().slice(0, 10);
+  // Use the browser's local calendar day instead of UTC to avoid off-by-one
+  // when building ranges (GA4 UI is timezone-based).
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 export function resolveDateRange(range) {
@@ -75,18 +80,18 @@ export function resolveDateRange(range) {
   if (preset === "last_30_days") {
     const startDate = new Date(today);
     startDate.setDate(startDate.getDate() - 29);
-    return { start: toDateKey(startDate), end };
+    return { preset, start: toDateKey(startDate), end };
   }
 
   if (preset === "custom") {
     const start = range?.start || "";
     const customEnd = range?.end || "";
-    if (start && customEnd) return { start, end: customEnd };
+    if (start && customEnd) return { preset, start, end: customEnd };
   }
 
   const startDate = new Date(today);
   startDate.setDate(startDate.getDate() - 6);
-  return { start: toDateKey(startDate), end };
+  return { preset, start: toDateKey(startDate), end };
 }
 
 export function stableStringify(value) {

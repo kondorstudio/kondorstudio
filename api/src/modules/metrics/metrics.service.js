@@ -4,6 +4,7 @@ const {
   resolveBrandGa4ActivePropertyId,
 } = require('../../services/brandGa4SettingsService');
 const { ensureFactMetrics } = require('../../services/factMetricsSyncService');
+const { buildRollingDateRange } = require('../../lib/timezone');
 
 const SUPPORTED_PLATFORMS = new Set([
   'META_ADS',
@@ -81,6 +82,27 @@ const METRICS_QUERY_EXEC_TIMEOUT_MS = Math.max(
 const metricsQueryCache = new Map();
 const metricsQueryInFlight = new Map();
 const dashboardQueues = new Map();
+
+const DATE_RANGE_PRESET_DAYS = Object.freeze({
+  last_7_days: 7,
+  last_30_days: 30,
+});
+
+function resolveEffectiveDateRange(dateRange, timeZone) {
+  const preset = String(dateRange?.preset || '').trim();
+  const days = DATE_RANGE_PRESET_DAYS[preset];
+  if (days) {
+    const rolling = buildRollingDateRange({ days, timeZone });
+    if (rolling?.start && rolling?.end) {
+      return { start: rolling.start, end: rolling.end, preset };
+    }
+  }
+  return {
+    start: String(dateRange?.start || ''),
+    end: String(dateRange?.end || ''),
+    ...(preset ? { preset } : {}),
+  };
+}
 
 function toArray(value) {
   if (!value) return [];
@@ -920,6 +942,8 @@ async function executeQueryMetrics(tenantId, payload = {}) {
     }
   }
 
+  const effectiveDateRange = resolveEffectiveDateRange(dateRange, brandTimezone);
+
   const catalogEntries = await prisma.metricsCatalog.findMany({
     where: { key: { in: metrics } },
   });
@@ -962,7 +986,7 @@ async function executeQueryMetrics(tenantId, payload = {}) {
         ensureGa4FactMetrics({
           tenantId,
           brandId,
-          dateRange,
+          dateRange: effectiveDateRange,
           metrics,
           dimensions,
           filters,
@@ -987,7 +1011,7 @@ async function executeQueryMetrics(tenantId, payload = {}) {
         ensureFactMetrics({
           tenantId,
           brandId,
-          dateRange,
+          dateRange: effectiveDateRange,
           metrics: Array.from(plan.baseMetrics || []),
           filters,
           requiredPlatforms: payload.requiredPlatforms,
@@ -1008,8 +1032,8 @@ async function executeQueryMetrics(tenantId, payload = {}) {
 	  const baseResult = await runAggregates({
 	    tenantId,
 	    brandId,
-	    dateFrom: dateRange.start,
-	    dateTo: dateRange.end,
+	    dateFrom: effectiveDateRange.start,
+	    dateTo: effectiveDateRange.end,
 	    dimensions,
 	    baseMetrics: plan.baseMetrics,
 	    derivedMetrics: derivedForSelect,
@@ -1041,7 +1065,11 @@ async function executeQueryMetrics(tenantId, payload = {}) {
 
   let compare = null;
   if (compareTo?.mode) {
-    const range = buildCompareRange(dateRange.start, dateRange.end, compareTo.mode);
+    const range = buildCompareRange(
+      effectiveDateRange.start,
+      effectiveDateRange.end,
+      compareTo.mode,
+    );
     if (range) {
 	      const compareResult = await runAggregates({
 	        tenantId,
@@ -1085,6 +1113,7 @@ async function executeQueryMetrics(tenantId, payload = {}) {
     meta: {
       currency: null,
       timezone: brandTimezone || 'UTC',
+      dateRange: effectiveDateRange,
       generatedAt: new Date().toISOString(),
     },
     rows,

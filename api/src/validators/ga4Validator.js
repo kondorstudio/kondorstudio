@@ -90,6 +90,12 @@ const propertySelectSchema = z.object({
   propertyId: numericString,
 });
 
+const ga4FactsSyncSchema = z.object({
+  brandId: z.string().uuid(),
+  days: z.coerce.number().int().min(1).max(365).optional(),
+  includeCampaigns: z.boolean().optional(),
+});
+
 const dashboardCreateSchema = z.object({
   integrationPropertyId: z.string().min(1),
   name: z.string().trim().min(2).max(120),
@@ -118,6 +124,7 @@ module.exports = {
   runRealtimeReportSchema,
   batchRunReportsSchema,
   propertySelectSchema,
+  ga4FactsSyncSchema,
   dashboardCreateSchema,
   dashboardUpdateSchema,
   widgetCreateSchema,

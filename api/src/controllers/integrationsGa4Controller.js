@@ -2,6 +2,13 @@ const ga4OAuthService = require('../services/ga4OAuthService');
 const ga4AdminService = require('../services/ga4AdminService');
 const ga4DataService = require('../services/ga4DataService');
 const ga4MetadataService = require('../services/ga4MetadataService');
+const { ensureGa4FactMetrics } = require('../services/ga4FactMetricsService');
+const {
+  resolveBrandGa4ActivePropertyId,
+  upsertBrandGa4Settings,
+} = require('../services/brandGa4SettingsService');
+const { ensureBrandGa4Timezone } = require('../services/ga4BrandTimezoneService');
+const { buildRollingDateRange } = require('../lib/timezone');
 const { prisma, useTenant } = require('../prisma');
 
 function getFrontUrl() {
@@ -472,6 +479,219 @@ module.exports = {
       return res
         .status(error.status || 500)
         .json({ error: error.message || 'Failed to fetch GA4 metadata' });
+    }
+  },
+
+  async syncFacts(req, res) {
+    const tenantId = req.tenantId;
+    const userId = req.user?.id;
+    const { brandId, days, includeCampaigns } = req.body || {};
+
+    if (!tenantId || !userId) {
+      return res.status(400).json({ error: 'tenantId or userId missing' });
+    }
+    if (!brandId) {
+      return res.status(400).json({ error: 'brandId missing' });
+    }
+
+    const windowDays = Math.max(1, Math.min(365, Number(days || 30)));
+    const wantsCampaigns = includeCampaigns === true;
+
+    const brand = await prisma.client.findFirst({
+      where: { id: String(brandId), tenantId: String(tenantId) },
+      select: { id: true, name: true },
+    });
+    if (!brand) {
+      return res.status(404).json({ error: 'Marca não encontrada' });
+    }
+
+    let propertyId = null;
+    try {
+      propertyId = await resolveBrandGa4ActivePropertyId({ tenantId, brandId });
+    } catch (err) {
+      propertyId = null;
+    }
+
+    if (!propertyId) {
+      return res.status(409).json({
+        error: 'GA4 property não configurada para esta marca',
+        code: 'GA4_PROPERTY_REQUIRED',
+      });
+    }
+
+    const startedAt = Date.now();
+
+    try {
+      const timezone = await ensureBrandGa4Timezone({
+        tenantId,
+        brandId,
+        propertyId: String(propertyId),
+      });
+
+      const rolling = buildRollingDateRange({ days: windowDays, timeZone: timezone });
+      if (!rolling?.start || !rolling?.end) {
+        return res.status(400).json({ error: 'Falha ao resolver dateRange' });
+      }
+
+      const dateRange = { start: rolling.start, end: rolling.end };
+      const metrics = ['sessions', 'leads', 'conversions', 'revenue'];
+
+      await upsertBrandGa4Settings(
+        {
+          tenantId,
+          brandId,
+          propertyId,
+          lastHistoricalSyncAt: new Date(),
+          lastError: null,
+        },
+        { db: prisma },
+      );
+
+      await ensureGa4FactMetrics({
+        tenantId,
+        brandId,
+        dateRange,
+        metrics,
+        dimensions: [],
+        filters: [],
+        requiredPlatforms: ['GA4'],
+      });
+
+      if (wantsCampaigns) {
+        await ensureGa4FactMetrics({
+          tenantId,
+          brandId,
+          dateRange,
+          metrics,
+          dimensions: ['campaign_id'],
+          filters: [],
+          requiredPlatforms: ['GA4'],
+        });
+      }
+
+      const [aggCount, campaignCount, aggSum] = await Promise.all([
+        prisma.factKondorMetricsDaily.count({
+          where: {
+            tenantId: String(tenantId),
+            brandId: String(brandId),
+            platform: 'GA4',
+            accountId: String(propertyId),
+            campaignId: null,
+            date: {
+              gte: new Date(dateRange.start),
+              lte: new Date(dateRange.end),
+            },
+          },
+        }),
+        prisma.factKondorMetricsDaily.count({
+          where: {
+            tenantId: String(tenantId),
+            brandId: String(brandId),
+            platform: 'GA4',
+            accountId: String(propertyId),
+            campaignId: { not: null },
+            date: {
+              gte: new Date(dateRange.start),
+              lte: new Date(dateRange.end),
+            },
+          },
+        }),
+        prisma.factKondorMetricsDaily.aggregate({
+          where: {
+            tenantId: String(tenantId),
+            brandId: String(brandId),
+            platform: 'GA4',
+            accountId: String(propertyId),
+            campaignId: null,
+            date: {
+              gte: new Date(dateRange.start),
+              lte: new Date(dateRange.end),
+            },
+          },
+          _sum: {
+            sessions: true,
+            leads: true,
+            conversions: true,
+            revenue: true,
+          },
+        }),
+      ]);
+
+      await upsertBrandGa4Settings(
+        {
+          tenantId,
+          brandId,
+          propertyId,
+          lastSuccessAt: new Date(),
+          lastError: null,
+        },
+        { db: prisma },
+      );
+
+      const toScalar = (value) => {
+        if (value === null || value === undefined) return null;
+        if (typeof value === 'bigint') return value.toString();
+        if (typeof value === 'object' && typeof value.toString === 'function') {
+          return value.toString();
+        }
+        return value;
+      };
+
+      return res.json({
+        ok: true,
+        tenantId: String(tenantId),
+        brandId: String(brandId),
+        brandName: brand.name || null,
+        propertyId: String(propertyId),
+        timezone: rolling.timeZone || timezone || 'UTC',
+        dateRange,
+        includeCampaigns: wantsCampaigns,
+        counts: {
+          aggregatedFacts: aggCount,
+          campaignFacts: campaignCount,
+        },
+        totals: {
+          sessions: toScalar(aggSum?._sum?.sessions),
+          leads: toScalar(aggSum?._sum?.leads),
+          conversions: toScalar(aggSum?._sum?.conversions),
+          revenue: toScalar(aggSum?._sum?.revenue),
+        },
+        durationMs: Date.now() - startedAt,
+      });
+    } catch (error) {
+      const safeError = {
+        message: error?.message || String(error),
+        code: error?.code || null,
+        status: error?.status || null,
+      };
+
+      try {
+        await upsertBrandGa4Settings(
+          {
+            tenantId,
+            brandId,
+            propertyId,
+            lastHistoricalSyncAt: new Date(),
+            lastError: safeError,
+          },
+          { db: prisma },
+        );
+      } catch (_) {}
+
+      console.error('GA4 syncFacts error:', safeError);
+      if (respondReauth(res, error)) return;
+      return res
+        .status(error?.status || 500)
+        .json({ error: error?.message || 'Failed to sync GA4 facts', details: safeError });
+    } finally {
+      if (process.env.NODE_ENV !== 'test') {
+        // eslint-disable-next-line no-console
+        console.log('[ga4] syncFacts finished', {
+          tenantId,
+          brandId,
+          ms: Date.now() - startedAt,
+        });
+      }
     }
   },
 };

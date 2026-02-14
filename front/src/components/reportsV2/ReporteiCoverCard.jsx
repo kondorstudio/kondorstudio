@@ -1,18 +1,13 @@
 import React from "react";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button.jsx";
-import { resolveDateRange } from "@/components/reportsV2/utils.js";
+import { resolveDateRange, toDateKey } from "@/components/reportsV2/utils.js";
 
 function formatDatePtBr(value) {
   if (!value) return "-";
   const [year, month, day] = String(value).split("-");
   if (!year || !month || !day) return value;
   return `${day}/${month}/${year}`;
-}
-
-function toDateKey(date) {
-  if (!(date instanceof Date)) return "";
-  return date.toISOString().slice(0, 10);
 }
 
 function resolveComparisonRange(filters, baseRange) {

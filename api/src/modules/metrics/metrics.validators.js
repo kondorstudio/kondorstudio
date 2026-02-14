@@ -1,9 +1,11 @@
 const { z } = require('zod');
 
 const dateKey = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const dateRangePreset = z.enum(['last_7_days', 'last_30_days', 'custom']);
 
 const dateRangeSchema = z
   .object({
+    preset: dateRangePreset.optional(),
     start: dateKey,
     end: dateKey,
   })
