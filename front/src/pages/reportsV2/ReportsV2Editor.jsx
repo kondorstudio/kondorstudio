@@ -57,6 +57,13 @@ import {
 import { Button } from "@/components/ui/button.jsx";
 import { Input } from "@/components/ui/input.jsx";
 import { Checkbox } from "@/components/ui/checkbox.jsx";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select.jsx";
 import Toast from "@/components/ui/toast.jsx";
 import {
   Dialog,
@@ -866,16 +873,106 @@ export default function ReportsV2Editor() {
   });
 
   const dashboard = data || null;
+  const brandId = dashboard?.brandId || null;
   const layoutFromApi =
     dashboard?.latestVersion?.layoutJson ||
     dashboard?.publishedVersion?.layoutJson ||
     null;
 
   const connectionsQuery = useQuery({
-    queryKey: ["reportsV2-editor-connections", dashboard?.brandId],
-    queryFn: () => base44.reportsV2.listConnections({ brandId: dashboard?.brandId }),
-    enabled: Boolean(dashboard?.brandId),
+    queryKey: ["reportsV2-editor-connections", brandId],
+    queryFn: () => base44.reportsV2.listConnections({ brandId }),
+    enabled: Boolean(brandId),
   });
+
+  const ga4StatusQuery = useQuery({
+    queryKey: ["ga4-status"],
+    queryFn: () => base44.ga4.status(),
+  });
+
+  const ga4BrandSettingsQuery = useQuery({
+    queryKey: ["ga4-brand-settings", brandId],
+    queryFn: () => base44.ga4.getBrandSettings({ brandId }),
+    enabled: Boolean(brandId),
+    retry: false,
+  });
+
+  const ga4Settings = ga4BrandSettingsQuery.data?.settings || null;
+  const ga4ActivePropertyId = ga4Settings?.propertyId
+    ? String(ga4Settings.propertyId).trim()
+    : "";
+
+  const ga4Properties = React.useMemo(() => {
+    const list = Array.isArray(ga4StatusQuery.data?.properties)
+      ? ga4StatusQuery.data.properties
+      : [];
+    const options = list
+      .map((prop) => {
+        const propertyId = String(prop?.propertyId || "")
+          .trim()
+          .replace(/^properties\//, "");
+        if (!propertyId) return null;
+        const displayName = String(prop?.displayName || "").trim();
+        return {
+          value: propertyId,
+          label: displayName
+            ? `${displayName} (${propertyId})`
+            : `Property ${propertyId}`,
+        };
+      })
+      .filter(Boolean);
+
+    const seen = new Set();
+    const unique = [];
+    options.forEach((opt) => {
+      if (!opt?.value) return;
+      if (seen.has(opt.value)) return;
+      seen.add(opt.value);
+      unique.push(opt);
+    });
+
+    // Ensure the active property is visible even if the list is stale.
+    if (ga4ActivePropertyId && !seen.has(ga4ActivePropertyId)) {
+      unique.unshift({
+        value: ga4ActivePropertyId,
+        label: `Property ${ga4ActivePropertyId}`,
+      });
+    }
+
+    return unique;
+  }, [ga4StatusQuery.data?.properties, ga4ActivePropertyId]);
+
+  const setGa4PropertyMutation = useMutation({
+    mutationFn: async (propertyId) => {
+      return base44.ga4.upsertBrandSettings({
+        brandId,
+        propertyId,
+      });
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["ga4-brand-settings", brandId] }),
+        queryClient.invalidateQueries({
+          queryKey: ["reportsV2-editor-connections", brandId],
+        }),
+        queryClient.invalidateQueries({ queryKey: ["reportsV2-widget", id] }),
+      ]);
+      showToast({
+        type: "success",
+        message: "Propriedade GA4 atualizada para esta marca.",
+      });
+    },
+    onError: (err) => {
+      const status = err?.status || err?.response?.status || null;
+      const message =
+        err?.message ||
+        (status === 403
+          ? "Sem permissão para alterar a propriedade GA4."
+          : "Falha ao atualizar a propriedade GA4.");
+      showToast({ type: "error", message });
+    },
+  });
+
   const connections = connectionsQuery.data?.items || [];
   const activeConnections = React.useMemo(() => {
     if (!Array.isArray(connections)) return [];
@@ -2429,6 +2526,64 @@ export default function ReportsV2Editor() {
         onSaveTemplate={handleOpenSaveTemplate}
         onViewClient={handleViewClient}
         onShare={() => setShowShareDialog(true)}
+        leftContent={
+          brandId ? (
+            <div className="ml-2 hidden items-center gap-2 lg:flex">
+              <span className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-slate-400">
+                GA4
+              </span>
+              <div className="w-[320px]">
+                <Select
+                  value={ga4ActivePropertyId || ""}
+                  onValueChange={(value) => {
+                    if (!value) return;
+                    if (value === ga4ActivePropertyId) return;
+                    setGa4PropertyMutation.mutate(value);
+                  }}
+                >
+                  <SelectTrigger
+                    className={cn(
+                      "h-8 w-full rounded-full border-[#d1dae6] bg-white px-3 text-[12px] font-bold text-slate-600 hover:bg-slate-50",
+                      setGa4PropertyMutation.isPending && "opacity-60"
+                    )}
+                    disabled={
+                      setGa4PropertyMutation.isPending ||
+                      ga4StatusQuery.isLoading ||
+                      ga4Properties.length === 0
+                    }
+                  >
+                    <SelectValue
+                      placeholder={
+                        ga4StatusQuery.isLoading
+                          ? "Carregando properties..."
+                          : ga4Properties.length
+                          ? "Selecionar propriedade GA4"
+                          : "Conecte o GA4"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[320px]">
+                    {ga4Properties.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {setGa4PropertyMutation.isPending ? (
+                <span className="text-[11px] font-semibold text-slate-400">
+                  Atualizando...
+                </span>
+              ) : null}
+              {ga4BrandSettingsQuery.error?.status === 409 ? (
+                <span className="text-[11px] font-semibold text-amber-700">
+                  Selecione uma property para ativar o GA4.
+                </span>
+              ) : null}
+            </div>
+          ) : null
+        }
         extraActions={
           <div className="hidden items-center gap-1.5 2xl:flex">
             <Button

@@ -10,6 +10,7 @@ export default function ReporteiReportToolbar({
   onSaveTemplate,
   onViewClient,
   onShare,
+  leftContent,
   extraActions,
   className = "",
 }) {
@@ -29,6 +30,7 @@ export default function ReporteiReportToolbar({
             {title || "Relatório"}
           </p>
           <Pencil className="h-3.5 w-3.5 text-[var(--text-muted)]" />
+          {leftContent}
         </div>
         <div className="flex items-center gap-1.5">
           <span className="inline-flex items-center gap-1 px-2 py-1 text-[13px] font-bold text-emerald-600">
