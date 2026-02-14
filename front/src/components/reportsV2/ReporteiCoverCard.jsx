@@ -39,11 +39,15 @@ export default function ReporteiCoverCard({
   title = "Relatório",
   subtitle = "Análise de desempenho",
   filters,
+  officialDateRange,
   onAddAnalysis,
   className = "",
 }) {
   const initial = String(title || "R").trim().charAt(0).toUpperCase() || "R";
-  const range = resolveDateRange(filters?.dateRange || {});
+  const range =
+    officialDateRange?.start && officialDateRange?.end
+      ? officialDateRange
+      : resolveDateRange(filters?.dateRange || {});
   const compare = resolveComparisonRange(filters, range);
 
   return (

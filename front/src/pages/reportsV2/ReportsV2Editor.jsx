@@ -772,6 +772,7 @@ export default function ReportsV2Editor() {
   const [previewFilters, setPreviewFilters] = React.useState(
     buildInitialFilters(DEFAULT_LAYOUT)
   );
+  const [officialDateRange, setOfficialDateRange] = React.useState(null);
   const debouncedPreviewFilters = useDebouncedValue(previewFilters, 400);
   const [actionMessage, setActionMessage] = React.useState(null);
   const [showValidation, setShowValidation] = React.useState(false);
@@ -803,6 +804,37 @@ export default function ReportsV2Editor() {
   const skipNextLayoutChangeRef = React.useRef(false);
   const guidesRef = React.useRef(null);
   const metricDragCounterRef = React.useRef(0);
+
+  React.useEffect(() => {
+    setOfficialDateRange(null);
+  }, [
+    previewFilters?.dateRange?.preset,
+    previewFilters?.dateRange?.start,
+    previewFilters?.dateRange?.end,
+  ]);
+
+  const handleWidgetMetaChange = React.useCallback((_widgetId, meta) => {
+    const range = meta?.dateRange || null;
+    if (!range?.start || !range?.end) return;
+    const next = {
+      preset: range.preset || null,
+      start: range.start,
+      end: range.end,
+      timezone: meta?.timezone || null,
+    };
+    setOfficialDateRange((prev) => {
+      if (
+        prev &&
+        prev.preset === next.preset &&
+        prev.start === next.start &&
+        prev.end === next.end &&
+        prev.timezone === next.timezone
+      ) {
+        return prev;
+      }
+      return next;
+    });
+  }, []);
   const scrollToWidgetCard = React.useCallback((widgetId) => {
     if (!widgetId || typeof document === "undefined") return;
     const tryScroll = (attempt = 0) => {
@@ -2474,6 +2506,7 @@ export default function ReportsV2Editor() {
             filters={previewFilters}
             onChange={handleGlobalFiltersChange}
             shareUrl={shareUrl}
+            officialDateRange={officialDateRange}
           />
         </div>
 
@@ -2531,6 +2564,7 @@ export default function ReportsV2Editor() {
               title={dashboard.name}
               subtitle={dashboard.subtitle || "Análise de desempenho"}
               filters={previewFilters}
+              officialDateRange={officialDateRange}
               onAddAnalysis={handleAddTextWidget}
               className="mb-4"
             />
@@ -2631,6 +2665,7 @@ export default function ReportsV2Editor() {
                     brandId={dashboard.brandId}
                     globalFilters={debouncedPreviewFilters}
                     activePageId={activePageId}
+                    onWidgetMetaChange={handleWidgetMetaChange}
                   />
                 ) : (
                   <div

@@ -361,6 +361,7 @@ export default function WidgetRenderer({
   pageId,
   globalFilters,
   onStatusChange,
+  onMetaChange,
   healthIssue,
   fetchReason,
 }) {
@@ -487,6 +488,23 @@ export default function WidgetRenderer({
     offset: pagination?.offset || 0,
     hasMore: false,
   };
+
+  React.useEffect(() => {
+    if (!onMetaChange) return;
+    const start = meta?.dateRange?.start;
+    const end = meta?.dateRange?.end;
+    if (!start || !end) return;
+    onMetaChange(widget?.id, {
+      dateRange: meta.dateRange,
+      timezone: meta.timezone || null,
+    });
+  }, [
+    onMetaChange,
+    widget?.id,
+    meta?.dateRange?.start,
+    meta?.dateRange?.end,
+    meta?.timezone,
+  ]);
 
   if (widgetType === "text") {
     return (

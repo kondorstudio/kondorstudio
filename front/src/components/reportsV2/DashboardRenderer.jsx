@@ -35,6 +35,7 @@ export default function DashboardRenderer({
   healthIssuesByWidgetId,
   fetchReason,
   onWidgetStatusesChange,
+  onWidgetMetaChange,
 }) {
   const { width, containerRef } = useContainerWidth({
     measureBeforeMount: true,
@@ -175,6 +176,7 @@ export default function DashboardRenderer({
                 healthIssue={healthIssuesByWidgetId?.[widget.id] || null}
                 fetchReason={fetchReason}
                 onStatusChange={handleWidgetStatusChange}
+                onMetaChange={onWidgetMetaChange}
               />
             </div>
           </div>

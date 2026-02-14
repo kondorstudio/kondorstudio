@@ -166,6 +166,7 @@ export default function ReportsV2Viewer() {
   const [filters, setFilters] = React.useState(() =>
     buildInitialFilters(normalizedLayout)
   );
+  const [officialDateRange, setOfficialDateRange] = React.useState(null);
   const debouncedFilters = useDebouncedValue(filters, 400);
   const debouncedFiltersKey = React.useMemo(
     () => stableStringify(debouncedFilters),
@@ -191,6 +192,38 @@ export default function ReportsV2Viewer() {
   React.useEffect(() => {
     setFilters(buildInitialFilters(normalizedLayout));
   }, [normalizedLayout]);
+
+  React.useEffect(() => {
+    setOfficialDateRange(null);
+  }, [
+    dashboard?.brandId,
+    filters?.dateRange?.preset,
+    filters?.dateRange?.start,
+    filters?.dateRange?.end,
+  ]);
+
+  const handleWidgetMetaChange = React.useCallback((_widgetId, meta) => {
+    const range = meta?.dateRange || null;
+    if (!range?.start || !range?.end) return;
+    const next = {
+      preset: range.preset || null,
+      start: range.start,
+      end: range.end,
+      timezone: meta?.timezone || null,
+    };
+    setOfficialDateRange((prev) => {
+      if (
+        prev &&
+        prev.preset === next.preset &&
+        prev.start === next.start &&
+        prev.end === next.end &&
+        prev.timezone === next.timezone
+      ) {
+        return prev;
+      }
+      return next;
+    });
+  }, []);
 
   React.useEffect(() => {
     if (!pages.length) return;
@@ -703,6 +736,7 @@ export default function ReportsV2Viewer() {
           filters={filters}
           onChange={setFilters}
           shareUrl={shareUrl}
+          officialDateRange={officialDateRange}
         />
 
         <div className="mt-6">
@@ -712,6 +746,7 @@ export default function ReportsV2Viewer() {
                 title={dashboard.name}
                 subtitle={dashboard.subtitle || "Análise de desempenho"}
                 filters={filters}
+                officialDateRange={officialDateRange}
                 className="mb-4"
               />
               {pages.length > 1 ? (
@@ -747,6 +782,7 @@ export default function ReportsV2Viewer() {
                 healthIssuesByWidgetId={healthIssuesByWidgetId}
                 fetchReason={fetchReason}
                 onWidgetStatusesChange={handleWidgetStatusesChange}
+                onWidgetMetaChange={handleWidgetMetaChange}
               />
             </>
           ) : (

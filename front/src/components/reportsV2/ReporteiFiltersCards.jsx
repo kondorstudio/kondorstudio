@@ -14,16 +14,21 @@ function formatDatePtBr(value) {
   return `${day}/${month}/${year}`;
 }
 
-function dateRangeLabel(filters) {
-  const resolved = resolveDateRange(filters?.dateRange || {});
+function resolveDisplayRange(filters, officialDateRange) {
+  if (officialDateRange?.start && officialDateRange?.end) return officialDateRange;
+  return resolveDateRange(filters?.dateRange || {});
+}
+
+function dateRangeLabel(filters, officialDateRange) {
+  const resolved = resolveDisplayRange(filters, officialDateRange);
   return `${formatDatePtBr(resolved.start)} a ${formatDatePtBr(resolved.end)}`;
 }
 
-function compareLabel(filters) {
+function compareLabel(filters, officialDateRange) {
   const compareTo = filters?.compareTo || null;
   if (!compareTo) return "Sem comparação";
 
-  const resolved = resolveDateRange(filters?.dateRange || {});
+  const resolved = resolveDisplayRange(filters, officialDateRange);
   const startDate = new Date(`${resolved.start}T00:00:00`);
   const endDate = new Date(`${resolved.end}T00:00:00`);
   if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
@@ -51,6 +56,7 @@ export default function ReporteiFiltersCards({
   filters,
   onChange,
   shareUrl = "",
+  officialDateRange,
   className = "",
   collapsible = true,
   defaultExpanded = false,
@@ -92,7 +98,7 @@ export default function ReporteiFiltersCards({
               Período de análise
             </p>
             <p className="text-[16px] font-extrabold leading-tight text-[var(--text)] lg:text-[22px]">
-              {dateRangeLabel(filters)}
+              {dateRangeLabel(filters, officialDateRange)}
             </p>
           </div>
         </div>
@@ -105,7 +111,7 @@ export default function ReporteiFiltersCards({
               Período de comparação
             </p>
             <p className="text-[16px] font-extrabold leading-tight text-[var(--text)] lg:text-[22px]">
-              {compareLabel(filters)}
+              {compareLabel(filters, officialDateRange)}
             </p>
           </div>
         </div>
