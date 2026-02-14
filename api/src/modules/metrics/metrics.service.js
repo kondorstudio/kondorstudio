@@ -899,6 +899,27 @@ async function executeQueryMetrics(tenantId, payload = {}) {
     throw err;
   }
 
+  let brandTimezone = 'UTC';
+  try {
+    const ga4Settings = await prisma.brandGa4Settings.findFirst({
+      where: {
+        tenantId: String(tenantId),
+        brandId: String(brandId),
+      },
+      select: {
+        timezone: true,
+      },
+    });
+    if (ga4Settings?.timezone) {
+      brandTimezone = String(ga4Settings.timezone);
+    }
+  } catch (err) {
+    if (process.env.NODE_ENV !== 'test') {
+      // eslint-disable-next-line no-console
+      console.warn('[metrics.service] brand timezone lookup warning', err?.message || err);
+    }
+  }
+
   const catalogEntries = await prisma.metricsCatalog.findMany({
     where: { key: { in: metrics } },
   });
@@ -1063,7 +1084,7 @@ async function executeQueryMetrics(tenantId, payload = {}) {
   return {
     meta: {
       currency: null,
-      timezone: 'UTC',
+      timezone: brandTimezone || 'UTC',
       generatedAt: new Date().toISOString(),
     },
     rows,

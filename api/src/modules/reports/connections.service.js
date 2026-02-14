@@ -4,6 +4,8 @@ const {
   normalizeGa4PropertyId,
   upsertBrandGa4Settings,
 } = require('../../services/brandGa4SettingsService');
+const { ensureBrandGa4Timezone } = require('../../services/ga4BrandTimezoneService');
+const { acquireTenantBrandLock } = require('../../lib/pgAdvisoryLock');
 
 const PLATFORM_SOURCE_MAP = {
   META_ADS: 'META_ADS',
@@ -203,6 +205,8 @@ async function linkConnection(tenantId, userId, payload) {
     : async (fn) => fn(prisma);
 
   const result = await runInTransaction(async (tx) => {
+    await acquireTenantBrandLock(tx, tenantId, brandId);
+
     // Enforce: 1 GA4 property per brand.
     if (typeof tx.brandSourceConnection?.updateMany === 'function') {
       await tx.brandSourceConnection.updateMany({
@@ -265,6 +269,13 @@ async function linkConnection(tenantId, userId, payload) {
 
     return linked;
   });
+
+  // Best-effort: resolve and persist property timezone so date ranges match GA4 UI.
+  ensureBrandGa4Timezone({
+    tenantId,
+    brandId,
+    propertyId: String(normalizedExternalAccountId),
+  }).catch(() => null);
 
   syncAfterConnection({
     tenantId,

@@ -7,6 +7,7 @@
 // - Historical facts must always be tied to the brand's active GA4 propertyId.
 
 const { prisma } = require('../prisma');
+const { acquireTenantBrandLock } = require('../lib/pgAdvisoryLock');
 
 function parseEnvList(value) {
   if (!value) return [];
@@ -168,54 +169,84 @@ async function resolveBrandGa4ActivePropertyId({ tenantId, brandId }, opts = {})
   const db = opts.db || prisma;
   if (!tenantId || !brandId) return null;
 
-  const connections = await db.brandSourceConnection.findMany({
+  // Fast path: use canonical settings without mutating connections.
+  const stored = await db.brandGa4Settings.findFirst({
     where: {
       tenantId: String(tenantId),
       brandId: String(brandId),
-      platform: 'GA4',
-      status: 'ACTIVE',
     },
-    orderBy: { updatedAt: 'desc' },
     select: {
-      id: true,
-      externalAccountId: true,
+      propertyId: true,
     },
   });
+  const storedPropertyId = normalizeGa4PropertyId(stored?.propertyId);
+  if (storedPropertyId) return storedPropertyId;
 
-  if (!connections.length) {
-    return null;
-  }
+  const runner = typeof db.$transaction === 'function'
+    ? db.$transaction.bind(db)
+    : async (fn) => fn(db);
 
-  const primaryExternal = String(connections[0].externalAccountId || '');
-  const propertyId = normalizeGa4PropertyId(primaryExternal);
-  if (!propertyId) {
-    return null;
-  }
+  return runner(async (tx) => {
+    // Initialize settings and cleanup legacy duplicates/facts atomically.
+    await acquireTenantBrandLock(tx, tenantId, brandId);
 
-  // Enforce the 1-property rule: keep only the newest ACTIVE connection.
-  if (connections.length > 1) {
-    await db.brandSourceConnection.updateMany({
+    const connections = await tx.brandSourceConnection.findMany({
       where: {
         tenantId: String(tenantId),
         brandId: String(brandId),
         platform: 'GA4',
         status: 'ACTIVE',
-        externalAccountId: { not: primaryExternal },
       },
-      data: { status: 'DISCONNECTED' },
+      orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+      select: {
+        externalAccountId: true,
+      },
     });
-  }
 
-  await upsertBrandGa4Settings(
-    {
-      tenantId,
-      brandId,
-      propertyId,
-    },
-    { db },
-  );
+    if (!connections.length) return null;
 
-  return propertyId;
+    const primaryExternal = String(connections[0].externalAccountId || '');
+    const propertyId = normalizeGa4PropertyId(primaryExternal);
+    if (!propertyId) return null;
+
+    if (connections.length > 1) {
+      await tx.brandSourceConnection.updateMany({
+        where: {
+          tenantId: String(tenantId),
+          brandId: String(brandId),
+          platform: 'GA4',
+          status: 'ACTIVE',
+          externalAccountId: { not: primaryExternal },
+        },
+        data: { status: 'DISCONNECTED' },
+      });
+    }
+
+    // Purge any GA4 facts not tied to the active property to avoid invisible sums/residue.
+    if (tx.factKondorMetricsDaily) {
+      await tx.factKondorMetricsDaily.deleteMany({
+        where: {
+          tenantId: String(tenantId),
+          brandId: String(brandId),
+          platform: 'GA4',
+          accountId: { not: String(propertyId) },
+        },
+      });
+    }
+
+    if (tx.brandGa4Settings) {
+      await upsertBrandGa4Settings(
+        {
+          tenantId,
+          brandId,
+          propertyId,
+        },
+        { db: tx },
+      );
+    }
+
+    return propertyId;
+  });
 }
 
 module.exports = {

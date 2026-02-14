@@ -4,6 +4,9 @@ const { resolveGa4IntegrationContext } = require('./ga4IntegrationResolver');
 const {
   resolveBrandGa4ActivePropertyId,
 } = require('./brandGa4SettingsService');
+const { ensureBrandGa4Timezone } = require('./ga4BrandTimezoneService');
+const { acquireTenantBrandLock } = require('../lib/pgAdvisoryLock');
+const { rangeTouchesToday } = require('../lib/timezone');
 
 const DEFAULT_CURRENCY = process.env.DEFAULT_CURRENCY || 'BRL';
 function parseEnvList(value) {
@@ -27,6 +30,10 @@ const LEAD_EVENT_NAMES = (() => {
 })();
 const CONVERSION_EVENT_NAME = process.env.GA4_CONVERSION_EVENT_NAME || null;
 const FACT_CACHE_TTL_MS = Number(process.env.GA4_FACT_CACHE_TTL_MS || 30000);
+const FACT_WRITE_TX_TIMEOUT_MS = Math.max(
+  10_000,
+  Number(process.env.GA4_FACT_WRITE_TX_TIMEOUT_MS || 120_000),
+);
 
 const GA4_METRIC_MAP = {
   sessions: 'sessions',
@@ -88,13 +95,7 @@ function normalizeDateKey(value) {
   return parsed.toISOString().slice(0, 10);
 }
 
-function rangeTouchesToday(dateRange) {
-  const start = normalizeDateKey(dateRange?.start);
-  const end = normalizeDateKey(dateRange?.end);
-  if (!start || !end) return false;
-  const today = new Date().toISOString().slice(0, 10);
-  return start <= today && end >= today;
-}
+// rangeTouchesToday is provided by ../lib/timezone and should use the brand's timezone.
 
 function dateOnlyUtc(value) {
   const key = normalizeDateKey(value);
@@ -329,7 +330,7 @@ function buildFactRows({
     rows.push({
       tenantId,
       brandId,
-      date: new Date(entry.date),
+      date: dateOnlyUtc(entry.date) || new Date(entry.date),
       platform: 'GA4',
       accountId: String(propertyId),
       campaignId: entry.campaignId || null,
@@ -462,7 +463,8 @@ async function ensureGa4FactMetrics({
     extractFilterValues(filters, 'campaign_id').length > 0;
   const cacheScope = wantsCampaign ? 'campaign' : 'agg';
   const fullFactSync = isFullFactSync(FULL_FACT_METRICS);
-  const shouldRefreshOpenRange = rangeTouchesToday(dateRange);
+  const timeZone = await ensureBrandGa4Timezone({ tenantId, brandId, propertyId: String(activePropertyId) });
+  const shouldRefreshOpenRange = rangeTouchesToday(dateRange, timeZone);
 
   const propertyId = String(activePropertyId);
 
@@ -697,27 +699,53 @@ async function ensureGa4FactMetrics({
         return;
       }
 
-      await prisma.factKondorMetricsDaily.deleteMany({
-        where: {
-          tenantId,
-          brandId,
-          platform: 'GA4',
-          accountId: propertyId,
-          campaignId: writingCampaignFacts ? { not: null } : null,
-          date: {
-            gte: new Date(dateRange.start),
-            lte: new Date(dateRange.end),
-          },
-        },
-      });
-
       const chunkSize = Math.max(100, Number(process.env.GA4_FACT_INSERT_CHUNK || 500));
-      for (let i = 0; i < scopedFactRows.length; i += chunkSize) {
-        await prisma.factKondorMetricsDaily.createMany({
-          data: scopedFactRows.slice(i, i + chunkSize),
-        });
-      }
-  });
+
+      await prisma.$transaction(
+        async (tx) => {
+          // Serialize with property switches to prevent residual facts.
+          await acquireTenantBrandLock(tx, tenantId, brandId);
+
+          // Guard rail: abort if the brand has switched GA4 properties since we started.
+          const active = await tx.brandSourceConnection.findFirst({
+            where: {
+              tenantId: String(tenantId),
+              brandId: String(brandId),
+              platform: 'GA4',
+              status: 'ACTIVE',
+            },
+            orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+            select: { externalAccountId: true },
+          });
+          const activeNow = normalizeGa4PropertyId(active?.externalAccountId);
+          if (!activeNow || String(activeNow) !== String(propertyId)) {
+            return;
+          }
+
+          await tx.factKondorMetricsDaily.deleteMany({
+            where: {
+              tenantId,
+              brandId,
+              platform: 'GA4',
+              accountId: propertyId,
+              campaignId: writingCampaignFacts ? { not: null } : null,
+              date: {
+                gte: new Date(dateRange.start),
+                lte: new Date(dateRange.end),
+              },
+            },
+          });
+
+          for (let i = 0; i < scopedFactRows.length; i += chunkSize) {
+            // eslint-disable-next-line no-await-in-loop
+            await tx.factKondorMetricsDaily.createMany({
+              data: scopedFactRows.slice(i, i + chunkSize),
+            });
+          }
+        },
+        { timeout: FACT_WRITE_TX_TIMEOUT_MS, maxWait: 10_000 },
+      );
+    });
 
   return { ok: true };
 }

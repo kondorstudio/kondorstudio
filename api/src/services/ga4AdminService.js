@@ -273,10 +273,52 @@ async function getSelectedProperty({ tenantId, userId }) {
   });
 }
 
+async function fetchProperty(accessToken, propertyId) {
+  if (!accessToken) {
+    const err = new Error('accessToken missing');
+    err.status = 400;
+    throw err;
+  }
+  if (!propertyId) {
+    const err = new Error('propertyId missing');
+    err.status = 400;
+    throw err;
+  }
+
+  const oauth2Client = new google.auth.OAuth2();
+  oauth2Client.setCredentials({ access_token: accessToken });
+  const client = google.analyticsadmin({
+    version: 'v1beta',
+    auth: oauth2Client,
+  });
+
+  try {
+    const response = await client.properties.get({
+      name: `properties/${String(propertyId).replace(/^properties\//, '')}`,
+    });
+    return response.data || null;
+  } catch (error) {
+    throw mapGoogleError(error);
+  }
+}
+
+async function getPropertyTimezone({ tenantId, userId, propertyId }) {
+  if (ga4OAuthService.isMockMode()) return 'UTC';
+  const accessToken = await ga4OAuthService.getValidAccessToken({
+    tenantId,
+    userId,
+  });
+  const property = await fetchProperty(accessToken, propertyId);
+  const tz = property?.timeZone || property?.timezone || null;
+  return tz ? String(tz) : null;
+}
+
 module.exports = {
   syncProperties,
   listProperties,
   selectProperty,
   getSelectedProperty,
   fetchProperties,
+  fetchProperty,
+  getPropertyTimezone,
 };
