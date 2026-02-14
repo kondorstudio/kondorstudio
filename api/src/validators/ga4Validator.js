@@ -96,6 +96,15 @@ const ga4FactsSyncSchema = z.object({
   includeCampaigns: z.boolean().optional(),
 });
 
+const ga4BrandSettingsSchema = z
+  .object({
+    brandId: z.string().uuid(),
+    leadEvents: z.array(z.string().trim().min(1)).max(50).optional(),
+    conversionEvents: z.array(z.string().trim().min(1)).max(50).optional(),
+    revenueEvent: z.string().trim().min(1).optional().nullable(),
+  })
+  .strict();
+
 const dashboardCreateSchema = z.object({
   integrationPropertyId: z.string().min(1),
   name: z.string().trim().min(2).max(120),
@@ -125,6 +134,7 @@ module.exports = {
   batchRunReportsSchema,
   propertySelectSchema,
   ga4FactsSyncSchema,
+  ga4BrandSettingsSchema,
   dashboardCreateSchema,
   dashboardUpdateSchema,
   widgetCreateSchema,

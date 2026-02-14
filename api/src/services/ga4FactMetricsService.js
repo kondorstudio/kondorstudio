@@ -9,26 +9,45 @@ const { acquireTenantBrandLock } = require('../lib/pgAdvisoryLock');
 const { rangeTouchesToday } = require('../lib/timezone');
 
 const DEFAULT_CURRENCY = process.env.DEFAULT_CURRENCY || 'BRL';
-function parseEnvList(value) {
-  if (!value) return [];
-  return String(value)
-    .split(/[,\n;]+/)
-    .map((entry) => entry.trim())
-    .filter(Boolean);
+
+function uniqueStrings(list) {
+  const out = [];
+  const seen = new Set();
+  (list || []).forEach((entry) => {
+    const value = String(entry || '').trim();
+    if (!value) return;
+    const key = value.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(value);
+  });
+  return out;
 }
 
-// GA4 standard event name for lead generation.
-// You can override it per environment using:
-// - GA4_LEAD_EVENT_NAME="generate_lead" (single)
-// - GA4_LEAD_EVENT_NAMES="generate_lead,lead" (multiple)
-const LEAD_EVENT_NAMES = (() => {
-  const list = parseEnvList(process.env.GA4_LEAD_EVENT_NAMES);
-  if (list.length) return list;
-  const single = String(process.env.GA4_LEAD_EVENT_NAME || '').trim();
-  if (single) return [single];
-  return ['generate_lead'];
-})();
-const CONVERSION_EVENT_NAME = process.env.GA4_CONVERSION_EVENT_NAME || null;
+async function getBrandEventMappings({ tenantId, brandId }, opts = {}) {
+  const db = opts.db || prisma;
+  if (!tenantId || !brandId) {
+    return { leadEvents: [], conversionEvents: [] };
+  }
+  try {
+    const row = await db.brandGa4Settings.findFirst({
+      where: {
+        tenantId: String(tenantId),
+        brandId: String(brandId),
+      },
+      select: {
+        leadEvents: true,
+        conversionEvents: true,
+      },
+    });
+    return {
+      leadEvents: uniqueStrings(row?.leadEvents || []),
+      conversionEvents: uniqueStrings(row?.conversionEvents || []),
+    };
+  } catch (_err) {
+    return { leadEvents: [], conversionEvents: [] };
+  }
+}
 const FACT_CACHE_TTL_MS = Number(process.env.GA4_FACT_CACHE_TTL_MS || 30000);
 const FACT_WRITE_TX_TIMEOUT_MS = Math.max(
   10_000,
@@ -37,7 +56,8 @@ const FACT_WRITE_TX_TIMEOUT_MS = Math.max(
 
 const GA4_METRIC_MAP = {
   sessions: 'sessions',
-  conversions: 'conversions',
+  // Prefer "keyEvents" (GA4 UI) and fallback to legacy "conversions" if needed.
+  conversions: 'keyEvents',
   revenue: 'totalRevenue',
 };
 
@@ -166,45 +186,68 @@ function extractFilterValues(filters = [], field) {
   return Array.from(values);
 }
 
-function buildGa4MetricPlan(requestedMetrics = []) {
-  const requested = new Set((requestedMetrics || []).map((m) => String(m || '').trim()));
-  const shouldFetch = Array.from(requested).some((metric) => GA4_METRIC_KEYS.has(metric));
-  if (!shouldFetch) {
+function buildGa4MetricPlan(requestedMetrics = [], options = {}) {
+  const leadEvents = uniqueStrings(options.leadEvents || []);
+  const conversionEvents = uniqueStrings(options.conversionEvents || []);
+
+  const requested = new Set(
+    (requestedMetrics || []).map((m) => String(m || '').trim().toLowerCase()),
+  );
+
+  const wantsLeads = requested.has('leads');
+  const wantsConversions = requested.has('conversions');
+
+  const needsLeadsFromEvent = Boolean(wantsLeads && leadEvents.length);
+  const needsConversionsFromEvent = Boolean(wantsConversions && conversionEvents.length);
+
+  const wantsAnyGa4 =
+    Array.from(requested).some((metric) => GA4_METRIC_KEYS.has(metric)) ||
+    needsLeadsFromEvent ||
+    needsConversionsFromEvent;
+
+  if (!wantsAnyGa4) {
     return {
       metrics: [],
       wantsLeads: false,
       wantsConversions: false,
       needsLeadsFromEvent: false,
+      needsConversionsFromEvent: false,
+      leadEvents,
+      conversionEvents,
     };
   }
 
   const metricsSet = new Set();
   requested.forEach((metric) => {
+    if (metric === 'conversions' && needsConversionsFromEvent) {
+      // When conversions are configured per brand, we compute them via eventCount filter.
+      return;
+    }
     const mapped = GA4_METRIC_MAP[metric];
     if (mapped) metricsSet.add(mapped);
   });
-
-  const wantsLeads = requested.has('leads');
-  const wantsConversions = requested.has('conversions');
-  const needsLeadsFromEvent = Boolean(wantsLeads && LEAD_EVENT_NAMES.length);
 
   return {
     metrics: Array.from(metricsSet),
     wantsLeads,
     wantsConversions,
     needsLeadsFromEvent,
+    needsConversionsFromEvent,
+    leadEvents,
+    conversionEvents,
   };
 }
 
-function buildDimensionFilterForLeadEvent() {
-  if (!LEAD_EVENT_NAMES.length) return null;
-  if (LEAD_EVENT_NAMES.length === 1) {
+function buildDimensionFilterForEvents(eventNames = []) {
+  const names = uniqueStrings(eventNames);
+  if (!names.length) return null;
+  if (names.length === 1) {
     return {
       filter: {
         fieldName: 'eventName',
         stringFilter: {
           matchType: 'EXACT',
-          value: String(LEAD_EVENT_NAMES[0]),
+          value: String(names[0]),
           caseSensitive: false,
         },
       },
@@ -214,21 +257,7 @@ function buildDimensionFilterForLeadEvent() {
     filter: {
       fieldName: 'eventName',
       inListFilter: {
-        values: LEAD_EVENT_NAMES.map((name) => String(name)),
-        caseSensitive: false,
-      },
-    },
-  };
-}
-
-function buildDimensionFilterForConversionEvent() {
-  if (!CONVERSION_EVENT_NAME) return null;
-  return {
-    filter: {
-      fieldName: 'eventName',
-      stringFilter: {
-        matchType: 'EXACT',
-        value: String(CONVERSION_EVENT_NAME),
+        values: names.map((name) => String(name)),
         caseSensitive: false,
       },
     },
@@ -446,12 +475,18 @@ async function ensureGa4FactMetrics({
     return { skipped: true, reason: 'account_filter_excludes_active_property' };
   }
 
-  const requestedMetricPlan = buildGa4MetricPlan(metrics);
-  if (!requestedMetricPlan.metrics.length && !requestedMetricPlan.needsLeadsFromEvent) {
+  const brandMappings = await getBrandEventMappings({ tenantId, brandId });
+
+  const requestedMetricPlan = buildGa4MetricPlan(metrics, brandMappings);
+  if (
+    !requestedMetricPlan.metrics.length &&
+    !requestedMetricPlan.needsLeadsFromEvent &&
+    !requestedMetricPlan.needsConversionsFromEvent
+  ) {
     return { skipped: true, reason: 'no_ga4_metrics' };
   }
 
-  const metricPlan = buildGa4MetricPlan(FULL_FACT_METRICS);
+  const metricPlan = buildGa4MetricPlan(FULL_FACT_METRICS, brandMappings);
 
   if (!platformAllowsGa4) {
     return { skipped: true, reason: 'platform_excludes_ga4' };
@@ -512,7 +547,11 @@ async function ensureGa4FactMetrics({
 
       let campaignDimension = wantsCampaign ? 'campaignId' : null;
       let metricsForRequest = Array.isArray(metricPlan.metrics) ? [...metricPlan.metrics] : [];
-      let conversionsMetricName = metricsForRequest.includes('conversions') ? 'conversions' : null;
+      let conversionsMetricName = metricsForRequest.includes('keyEvents')
+        ? 'keyEvents'
+        : metricsForRequest.includes('conversions')
+          ? 'conversions'
+          : null;
       let conversionsInvalid = false;
 
       const fetchWithDimensionFallback = async (metricsList, initialCampaignDimension) => {
@@ -577,21 +616,19 @@ async function ensureGa4FactMetrics({
 
       if (metricsForRequest.length && attempt.invalidMetrics.length) {
         if (conversionsMetricName && attempt.invalidMetrics.includes(conversionsMetricName)) {
-          // GA4 renamed "conversions" to "keyEvents" in some properties. Try the new metric.
-          if (conversionsMetricName === 'conversions') {
-            const swapped = metricsForRequest.map((metric) =>
-              metric === 'conversions' ? 'keyEvents' : metric,
-            );
-            const swappedFetched = await fetchWithDimensionFallback(swapped, campaignDimension);
-            const swappedAttempt = swappedFetched.attempt;
-            if (!swappedAttempt.invalidMetrics.includes('keyEvents')) {
-              metricsForRequest = swapped;
-              attempt = swappedAttempt;
-              campaignDimension = swappedFetched.campaignDimension;
-              conversionsMetricName = 'keyEvents';
-            } else {
-              conversionsInvalid = true;
-            }
+          // GA4 uses "keyEvents" (preferred) and legacy "conversions" depending on property version.
+          const swapTo = conversionsMetricName === 'keyEvents' ? 'conversions' : 'keyEvents';
+          const swapped = metricsForRequest.map((metric) =>
+            metric === conversionsMetricName ? swapTo : metric,
+          );
+
+          const swappedFetched = await fetchWithDimensionFallback(swapped, campaignDimension);
+          const swappedAttempt = swappedFetched.attempt;
+          if (!swappedAttempt.invalidMetrics.includes(swapTo)) {
+            metricsForRequest = swapped;
+            attempt = swappedAttempt;
+            campaignDimension = swappedFetched.campaignDimension;
+            conversionsMetricName = swapTo;
           } else {
             conversionsInvalid = true;
           }
@@ -656,16 +693,12 @@ async function ensureGa4FactMetrics({
           metrics: ['eventCount'],
           dimensions: campaignDimension ? ['date', campaignDimension] : ['date'],
           dateRange,
-          dimensionFilter: buildDimensionFilterForLeadEvent(),
+          dimensionFilter: buildDimensionFilterForEvents(metricPlan.leadEvents),
         });
         applyGa4Response(rowsMap, leadResponse, { leads: 'eventCount' }, { campaignDimension });
       }
 
-      if (
-        metricPlan.wantsConversions &&
-        (conversionsInvalid || !conversionsMetricName) &&
-        CONVERSION_EVENT_NAME
-      ) {
+      if (metricPlan.needsConversionsFromEvent) {
         const conversionResponse = await fetchGa4Report({
           tenantId,
           userId: resolved.userId,
@@ -673,7 +706,7 @@ async function ensureGa4FactMetrics({
           metrics: ['eventCount'],
           dimensions: campaignDimension ? ['date', campaignDimension] : ['date'],
           dateRange,
-          dimensionFilter: buildDimensionFilterForConversionEvent(),
+          dimensionFilter: buildDimensionFilterForEvents(metricPlan.conversionEvents),
         });
         applyGa4Response(
           rowsMap,

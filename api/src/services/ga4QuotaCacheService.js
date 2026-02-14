@@ -20,12 +20,19 @@ const memoryCache = new Map();
 const propertyQueues = new Map();
 const rateCounters = new Map();
 let redisClient;
+let hasLoggedRedisError = false;
 
 function getRedisClient() {
   if (REDIS_DISABLED) return null;
   if (!redisClient) {
     const url = process.env.GA4_REDIS_URL || process.env.REDIS_URL || 'redis://localhost:6379';
     redisClient = new Redis(url);
+    redisClient.on('error', (err) => {
+      if (hasLoggedRedisError || process.env.NODE_ENV === 'test') return;
+      hasLoggedRedisError = true;
+      // eslint-disable-next-line no-console
+      console.warn('[ga4QuotaCache] Redis error:', err?.message || err);
+    });
   }
   return redisClient;
 }

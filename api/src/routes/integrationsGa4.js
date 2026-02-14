@@ -6,6 +6,7 @@ const validate = require('../middleware/validate');
 const {
   propertySelectSchema,
   ga4FactsSyncSchema,
+  ga4BrandSettingsSchema,
 } = require('../validators/ga4Validator');
 const controller = require('../controllers/integrationsGa4Controller');
 
@@ -23,6 +24,8 @@ router.get('/properties', controller.propertiesList);
 router.post('/properties/select', requireGa4Admin, validate(propertySelectSchema), controller.propertiesSelect);
 router.post('/demo-report', controller.demoReport);
 router.get('/metadata', controller.metadata);
+router.get('/brands/settings', controller.brandSettingsGet);
+router.post('/brands/settings', requireGa4Admin, validate(ga4BrandSettingsSchema), controller.brandSettingsUpsert);
 router.post('/facts/sync', requireGa4Admin, validate(ga4FactsSyncSchema), controller.syncFacts);
 
 module.exports = router;

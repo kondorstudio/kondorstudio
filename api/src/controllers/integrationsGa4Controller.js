@@ -9,6 +9,8 @@ const {
 } = require('../services/brandGa4SettingsService');
 const { ensureBrandGa4Timezone } = require('../services/ga4BrandTimezoneService');
 const { buildRollingDateRange } = require('../lib/timezone');
+const { getRedisClient } = require('../lib/redisClient');
+const { ga4SyncQueue } = require('../queues');
 const { prisma, useTenant } = require('../prisma');
 
 function getFrontUrl() {
@@ -120,6 +122,59 @@ function normalizeDemoRows(response) {
     metrics: metricHeaders,
     rows: normalized,
   };
+}
+
+const GA4_FACT_SYNC_COOLDOWN_MS = Math.max(
+  0,
+  Number(process.env.GA4_FACT_SYNC_COOLDOWN_MS || 60_000),
+);
+
+async function assertGa4FactsSyncCooldown({ tenantId, brandId }) {
+  const cooldownMs = GA4_FACT_SYNC_COOLDOWN_MS;
+  if (!cooldownMs || cooldownMs <= 0) return;
+  if (!tenantId || !brandId) return;
+
+  const key = `ga4:facts:sync:cooldown:${tenantId}:${brandId}`;
+  const redis = getRedisClient();
+  if (redis) {
+    try {
+      const inserted = await redis.set(key, String(Date.now()), 'PX', cooldownMs, 'NX');
+      if (inserted === 'OK') return;
+      const ttl = await redis.pttl(key);
+      const retryAfterMs = ttl && ttl > 0 ? ttl : cooldownMs;
+      const err = new Error('GA4 facts sync em cooldown');
+      err.status = 429;
+      err.code = 'GA4_FACT_SYNC_COOLDOWN';
+      err.details = { retryAfterMs };
+      throw err;
+    } catch (err) {
+      if (err?.code === 'GA4_FACT_SYNC_COOLDOWN') throw err;
+      // If Redis is flaky, fall back to DB-based cooldown.
+    }
+  }
+
+  const row = await prisma.brandGa4Settings.findFirst({
+    where: {
+      tenantId: String(tenantId),
+      brandId: String(brandId),
+    },
+    select: {
+      lastHistoricalSyncAt: true,
+    },
+  });
+
+  const last = row?.lastHistoricalSyncAt ? new Date(row.lastHistoricalSyncAt) : null;
+  if (!last || Number.isNaN(last.getTime())) return;
+
+  const elapsed = Date.now() - last.getTime();
+  if (elapsed >= cooldownMs) return;
+
+  const retryAfterMs = Math.max(1, cooldownMs - elapsed);
+  const err = new Error('GA4 facts sync em cooldown');
+  err.status = 429;
+  err.code = 'GA4_FACT_SYNC_COOLDOWN';
+  err.details = { retryAfterMs };
+  throw err;
 }
 
 module.exports = {
@@ -482,6 +537,139 @@ module.exports = {
     }
   },
 
+  async brandSettingsGet(req, res) {
+    try {
+      const tenantId = req.tenantId;
+      const userId = req.user?.id;
+      const brandId = req.query?.brandId;
+
+      if (!tenantId || !userId) {
+        return res.status(400).json({ error: 'tenantId or userId missing' });
+      }
+      if (!brandId) {
+        return res.status(400).json({ error: 'brandId missing' });
+      }
+
+      const brand = await prisma.client.findFirst({
+        where: { id: String(brandId), tenantId: String(tenantId) },
+        select: { id: true, name: true },
+      });
+      if (!brand) {
+        return res.status(404).json({ error: 'Marca não encontrada' });
+      }
+
+      let settings = await prisma.brandGa4Settings.findFirst({
+        where: { tenantId: String(tenantId), brandId: String(brandId) },
+      });
+
+      if (!settings) {
+        // Best-effort initialize settings from active connection (does not require GA4 OAuth selection).
+        const propertyId = await resolveBrandGa4ActivePropertyId({ tenantId, brandId });
+        if (propertyId) {
+          settings = await prisma.brandGa4Settings.findFirst({
+            where: { tenantId: String(tenantId), brandId: String(brandId) },
+          });
+        }
+      }
+
+      if (!settings) {
+        return res.status(409).json({
+          error: 'GA4 property não configurada para esta marca',
+          code: 'GA4_PROPERTY_REQUIRED',
+        });
+      }
+
+      return res.json({
+        ok: true,
+        brandId: brand.id,
+        brandName: brand.name || null,
+        settings: {
+          propertyId: settings.propertyId,
+          timezone: settings.timezone || null,
+          leadEvents: settings.leadEvents || [],
+          conversionEvents: settings.conversionEvents || [],
+          revenueEvent: settings.revenueEvent || null,
+          lastHistoricalSyncAt: settings.lastHistoricalSyncAt || null,
+          lastSuccessAt: settings.lastSuccessAt || null,
+          lastError: settings.lastError || null,
+          backfillCursor: settings.backfillCursor || null,
+          updatedAt: settings.updatedAt || null,
+        },
+      });
+    } catch (error) {
+      console.error('GA4 brandSettingsGet error:', error);
+      return res
+        .status(error.status || 500)
+        .json({ error: error.message || 'Failed to fetch GA4 brand settings' });
+    }
+  },
+
+  async brandSettingsUpsert(req, res) {
+    try {
+      const tenantId = req.tenantId;
+      const userId = req.user?.id;
+      const { brandId, leadEvents, conversionEvents, revenueEvent } = req.body || {};
+
+      if (!tenantId || !userId) {
+        return res.status(400).json({ error: 'tenantId or userId missing' });
+      }
+      if (!brandId) {
+        return res.status(400).json({ error: 'brandId missing' });
+      }
+
+      const brand = await prisma.client.findFirst({
+        where: { id: String(brandId), tenantId: String(tenantId) },
+        select: { id: true, name: true },
+      });
+      if (!brand) {
+        return res.status(404).json({ error: 'Marca não encontrada' });
+      }
+
+      const propertyId = await resolveBrandGa4ActivePropertyId({ tenantId, brandId });
+      if (!propertyId) {
+        return res.status(409).json({
+          error: 'GA4 property não configurada para esta marca',
+          code: 'GA4_PROPERTY_REQUIRED',
+        });
+      }
+
+      const updated = await upsertBrandGa4Settings(
+        {
+          tenantId,
+          brandId,
+          propertyId,
+          ...(leadEvents !== undefined ? { leadEvents } : {}),
+          ...(conversionEvents !== undefined ? { conversionEvents } : {}),
+          ...(revenueEvent !== undefined ? { revenueEvent } : {}),
+        },
+        { db: prisma },
+      );
+
+      return res.json({
+        ok: true,
+        brandId: brand.id,
+        brandName: brand.name || null,
+        settings: {
+          propertyId: updated.propertyId,
+          timezone: updated.timezone || null,
+          leadEvents: updated.leadEvents || [],
+          conversionEvents: updated.conversionEvents || [],
+          revenueEvent: updated.revenueEvent || null,
+          lastHistoricalSyncAt: updated.lastHistoricalSyncAt || null,
+          lastSuccessAt: updated.lastSuccessAt || null,
+          lastError: updated.lastError || null,
+          backfillCursor: updated.backfillCursor || null,
+          updatedAt: updated.updatedAt || null,
+        },
+      });
+    } catch (error) {
+      console.error('GA4 brandSettingsUpsert error:', error);
+      return res
+        .status(error.status || 500)
+        .json({ error: error.message || 'Failed to update GA4 brand settings' });
+    }
+  },
+
   async syncFacts(req, res) {
     const tenantId = req.tenantId;
     const userId = req.user?.id;
@@ -496,6 +684,16 @@ module.exports = {
 
     const windowDays = Math.max(1, Math.min(365, Number(days || 30)));
     const wantsCampaigns = includeCampaigns === true;
+
+    try {
+      await assertGa4FactsSyncCooldown({ tenantId, brandId });
+    } catch (cooldownErr) {
+      return res.status(cooldownErr.status || 429).json({
+        error: cooldownErr.message || 'Cooldown ativo',
+        code: cooldownErr.code || 'GA4_FACT_SYNC_COOLDOWN',
+        ...(cooldownErr.details ? cooldownErr.details : {}),
+      });
+    }
 
     const brand = await prisma.client.findFirst({
       where: { id: String(brandId), tenantId: String(tenantId) },
@@ -543,9 +741,56 @@ module.exports = {
           propertyId,
           lastHistoricalSyncAt: new Date(),
           lastError: null,
+          backfillCursor: wantsCampaigns
+            ? {
+                status: 'QUEUED',
+                queuedAt: new Date().toISOString(),
+                dateRange,
+                includeCampaigns: true,
+              }
+            : undefined,
         },
         { db: prisma },
       );
+
+      if (wantsCampaigns) {
+        if (!ga4SyncQueue) {
+          return res.status(503).json({
+            error: 'Fila GA4 indisponível (Redis desativado)',
+            code: 'GA4_QUEUE_UNAVAILABLE',
+          });
+        }
+
+        const job = await ga4SyncQueue.add(
+          'ga4-brand-facts-sync',
+          {
+            tenantId: String(tenantId),
+            brandId: String(brandId),
+            days: windowDays,
+            includeCampaigns: true,
+            requestedBy: String(userId),
+          },
+          {
+            removeOnComplete: true,
+            removeOnFail: false,
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 2_000 },
+          },
+        );
+
+        return res.status(202).json({
+          ok: true,
+          queued: true,
+          jobId: job.id,
+          tenantId: String(tenantId),
+          brandId: String(brandId),
+          brandName: brand.name || null,
+          propertyId: String(propertyId),
+          timezone: rolling.timeZone || timezone || 'UTC',
+          dateRange,
+          includeCampaigns: true,
+        });
+      }
 
       await ensureGa4FactMetrics({
         tenantId,
@@ -673,6 +918,11 @@ module.exports = {
             propertyId,
             lastHistoricalSyncAt: new Date(),
             lastError: safeError,
+            backfillCursor: {
+              status: 'ERROR',
+              at: new Date().toISOString(),
+              error: safeError,
+            },
           },
           { db: prisma },
         );

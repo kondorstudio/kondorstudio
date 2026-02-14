@@ -4,7 +4,19 @@ const Redis = require('ioredis');
 
 const redisDisabled = process.env.REDIS_DISABLED === 'true' || process.env.NODE_ENV === 'test';
 
-const connection = redisDisabled ? null : new Redis(process.env.REDIS_URL);
+const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+const connection = redisDisabled
+  ? null
+  : new Redis(REDIS_URL, { maxRetriesPerRequest: null });
+let hasLoggedRedisError = false;
+if (connection) {
+  connection.on('error', (err) => {
+    if (hasLoggedRedisError || process.env.NODE_ENV === 'test') return;
+    hasLoggedRedisError = true;
+    // eslint-disable-next-line no-console
+    console.warn('[queues] Redis error:', err?.message || err);
+  });
+}
 
 const createQueue = (name) => (redisDisabled ? null : new Queue(name, { connection }));
 

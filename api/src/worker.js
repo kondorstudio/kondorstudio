@@ -27,6 +27,7 @@ const publishScheduledPostsJob = require('./jobs/publishScheduledPostsJob');
 const reportSchedulesService = require('./modules/reporting/reportSchedules.service');
 const ga4FactSyncJob = require('./jobs/ga4FactSyncJob');
 const ga4RealtimeSyncJob = require('./jobs/ga4RealtimeSyncJob');
+const ga4BrandFactsSyncJob = require('./jobs/ga4BrandFactsSyncJob');
 const ga4PruneJob = require('./jobs/ga4PruneJob');
 
 // ------------------------------------------------------
@@ -190,6 +191,10 @@ const ga4SyncWorker = ga4SyncQueue
         }
         if (job.name === 'ga4-facts-sync') {
           await runPollOnce(ga4FactSyncJob, 'ga4FactSyncJob');
+          return;
+        }
+        if (job.name === 'ga4-brand-facts-sync') {
+          await ga4BrandFactsSyncJob.processJob(job.data || {});
           return;
         }
         if (job.name === 'ga4-prune') {
