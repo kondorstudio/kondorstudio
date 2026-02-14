@@ -1,4 +1,5 @@
 const { z } = require('zod');
+const { isValidIanaTimeZone } = require('../lib/timezone');
 
 const MAX_LIMIT = Number(process.env.GA4_MAX_LIMIT || 10000);
 const MAX_OFFSET = Number(process.env.GA4_MAX_OFFSET || 1_000_000);
@@ -6,6 +7,16 @@ const MAX_BATCH_REQUESTS = Number(process.env.GA4_BATCH_MAX_REQUESTS || 5);
 const MAX_FILTER_BYTES = Number(process.env.GA4_FILTER_MAX_BYTES || 20_000);
 
 const numericString = z.string().trim().regex(/^\d+$/, 'Must be numeric');
+const ga4PropertyIdSchema = z
+  .string()
+  .trim()
+  .regex(/^(properties\/)?\d+$/, 'Invalid GA4 propertyId');
+const ianaTimeZoneSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(64)
+  .refine((value) => isValidIanaTimeZone(value), 'Invalid timezone');
 
 function boundedJson(label) {
   return z
@@ -99,6 +110,8 @@ const ga4FactsSyncSchema = z.object({
 const ga4BrandSettingsSchema = z
   .object({
     brandId: z.string().uuid(),
+    propertyId: ga4PropertyIdSchema.optional(),
+    timezone: ianaTimeZoneSchema.optional().nullable(),
     leadEvents: z.array(z.string().trim().min(1)).max(50).optional(),
     conversionEvents: z.array(z.string().trim().min(1)).max(50).optional(),
     revenueEvent: z.string().trim().min(1).optional().nullable(),

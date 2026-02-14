@@ -130,6 +130,19 @@ export default function ReportsV2Connections() {
     enabled: Boolean(brandId),
   });
 
+  const {
+    data: ga4BrandSettingsData,
+    isLoading: ga4BrandSettingsLoading,
+    error: ga4BrandSettingsError,
+  } = useQuery({
+    queryKey: ["ga4-brand-settings", brandId],
+    queryFn: () => base44.ga4.getBrandSettings({ brandId }),
+    enabled: Boolean(brandId),
+    retry: false,
+  });
+
+  const ga4Settings = ga4BrandSettingsData?.settings || null;
+
   const connections = connectionsData?.items || [];
   const connectionsByPlatform = React.useMemo(
     () => groupConnections(connections),
@@ -243,6 +256,60 @@ export default function ReportsV2Connections() {
                 </SelectContent>
               </Select>
             </div>
+
+            {brandId ? (
+              <div className="reportei-card p-4">
+                <p className="text-sm font-extrabold text-[var(--primary)]">
+                  GA4 Settings (Brand)
+                </p>
+                <p className="mt-1 text-xs text-[var(--text-muted)]">
+                  Fonte da verdade para property/timezone e eventos de lead/conversão.
+                </p>
+
+                {ga4BrandSettingsLoading ? (
+                  <div className="mt-3 space-y-2">
+                    <div className="h-4 w-48 rounded-full kondor-shimmer" />
+                    <div className="h-4 w-72 rounded-full kondor-shimmer" />
+                  </div>
+                ) : ga4Settings ? (
+                  <div className="mt-3 grid gap-2 text-xs text-[var(--text-muted)] md:grid-cols-2">
+                    <div>
+                      <span className="font-semibold text-[var(--text)]">
+                        PropertyId:
+                      </span>{" "}
+                      {ga4Settings.propertyId || "-"}
+                    </div>
+                    <div>
+                      <span className="font-semibold text-[var(--text)]">
+                        Timezone:
+                      </span>{" "}
+                      {ga4Settings.timezone || "UTC"}
+                    </div>
+                    <div className="md:col-span-2">
+                      <span className="font-semibold text-[var(--text)]">
+                        Lead events:
+                      </span>{" "}
+                      {(ga4Settings.leadEvents || []).join(", ") || "-"}
+                    </div>
+                    <div className="md:col-span-2">
+                      <span className="font-semibold text-[var(--text)]">
+                        Conversion events:
+                      </span>{" "}
+                      {(ga4Settings.conversionEvents || []).join(", ") || "-"}
+                    </div>
+                  </div>
+                ) : ga4BrandSettingsError?.status === 409 ? (
+                  <div className="mt-3 rounded-[12px] border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+                    GA4 ainda não está configurado para esta marca. Conecte uma
+                    propriedade GA4 abaixo.
+                  </div>
+                ) : ga4BrandSettingsError ? (
+                  <div className="mt-3 rounded-[12px] border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
+                    Falha ao carregar GA4 settings.
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             <div className="reportei-card p-4">
               <div className="mb-4">

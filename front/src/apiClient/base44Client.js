@@ -1007,6 +1007,25 @@ const GA4 = {
     return jsonFetch("/integrations/ga4/status", { method: "GET" });
   },
 
+  async getBrandSettings(params = {}) {
+    const qs = buildQuery(params);
+    return jsonFetch(`/integrations/ga4/brands/settings${qs}`, { method: "GET" });
+  },
+
+  async upsertBrandSettings(payload = {}) {
+    return jsonFetch("/integrations/ga4/brands/settings", {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    });
+  },
+
+  async syncFacts(payload = {}) {
+    return jsonFetch("/integrations/ga4/facts/sync", {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    });
+  },
+
   async disconnect() {
     return jsonFetch("/integrations/ga4/disconnect", { method: "POST" });
   },

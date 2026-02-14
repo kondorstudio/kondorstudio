@@ -5,8 +5,11 @@ const crypto = require('crypto');
 
 const authMiddleware = require('../middleware/auth');
 const tenantMiddleware = require('../middleware/tenant');
+const validate = require('../middleware/validate');
 const integrationsController = require('../controllers/integrationsController');
 const metaSocialService = require('../services/metaSocialService');
+const ga4Controller = require('../controllers/integrationsGa4Controller');
+const { ga4BrandSettingsSchema, ga4FactsSyncSchema } = require('../validators/ga4Validator');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'changeme_local_secret';
 
@@ -90,6 +93,25 @@ router.get('/meta/connect-url', async (req, res) => {
     return res.status(500).json({ error: err.message || 'server error' });
   }
 });
+
+// =========================
+// GA4 (Brand Settings / Facts Sync) - compat alias
+// =========================
+// Some deployments historically mounted GA4 integration routes under /api/integrations only.
+// Keep these aliases to avoid 404s when the frontend calls /api/integrations/ga4/*.
+router.get('/ga4/brands/settings', ga4Controller.brandSettingsGet);
+router.post(
+  '/ga4/brands/settings',
+  authMiddleware.requireRole('OWNER', 'ADMIN'),
+  validate(ga4BrandSettingsSchema),
+  ga4Controller.brandSettingsUpsert,
+);
+router.post(
+  '/ga4/facts/sync',
+  authMiddleware.requireRole('OWNER', 'ADMIN'),
+  validate(ga4FactsSyncSchema),
+  ga4Controller.syncFacts,
+);
 
 // B) GET /api/integrations/whatsapp/status
 router.get('/whatsapp/status', async (req, res) => {

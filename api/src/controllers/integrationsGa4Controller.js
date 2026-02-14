@@ -6,6 +6,7 @@ const { ensureGa4FactMetrics } = require('../services/ga4FactMetricsService');
 const {
   resolveBrandGa4ActivePropertyId,
   upsertBrandGa4Settings,
+  setBrandGa4ActiveProperty,
 } = require('../services/brandGa4SettingsService');
 const { ensureBrandGa4Timezone } = require('../services/ga4BrandTimezoneService');
 const { buildRollingDateRange } = require('../lib/timezone');
@@ -558,24 +559,22 @@ module.exports = {
         return res.status(404).json({ error: 'Marca não encontrada' });
       }
 
-      let settings = await prisma.brandGa4Settings.findFirst({
-        where: { tenantId: String(tenantId), brandId: String(brandId) },
-      });
-
-      if (!settings) {
-        // Best-effort initialize settings from active connection (does not require GA4 OAuth selection).
-        const propertyId = await resolveBrandGa4ActivePropertyId({ tenantId, brandId });
-        if (propertyId) {
-          settings = await prisma.brandGa4Settings.findFirst({
-            where: { tenantId: String(tenantId), brandId: String(brandId) },
-          });
-        }
-      }
-
-      if (!settings) {
+      // Enforce 1 GA4 property per brand and materialize canonical settings if possible.
+      const propertyId = await resolveBrandGa4ActivePropertyId({ tenantId, brandId });
+      if (!propertyId) {
         return res.status(409).json({
           error: 'GA4 property não configurada para esta marca',
           code: 'GA4_PROPERTY_REQUIRED',
+        });
+      }
+
+      const settings = await prisma.brandGa4Settings.findFirst({
+        where: { tenantId: String(tenantId), brandId: String(brandId) },
+      });
+      if (!settings) {
+        return res.status(409).json({
+          error: 'GA4 settings não encontrados para esta marca',
+          code: 'GA4_SETTINGS_REQUIRED',
         });
       }
 
@@ -608,7 +607,14 @@ module.exports = {
     try {
       const tenantId = req.tenantId;
       const userId = req.user?.id;
-      const { brandId, leadEvents, conversionEvents, revenueEvent } = req.body || {};
+      const {
+        brandId,
+        propertyId: desiredPropertyId,
+        timezone,
+        leadEvents,
+        conversionEvents,
+        revenueEvent,
+      } = req.body || {};
 
       if (!tenantId || !userId) {
         return res.status(400).json({ error: 'tenantId or userId missing' });
@@ -625,7 +631,16 @@ module.exports = {
         return res.status(404).json({ error: 'Marca não encontrada' });
       }
 
-      const propertyId = await resolveBrandGa4ActivePropertyId({ tenantId, brandId });
+      let propertyId = null;
+      if (desiredPropertyId) {
+        propertyId = await setBrandGa4ActiveProperty({
+          tenantId,
+          brandId,
+          propertyId: desiredPropertyId,
+        });
+      } else {
+        propertyId = await resolveBrandGa4ActivePropertyId({ tenantId, brandId });
+      }
       if (!propertyId) {
         return res.status(409).json({
           error: 'GA4 property não configurada para esta marca',
@@ -638,12 +653,22 @@ module.exports = {
           tenantId,
           brandId,
           propertyId,
+          ...(timezone !== undefined ? { timezone } : {}),
           ...(leadEvents !== undefined ? { leadEvents } : {}),
           ...(conversionEvents !== undefined ? { conversionEvents } : {}),
           ...(revenueEvent !== undefined ? { revenueEvent } : {}),
         },
         { db: prisma },
       );
+
+      // Best-effort auto-resolve timezone if not set explicitly.
+      if (timezone === undefined && !updated.timezone) {
+        ensureBrandGa4Timezone({
+          tenantId,
+          brandId,
+          propertyId: String(updated.propertyId),
+        }).catch(() => null);
+      }
 
       return res.json({
         ok: true,
@@ -674,6 +699,11 @@ module.exports = {
     const tenantId = req.tenantId;
     const userId = req.user?.id;
     const { brandId, days, includeCampaigns } = req.body || {};
+    let propertyId = null;
+    let timezoneForLog = null;
+    let dateRangeForLog = null;
+    let leadEventsForLog = null;
+    let conversionEventsForLog = null;
 
     if (!tenantId || !userId) {
       return res.status(400).json({ error: 'tenantId or userId missing' });
@@ -703,7 +733,6 @@ module.exports = {
       return res.status(404).json({ error: 'Marca não encontrada' });
     }
 
-    let propertyId = null;
     try {
       propertyId = await resolveBrandGa4ActivePropertyId({ tenantId, brandId });
     } catch (err) {
@@ -720,11 +749,49 @@ module.exports = {
     const startedAt = Date.now();
 
     try {
+      // Observability: log mismatch between canonical settings and active connection (should not happen).
+      try {
+        const [settingsRow, activeConn] = await Promise.all([
+          prisma.brandGa4Settings.findFirst({
+            where: { tenantId: String(tenantId), brandId: String(brandId) },
+            select: { propertyId: true, leadEvents: true, conversionEvents: true },
+          }),
+          prisma.brandSourceConnection.findFirst({
+            where: {
+              tenantId: String(tenantId),
+              brandId: String(brandId),
+              platform: 'GA4',
+              status: 'ACTIVE',
+            },
+            orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+            select: { externalAccountId: true },
+          }),
+        ]);
+
+        leadEventsForLog = settingsRow?.leadEvents || null;
+        conversionEventsForLog = settingsRow?.conversionEvents || null;
+
+        const normalizeProp = (value) =>
+          String(value || '').trim().replace(/^properties\//, '');
+        const settingsProp = normalizeProp(settingsRow?.propertyId);
+        const activeProp = normalizeProp(activeConn?.externalAccountId);
+        if (settingsProp && activeProp && settingsProp !== activeProp) {
+          // eslint-disable-next-line no-console
+          console.warn('[ga4] property mismatch before syncFacts', {
+            tenantId: String(tenantId),
+            brandId: String(brandId),
+            settingsPropertyId: settingsProp,
+            activeExternalAccountId: activeProp,
+          });
+        }
+      } catch (_err) {}
+
       const timezone = await ensureBrandGa4Timezone({
         tenantId,
         brandId,
         propertyId: String(propertyId),
       });
+      timezoneForLog = timezone || null;
 
       const rolling = buildRollingDateRange({ days: windowDays, timeZone: timezone });
       if (!rolling?.start || !rolling?.end) {
@@ -732,6 +799,7 @@ module.exports = {
       }
 
       const dateRange = { start: rolling.start, end: rolling.end };
+      dateRangeForLog = dateRange;
       const metrics = ['sessions', 'leads', 'conversions', 'revenue'];
 
       await upsertBrandGa4Settings(
@@ -941,6 +1009,11 @@ module.exports = {
         console.log('[ga4] syncFacts finished', {
           tenantId,
           brandId,
+          propertyId,
+          timezone: timezoneForLog,
+          dateRange: dateRangeForLog,
+          leadEvents: leadEventsForLog,
+          conversionEvents: conversionEventsForLog,
           ms: Date.now() - startedAt,
         });
       }

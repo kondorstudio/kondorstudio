@@ -3,6 +3,7 @@ const { syncAfterConnection } = require('../../services/factMetricsSyncService')
 const {
   normalizeGa4PropertyId,
   upsertBrandGa4Settings,
+  resolveBrandGa4ActivePropertyId,
 } = require('../../services/brandGa4SettingsService');
 const { ensureBrandGa4Timezone } = require('../../services/ga4BrandTimezoneService');
 const { acquireTenantBrandLock } = require('../../lib/pgAdvisoryLock');
@@ -42,6 +43,13 @@ async function assertBrand(tenantId, brandId) {
 
 async function listConnections(tenantId, brandId) {
   await assertBrand(tenantId, brandId);
+
+  // Ensure we never present multiple GA4 connections as ACTIVE for the same brand.
+  try {
+    await resolveBrandGa4ActivePropertyId({ tenantId, brandId });
+  } catch (_err) {
+    // Best-effort cleanup only.
+  }
 
   return prisma.brandSourceConnection.findMany({
     where: { tenantId, brandId },
