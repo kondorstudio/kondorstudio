@@ -5,6 +5,13 @@ function formatValidationError(error) {
   return error.flatten ? error.flatten() : error.errors || error;
 }
 
+function sanitizePayloadForLog(payload) {
+  if (!payload || typeof payload !== 'object') return payload;
+  const clone = { ...(payload || {}) };
+  if (clone.token) clone.token = '[redacted]';
+  return clone;
+}
+
 function resolveInfrastructureError(err) {
   const code = String(err?.code || '').toUpperCase();
   const message = String(err?.message || '').toLowerCase();
@@ -90,11 +97,22 @@ function handleError(res, err) {
 async function query(req, res) {
   const parsed = metricsQuerySchema.safeParse(req.body || {});
   if (!parsed.success) {
+    const details = formatValidationError(parsed.error);
+    if (process.env.NODE_ENV !== 'test') {
+      // eslint-disable-next-line no-console
+      console.warn('[metrics.query] validation failed', {
+        tenantId: req.tenantId,
+        userId: req.user?.id || null,
+        body: sanitizePayloadForLog(req.body || {}),
+        issues: parsed.error?.issues || [],
+      });
+    }
     return res.status(400).json({
       error: {
         code: 'VALIDATION_ERROR',
         message: 'Dados inválidos',
-        details: formatValidationError(parsed.error),
+        details,
+        issues: parsed.error?.issues || [],
       },
     });
   }
