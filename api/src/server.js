@@ -7,6 +7,7 @@ const morgan = require("morgan");
 const path = require("path");
 const fs = require("fs");
 const { prisma } = require("./prisma");
+const pkg = require("../package.json");
 
 const authMiddleware = require("./middleware/auth");
 const tenantMiddleware = require("./middleware/tenant");
@@ -460,6 +461,27 @@ app.get("/api/healthz", async (req, res) => {
     console.error("❌ Healthcheck /api/healthz falhou:", err);
     return res.status(500).json({ status: "error", db: "error" });
   }
+});
+
+// Version endpoint (helps validate what code is live in prod without guessing).
+// Safe to expose: no secrets, only build/runtime metadata.
+const BOOTED_AT = new Date().toISOString();
+app.get("/api/version", (req, res) => {
+  const commit =
+    process.env.SOURCE_COMMIT ||
+    process.env.GIT_SHA ||
+    process.env.COMMIT_SHA ||
+    process.env.APP_COMMIT ||
+    process.env.DIGITALOCEAN_APP_COMMIT ||
+    null;
+  return res.json({
+    name: pkg.name,
+    version: pkg.version,
+    node: process.version,
+    env: process.env.NODE_ENV || null,
+    bootedAt: BOOTED_AT,
+    commit,
+  });
 });
 
 // =========================
