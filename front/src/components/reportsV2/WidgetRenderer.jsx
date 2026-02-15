@@ -476,10 +476,21 @@ export default function WidgetRenderer({
   });
   const isRefreshing = isFetching && !isLoading;
   const refreshLabel = resolveRefreshLabel(fetchReason);
-  const normalizedData = React.useMemo(
-    () => resolveReporteiData(data, widget) || data,
-    [data, widget]
-  );
+  const normalizedData = React.useMemo(() => {
+    const resolved = resolveReporteiData(data, widget) || data;
+    const topMeta =
+      data && typeof data === "object" && data.meta && typeof data.meta === "object"
+        ? data.meta
+        : null;
+
+    if (!resolved || typeof resolved !== "object" || !topMeta) return resolved;
+
+    const currentMeta =
+      resolved.meta && typeof resolved.meta === "object" ? resolved.meta : null;
+    if (currentMeta && Object.keys(currentMeta).length) return resolved;
+
+    return { ...resolved, meta: topMeta };
+  }, [data, widget]);
   const rows = Array.isArray(normalizedData?.rows) ? normalizedData.rows : [];
   const totals = normalizedData?.totals || {};
   const meta = normalizedData?.meta || {};
