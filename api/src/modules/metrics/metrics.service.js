@@ -1130,6 +1130,9 @@ async function executeQueryMetrics(tenantId, payload = {}) {
       currency: null,
       timezone: brandTimezone || 'UTC',
       dateRange: effectiveDateRange,
+      ga4: {
+        propertyId: ga4PropertyId ? String(ga4PropertyId) : null,
+      },
       generatedAt: new Date().toISOString(),
     },
     rows,
@@ -1186,11 +1189,18 @@ async function queryMetrics(tenantId, payload = {}) {
 async function queryMetricsReportei(tenantId, payload = {}) {
   const { widgetId, widgetType, responseFormat, ...rest } = payload || {};
   const result = await queryMetrics(tenantId, rest);
-  return formatReporteiResponse(result, {
+  const formatted = formatReporteiResponse(result, {
     widgetId,
     widgetType,
     ...rest,
   });
+
+  // Keep Reportei's widget-centric response while still exposing the canonical
+  // meta (timezone/dateRange and GA4 active property). Frontend can ignore it.
+  return {
+    meta: result?.meta || {},
+    ...(formatted && typeof formatted === 'object' ? formatted : {}),
+  };
 }
 
 module.exports = {
