@@ -8,6 +8,9 @@ const {
   upsertBrandGa4Settings,
   setBrandGa4ActiveProperty,
 } = require('../services/brandGa4SettingsService');
+const {
+  invalidateMetricsCacheForBrand,
+} = require('../modules/metrics/metrics.service');
 const { ensureBrandGa4Timezone } = require('../services/ga4BrandTimezoneService');
 const { buildRollingDateRange } = require('../lib/timezone');
 const { getRedisClient } = require('../lib/redisClient');
@@ -669,6 +672,10 @@ module.exports = {
           propertyId: String(updated.propertyId),
         }).catch(() => null);
       }
+
+      // Ensure dashboards refetch with the new property; otherwise cached /metrics/query results
+      // can keep showing the previous property's totals for up to METRICS_QUERY_CACHE_TTL_MS.
+      invalidateMetricsCacheForBrand(tenantId, brandId);
 
       return res.json({
         ok: true,

@@ -259,6 +259,22 @@ function setCachedMetricsResult(key, value) {
   pruneMetricsCache();
 }
 
+function invalidateMetricsCacheForBrand(tenantId, brandId) {
+  if (!tenantId || !brandId) return;
+  const tenantNeedle = `"tenantId":"${String(tenantId)}"`;
+  const brandNeedle = `"brandId":"${String(brandId)}"`;
+
+  const matches = (key) =>
+    typeof key === 'string' && key.includes(tenantNeedle) && key.includes(brandNeedle);
+
+  for (const key of Array.from(metricsQueryCache.keys())) {
+    if (matches(key)) metricsQueryCache.delete(key);
+  }
+  for (const key of Array.from(metricsQueryInFlight.keys())) {
+    if (matches(key)) metricsQueryInFlight.delete(key);
+  }
+}
+
 function buildMetricsCacheKey(tenantId, payload = {}) {
   if (!tenantId || !payload?.brandId || !payload?.dateRange?.start || !payload?.dateRange?.end) {
     return null;
@@ -1180,6 +1196,7 @@ async function queryMetricsReportei(tenantId, payload = {}) {
 module.exports = {
   queryMetrics,
   queryMetricsReportei,
+  invalidateMetricsCacheForBrand,
   buildCompareRange,
   buildMetricsPlan,
   buildWhereClause,

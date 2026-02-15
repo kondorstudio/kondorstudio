@@ -5,6 +5,9 @@ const {
   upsertBrandGa4Settings,
   resolveBrandGa4ActivePropertyId,
 } = require('../../services/brandGa4SettingsService');
+const {
+  invalidateMetricsCacheForBrand,
+} = require('../metrics/metrics.service');
 const { ensureBrandGa4Timezone } = require('../../services/ga4BrandTimezoneService');
 const { acquireTenantBrandLock } = require('../../lib/pgAdvisoryLock');
 
@@ -284,6 +287,9 @@ async function linkConnection(tenantId, userId, payload) {
     brandId,
     propertyId: String(normalizedExternalAccountId),
   }).catch(() => null);
+
+  // Prevent stale dashboards when a GA4 property is switched/linked via /reports/connections.
+  invalidateMetricsCacheForBrand(tenantId, brandId);
 
   syncAfterConnection({
     tenantId,
