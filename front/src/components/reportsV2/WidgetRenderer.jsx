@@ -441,7 +441,7 @@ export default function WidgetRenderer({
     metrics,
     filters: mergedFilters,
     requiredPlatforms: widget?.query?.requiredPlatforms,
-    compareTo,
+    ...(compareTo ? { compareTo } : {}),
     ...(widgetLimit ? { limit: widgetLimit } : {}),
     pagination,
     sort,

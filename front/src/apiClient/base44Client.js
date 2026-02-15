@@ -1009,14 +1009,76 @@ const GA4 = {
 
   async getBrandSettings(params = {}) {
     const qs = buildQuery(params);
-    return jsonFetch(`/integrations/ga4/brands/settings${qs}`, { method: "GET" });
+    try {
+      return await jsonFetch(`/integrations/ga4/brands/settings${qs}`, {
+        method: "GET",
+      });
+    } catch (err) {
+      // Backwards-compat: older API deployments don't have this endpoint yet.
+      // Fallback to /reports/connections to derive the active GA4 property for the brand.
+      if (Number(err?.status) !== 404 || !params?.brandId) throw err;
+      try {
+        const brandId = String(params.brandId);
+        const connections = await jsonFetch(
+          `/reports/connections?brandId=${encodeURIComponent(brandId)}`,
+          { method: "GET" }
+        );
+        const items = Array.isArray(connections?.items) ? connections.items : [];
+        const activeGa4 = items
+          .filter(
+            (item) =>
+              String(item?.platform || "").toUpperCase() === "GA4" &&
+              String(item?.status || "").toUpperCase() === "ACTIVE"
+          )
+          .sort((a, b) => {
+            const aTime = a?.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+            const bTime = b?.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+            return bTime - aTime;
+          })[0];
+        if (!activeGa4?.externalAccountId) {
+          const fallback = new Error("GA4 property não configurada para esta marca.");
+          fallback.status = 409;
+          fallback.data = { error: { code: "GA4_PROPERTY_REQUIRED" } };
+          throw fallback;
+        }
+        return {
+          ok: true,
+          settings: {
+            propertyId: String(activeGa4.externalAccountId),
+            timezone: null,
+            leadEvents: [],
+            conversionEvents: [],
+            revenueEvent: null,
+          },
+        };
+      } catch (fallbackErr) {
+        throw fallbackErr;
+      }
+    }
   },
 
   async upsertBrandSettings(payload = {}) {
-    return jsonFetch("/integrations/ga4/brands/settings", {
-      method: "POST",
-      body: JSON.stringify(payload || {}),
-    });
+    try {
+      return await jsonFetch("/integrations/ga4/brands/settings", {
+        method: "POST",
+        body: JSON.stringify(payload || {}),
+      });
+    } catch (err) {
+      // Backwards-compat: older API deployments don't have this endpoint yet.
+      // Fallback to linking GA4 connection for the brand (this also makes GA4 connected for /metrics/query).
+      if (Number(err?.status) !== 404) throw err;
+      const brandId = payload?.brandId ? String(payload.brandId) : "";
+      const propertyId = payload?.propertyId ? String(payload.propertyId) : "";
+      if (!brandId || !propertyId) throw err;
+      return jsonFetch("/reports/connections", {
+        method: "POST",
+        body: JSON.stringify({
+          brandId,
+          platform: "GA4",
+          externalAccountId: propertyId,
+        }),
+      });
+    }
   },
 
   async syncFacts(payload = {}) {

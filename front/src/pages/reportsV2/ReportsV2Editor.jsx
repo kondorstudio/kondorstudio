@@ -957,10 +957,7 @@ export default function ReportsV2Editor() {
         }),
         queryClient.invalidateQueries({ queryKey: ["reportsV2-widget", id] }),
       ]);
-      showToast({
-        type: "success",
-        message: "Propriedade GA4 atualizada para esta marca.",
-      });
+      showToast("Propriedade GA4 atualizada para esta marca.", "success");
     },
     onError: (err) => {
       const status = err?.status || err?.response?.status || null;
@@ -969,7 +966,7 @@ export default function ReportsV2Editor() {
         (status === 403
           ? "Sem permissão para alterar a propriedade GA4."
           : "Falha ao atualizar a propriedade GA4.");
-      showToast({ type: "error", message });
+      showToast(message, "error");
     },
   });
 
