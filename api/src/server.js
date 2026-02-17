@@ -24,6 +24,41 @@ app.set("trust proxy", 1);
 const isProduction = process.env.NODE_ENV === "production";
 const AUTO_FIX_SCHEMA = process.env.PRISMA_AUTOFIX_SCHEMA === "true";
 
+function formatUnhandledReason(reason) {
+  if (reason instanceof Error) {
+    return {
+      message: reason.message,
+      stack: reason.stack,
+    };
+  }
+  if (typeof reason === "string") {
+    return { message: reason, stack: null };
+  }
+  try {
+    return {
+      message: JSON.stringify(reason),
+      stack: null,
+    };
+  } catch (_) {
+    return { message: "Unknown unhandled rejection reason", stack: null };
+  }
+}
+
+process.on("unhandledRejection", (reason) => {
+  const parsed = formatUnhandledReason(reason);
+  console.error("[process] unhandledRejection:", parsed.message);
+  if (parsed.stack) {
+    console.error(parsed.stack);
+  }
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("[process] uncaughtException:", error?.message || error);
+  if (error?.stack) {
+    console.error(error.stack);
+  }
+});
+
 async function ensureRefreshTokenColumns() {
   try {
     await prisma.$executeRawUnsafe(`

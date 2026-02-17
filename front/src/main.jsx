@@ -8,6 +8,50 @@ import { SubscriptionProvider } from "./components/SubscriptionContext.jsx";
 import ErrorBoundary from "./components/ErrorBoundary.jsx";
 import "./styles/global.css";
 
+const CHUNK_RELOAD_KEY = "kondor_chunk_reload_at";
+const CHUNK_RELOAD_TTL_MS = 60 * 1000;
+
+function isChunkLoadFailure(reason) {
+  const message = String(reason?.message || reason || "").toLowerCase();
+  if (!message) return false;
+  return (
+    message.includes("loading chunk") ||
+    message.includes("chunkloaderror") ||
+    message.includes("failed to fetch dynamically imported module") ||
+    message.includes("importing a module script failed")
+  );
+}
+
+function tryRecoverFromChunkFailure(reason) {
+  if (typeof window === "undefined") return false;
+  if (!isChunkLoadFailure(reason)) return false;
+
+  const now = Date.now();
+  const lastReloadAt = Number(window.sessionStorage.getItem(CHUNK_RELOAD_KEY) || 0);
+
+  if (lastReloadAt && now - lastReloadAt < CHUNK_RELOAD_TTL_MS) {
+    return false;
+  }
+
+  window.sessionStorage.setItem(CHUNK_RELOAD_KEY, String(now));
+  window.location.reload();
+  return true;
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("error", (event) => {
+    tryRecoverFromChunkFailure(event?.error || event?.message);
+  });
+
+  window.addEventListener("unhandledrejection", (event) => {
+    if (tryRecoverFromChunkFailure(event?.reason)) {
+      if (typeof event.preventDefault === "function") {
+        event.preventDefault();
+      }
+    }
+  });
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
