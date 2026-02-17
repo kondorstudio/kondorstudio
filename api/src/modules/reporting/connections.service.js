@@ -2,6 +2,13 @@ const { prisma } = require('../../prisma');
 const { getAdapter, getIntegrationKind } = require('./providers');
 const ga4MetadataService = require('../../services/ga4MetadataService');
 const { resolveGa4IntegrationContext } = require('../../services/ga4IntegrationResolver');
+const {
+  normalizeGa4PropertyId,
+  setBrandGa4ActiveProperty,
+} = require('../../services/brandGa4SettingsService');
+const {
+  invalidateMetricsCacheForBrand,
+} = require('../metrics/metrics.service');
 const { assertBrandAccess, hasBrandScope, isBrandAllowed } = require('./reportingScope.service');
 
 const SOURCE_INTEGRATION_MAP = {
@@ -148,11 +155,18 @@ async function linkConnection(tenantId, brandId, payload, userId, scope) {
   }
 
   const { source, integrationId, externalAccountId, displayName } = payload;
-  if (source === 'GA4' && !integrationId) {
+  if (source === 'GA4') {
+    const normalizedPropertyId = normalizeGa4PropertyId(externalAccountId);
+    if (!normalizedPropertyId) {
+      const err = new Error('propertyId GA4 inválido');
+      err.status = 400;
+      throw err;
+    }
+
     const property = await prisma.integrationGoogleGa4Property.findFirst({
       where: {
         tenantId,
-        propertyId: String(externalAccountId),
+        propertyId: String(normalizedPropertyId),
       },
       include: { integration: true },
     });
@@ -169,45 +183,81 @@ async function linkConnection(tenantId, brandId, payload, userId, scope) {
       throw err;
     }
 
+    const propertyDisplayName =
+      displayName ||
+      property.displayName ||
+      String(normalizedPropertyId);
+
     const meta = {
       ga4UserId: property.integration?.userId ? String(property.integration.userId) : null,
       ga4IntegrationId: property.integrationId,
-      propertyId: String(property.propertyId),
+      propertyId: String(normalizedPropertyId),
     };
 
-    const existing = await prisma.dataSourceConnection.findFirst({
-      where: {
-        tenantId,
-        brandId,
-        source,
-        externalAccountId: String(externalAccountId),
-      },
+    const runInTransaction = typeof prisma.$transaction === 'function'
+      ? prisma.$transaction.bind(prisma)
+      : async (executor) => executor(prisma);
+
+    const connection = await runInTransaction(async (tx) => {
+      const existing = await tx.dataSourceConnection.findFirst({
+        where: {
+          tenantId,
+          brandId,
+          source,
+          externalAccountId: String(normalizedPropertyId),
+        },
+      });
+
+      const linked = existing
+        ? await tx.dataSourceConnection.update({
+            where: { id: existing.id },
+            data: {
+              integrationId: null,
+              displayName: propertyDisplayName || existing.displayName,
+              status: 'CONNECTED',
+              meta,
+            },
+          })
+        : await tx.dataSourceConnection.create({
+            data: {
+              tenantId,
+              brandId,
+              source,
+              integrationId: null,
+              externalAccountId: String(normalizedPropertyId),
+              displayName: propertyDisplayName,
+              status: 'CONNECTED',
+              meta,
+            },
+          });
+
+      await setBrandGa4ActiveProperty(
+        {
+          tenantId,
+          brandId,
+          propertyId: normalizedPropertyId,
+          externalAccountName: propertyDisplayName,
+        },
+        { db: tx },
+      );
+
+      return linked;
     });
 
-    if (existing) {
-      return prisma.dataSourceConnection.update({
-        where: { id: existing.id },
-        data: {
-          integrationId: null,
-          displayName: displayName || property.displayName || existing.displayName,
-          status: 'CONNECTED',
-          meta,
-        },
+    invalidateMetricsCacheForBrand(tenantId, brandId);
+
+    if (process.env.NODE_ENV !== 'test') {
+      // eslint-disable-next-line no-console
+      console.log('[reporting.connections] GA4 linked with brand source bridge', {
+        tenantId: String(tenantId),
+        brandId: String(brandId),
+        propertyId: String(normalizedPropertyId),
+        userId: userId ? String(userId) : null,
+        connectionId: connection?.id || null,
       });
     }
 
-    return prisma.dataSourceConnection.create({
-      data: {
-        tenantId,
-        brandId,
-        source,
-        integrationId: null,
-        externalAccountId: String(externalAccountId),
-        displayName: displayName || property.displayName || String(externalAccountId),
-        status: 'CONNECTED',
-        meta,
-      },
-    });
+    return connection;
   }
   const integration = await prisma.integration.findFirst({
     where: { id: integrationId, tenantId },

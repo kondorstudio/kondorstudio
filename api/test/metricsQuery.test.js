@@ -515,6 +515,71 @@ test('metrics query allows when GA4 connection exists', async () => {
   assert.equal(res.status, 200);
 });
 
+test('metrics query returns ga4 skip debug info when METRICS_DEBUG=true', async () => {
+  const previousDebug = process.env.METRICS_DEBUG;
+  process.env.METRICS_DEBUG = 'true';
+
+  const fakePrisma = {
+    client: {
+      findFirst: async () => ({ id: 'brand-1' }),
+    },
+    brandSourceConnection: {
+      findMany: async ({ where }) => {
+        if (where?.status === 'ACTIVE') {
+          return [{ platform: 'GA4', externalAccountId: '123456' }];
+        }
+        return [{ platform: 'GA4' }];
+      },
+    },
+    brandGa4Settings: {
+      findFirst: async () => ({ propertyId: '123456', timezone: 'UTC' }),
+    },
+    metricsCatalog: {
+      findMany: async ({ where }) => buildCatalog(where.key.in),
+    },
+    $queryRawUnsafe: async (sql) => {
+      if (sql.includes('GROUP BY')) return [{ date: '2026-01-01', sessions: '10' }];
+      return [{ sessions: '10' }];
+    },
+  };
+
+  mockModule('../src/services/factMetricsSyncService', {
+    ensureFactMetrics: async () => {},
+    syncAfterConnection: async () => {},
+  });
+  mockModule('../src/services/ga4FactMetricsService', {
+    ensureGa4FactMetrics: async () => ({
+      ok: true,
+      skipped: true,
+      reason: 'platform_excludes_ga4',
+    }),
+  });
+  mockModule('../src/prisma', { prisma: fakePrisma });
+  resetModule('../src/modules/metrics/metrics.service');
+  const service = require('../src/modules/metrics/metrics.service');
+  service.__internal._resetForTests();
+
+  try {
+    const result = await service.queryMetrics('tenant-1', {
+      brandId: 'brand-1',
+      dateRange: { start: '2026-01-01', end: '2026-01-01' },
+      dimensions: ['date'],
+      metrics: ['sessions'],
+      filters: [],
+    });
+
+    assert.ok(Array.isArray(result.debug?.ga4Skips));
+    assert.equal(result.debug.ga4Skips[0]?.reason, 'platform_excludes_ga4');
+  } finally {
+    if (previousDebug === undefined) {
+      delete process.env.METRICS_DEBUG;
+    } else {
+      process.env.METRICS_DEBUG = previousDebug;
+    }
+    resetModule('../src/modules/metrics/metrics.service');
+  }
+});
+
 test('metrics query rejects invalid sort field', async () => {
   const { app } = buildMetricsApp();
   const brandId = randomUUID();

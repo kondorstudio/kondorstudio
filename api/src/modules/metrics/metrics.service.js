@@ -83,6 +83,10 @@ const metricsQueryCache = new Map();
 const metricsQueryInFlight = new Map();
 const dashboardQueues = new Map();
 
+function isMetricsDebugEnabled() {
+  return String(process.env.METRICS_DEBUG || '').trim().toLowerCase() === 'true';
+}
+
 const DATE_RANGE_PRESET_DAYS = Object.freeze({
   last_7_days: 7,
   last_30_days: 30,
@@ -896,6 +900,7 @@ async function executeQueryMetrics(tenantId, payload = {}) {
 
   const { brandId, dateRange, dimensions, metrics, filters, compareTo, limit } =
     payload;
+  const ga4Skips = [];
 
   const brand = await prisma.client.findFirst({
     where: { id: brandId, tenantId },
@@ -997,7 +1002,7 @@ async function executeQueryMetrics(tenantId, payload = {}) {
   }
 
   try {
-    await withTimeout(
+    const ga4EnsureResult = await withTimeout(
       () =>
         ensureGa4FactMetrics({
           tenantId,
@@ -1014,6 +1019,19 @@ async function executeQueryMetrics(tenantId, payload = {}) {
         message: 'Tempo limite ao sincronizar métricas GA4',
       },
     );
+
+    if (ga4EnsureResult?.skipped) {
+      const reason = String(ga4EnsureResult.reason || 'unknown');
+      ga4Skips.push({ reason });
+      if (process.env.NODE_ENV !== 'test') {
+        // eslint-disable-next-line no-console
+        console.info('[metrics.service] GA4 skipped in ensureGa4FactMetrics', {
+          tenantId: String(tenantId),
+          brandId: String(brandId),
+          reason,
+        });
+      }
+    }
   } catch (err) {
     if (process.env.NODE_ENV !== 'test') {
       // eslint-disable-next-line no-console
@@ -1125,7 +1143,7 @@ async function executeQueryMetrics(tenantId, payload = {}) {
     }
   }
 
-  return {
+  const response = {
     meta: {
       currency: null,
       timezone: brandTimezone || 'UTC',
@@ -1140,6 +1158,14 @@ async function executeQueryMetrics(tenantId, payload = {}) {
     pageInfo: baseResult.pageInfo,
     compare,
   };
+
+  if (isMetricsDebugEnabled()) {
+    response.debug = {
+      ga4Skips,
+    };
+  }
+
+  return response;
 }
 
 async function queryMetrics(tenantId, payload = {}) {

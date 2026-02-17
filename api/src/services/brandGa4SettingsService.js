@@ -174,7 +174,8 @@ async function enforceSingleActiveGa4Connection(
 
   const preferred = normalizeGa4PropertyId(preferredPropertyId);
 
-  const runner = typeof db.$transaction === 'function'
+  const shouldStartOwnTransaction = !opts.db && typeof db.$transaction === 'function';
+  const runner = shouldStartOwnTransaction
     ? db.$transaction.bind(db)
     : async (fn) => fn(db);
 
@@ -299,7 +300,8 @@ async function setBrandGa4ActiveProperty(
 
   const nameOverride = externalAccountName ? String(externalAccountName) : null;
 
-  const runner = typeof db.$transaction === 'function'
+  const shouldStartOwnTransaction = !opts.db && typeof db.$transaction === 'function';
+  const runner = shouldStartOwnTransaction
     ? db.$transaction.bind(db)
     : async (fn) => fn(db);
 

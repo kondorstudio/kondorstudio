@@ -72,6 +72,31 @@ const GA4_METRIC_KEYS = new Set([
 const FULL_FACT_METRICS = ['sessions', 'leads', 'conversions', 'revenue'];
 const factCache = new Map();
 
+function buildGa4SkipResult(reason, details = null) {
+  const normalizedReason = String(reason || 'unknown');
+  return {
+    ok: true,
+    skipped: true,
+    reason: normalizedReason,
+    ...(details ? { details } : {}),
+    meta: { truncated: false, maxRows: null },
+  };
+}
+
+function logGa4Skip(reason, context = {}) {
+  if (process.env.NODE_ENV === 'test') return;
+  // eslint-disable-next-line no-console
+  console.info('[ga4FactMetrics] skipped', {
+    reason: String(reason || 'unknown'),
+    ...(context || {}),
+  });
+}
+
+function skipGa4(reason, context = {}, details = null) {
+  logGa4Skip(reason, context);
+  return buildGa4SkipResult(reason, details);
+}
+
 function normalizePlatform(value) {
   return String(value || '').trim().toUpperCase();
 }
@@ -457,7 +482,11 @@ async function ensureGa4FactMetrics({
   requiredPlatforms,
 }) {
   if (!tenantId || !brandId || !dateRange?.start || !dateRange?.end) {
-    return { skipped: true, reason: 'missing_params' };
+    return skipGa4('missing_params', {
+      tenantId: tenantId ? String(tenantId) : null,
+      brandId: brandId ? String(brandId) : null,
+      hasDateRange: Boolean(dateRange?.start && dateRange?.end),
+    });
   }
 
   const accountFilter = extractFilterValues(filters, 'account_id')
@@ -469,10 +498,17 @@ async function ensureGa4FactMetrics({
 
   const activePropertyId = await resolveBrandGa4ActivePropertyId({ tenantId, brandId });
   if (!activePropertyId) {
-    return { skipped: true, reason: 'no_connections' };
+    return skipGa4('no_connections', {
+      tenantId: String(tenantId),
+      brandId: String(brandId),
+    });
   }
   if (accountFilter.length && !accountFilter.includes(String(activePropertyId))) {
-    return { skipped: true, reason: 'account_filter_excludes_active_property' };
+    return skipGa4('account_filter_excludes_active_property', {
+      tenantId: String(tenantId),
+      brandId: String(brandId),
+      propertyId: String(activePropertyId),
+    });
   }
 
   const brandMappings = await getBrandEventMappings({ tenantId, brandId });
@@ -483,13 +519,19 @@ async function ensureGa4FactMetrics({
     !requestedMetricPlan.needsLeadsFromEvent &&
     !requestedMetricPlan.needsConversionsFromEvent
   ) {
-    return { skipped: true, reason: 'no_ga4_metrics' };
+    return skipGa4('no_ga4_metrics', {
+      tenantId: String(tenantId),
+      brandId: String(brandId),
+    });
   }
 
   const metricPlan = buildGa4MetricPlan(FULL_FACT_METRICS, brandMappings);
 
   if (!platformAllowsGa4) {
-    return { skipped: true, reason: 'platform_excludes_ga4' };
+    return skipGa4('platform_excludes_ga4', {
+      tenantId: String(tenantId),
+      brandId: String(brandId),
+    });
   }
 
   const requestedDimensions = Array.isArray(dimensions) ? dimensions : [];
@@ -538,7 +580,12 @@ async function ensureGa4FactMetrics({
           err?.code === 'GA4_INTEGRATION_NOT_CONNECTED' ||
           err?.code === 'GA4_PROPERTY_NOT_SELECTED'
         ) {
-          return;
+          return skipGa4('no_integration_context', {
+            tenantId: String(tenantId),
+            brandId: String(brandId),
+            propertyId: String(propertyId),
+            code: err?.code || null,
+          });
         }
         throw err;
       }
@@ -551,10 +598,20 @@ async function ensureGa4FactMetrics({
       // Skip closed ranges once we have full facts materialized to avoid re-fetching and rewrites.
       if (!shouldRefreshOpenRange && fullFactSync) {
         if (!wantsCampaign && hasAggregatedFacts) {
-          return;
+          return skipGa4('facts_already_materialized', {
+            tenantId: String(tenantId),
+            brandId: String(brandId),
+            propertyId: String(propertyId),
+            scope: cacheScope,
+          });
         }
         if (wantsCampaign && hasCampaignFacts) {
-          return;
+          return skipGa4('facts_already_materialized', {
+            tenantId: String(tenantId),
+            brandId: String(brandId),
+            propertyId: String(propertyId),
+            scope: cacheScope,
+          });
         }
       }
 
@@ -624,7 +681,11 @@ async function ensureGa4FactMetrics({
       // If the widget requires campaign breakdown but the property doesn't support campaign dimensions,
       // skip mutating facts to avoid mixing scopes (campaign vs aggregated).
       if (wantsCampaign && !campaignDimension) {
-        return;
+        return skipGa4('wantsCampaignButNoCampaignDimension', {
+          tenantId: String(tenantId),
+          brandId: String(brandId),
+          propertyId: String(propertyId),
+        });
       }
 
       if (metricsForRequest.length && attempt.invalidMetrics.length) {
@@ -664,7 +725,11 @@ async function ensureGa4FactMetrics({
       }
 
       if (wantsCampaign && !campaignDimension) {
-        return;
+        return skipGa4('wantsCampaignButNoCampaignDimension', {
+          tenantId: String(tenantId),
+          brandId: String(brandId),
+          propertyId: String(propertyId),
+        });
       }
 
       if (attempt.error && !attempt.response) {
@@ -677,7 +742,11 @@ async function ensureGa4FactMetrics({
             propertyId,
           };
           if (attempt.error.code === 'GA4_DATA_ERROR') {
-            return;
+            return skipGa4('ga4_data_error', {
+              tenantId: String(tenantId),
+              brandId: String(brandId),
+              propertyId: String(propertyId),
+            });
           }
           throw attempt.error;
         }
@@ -745,10 +814,16 @@ async function ensureGa4FactMetrics({
         : factRows.filter((row) => row.campaignId === null);
 
       if (!scopedFactRows.length) {
-        return;
+        return skipGa4('no_rows_for_requested_scope', {
+          tenantId: String(tenantId),
+          brandId: String(brandId),
+          propertyId: String(propertyId),
+          scope: cacheScope,
+        });
       }
 
       const chunkSize = Math.max(100, Number(process.env.GA4_FACT_INSERT_CHUNK || 500));
+      let skippedByPropertySwitch = false;
 
       await prisma.$transaction(
         async (tx) => {
@@ -768,6 +843,7 @@ async function ensureGa4FactMetrics({
           });
           const activeNow = normalizeGa4PropertyId(active?.externalAccountId);
           if (!activeNow || String(activeNow) !== String(propertyId)) {
+            skippedByPropertySwitch = true;
             return;
           }
 
@@ -795,6 +871,14 @@ async function ensureGa4FactMetrics({
         { timeout: FACT_WRITE_TX_TIMEOUT_MS, maxWait: 10_000 },
       );
 
+      if (skippedByPropertySwitch) {
+        return skipGa4('active_property_switched_during_sync', {
+          tenantId: String(tenantId),
+          brandId: String(brandId),
+          propertyId: String(propertyId),
+        });
+      }
+
       if (meta.truncated && process.env.NODE_ENV !== 'test') {
         // eslint-disable-next-line no-console
         console.warn('[ga4FactMetrics] truncated GA4 report while materializing facts', {
@@ -812,9 +896,7 @@ async function ensureGa4FactMetrics({
 
   return (
     syncResult || {
-      ok: true,
-      skipped: true,
-      meta: { truncated: false, maxRows: null },
+      ...buildGa4SkipResult('unknown'),
     }
   );
 }
