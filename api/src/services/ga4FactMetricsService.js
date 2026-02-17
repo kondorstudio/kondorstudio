@@ -183,12 +183,14 @@ function withFactCache(key, executor) {
 
   const promise = (async () => executor())();
   factCache.set(key, { promise, expiresAt: now + FACT_CACHE_TTL_MS });
-  promise.finally(() => {
+
+  const cleanup = () => {
     const current = factCache.get(key);
     if (current && current.promise === promise && current.expiresAt <= Date.now()) {
       factCache.delete(key);
     }
-  });
+  };
+  promise.then(cleanup, cleanup);
   return promise;
 }
 

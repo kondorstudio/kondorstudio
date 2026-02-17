@@ -194,11 +194,7 @@ async function linkConnection(tenantId, brandId, payload, userId, scope) {
       propertyId: String(normalizedPropertyId),
     };
 
-    const runInTransaction = typeof prisma.$transaction === 'function'
-      ? prisma.$transaction.bind(prisma)
-      : async (executor) => executor(prisma);
-
-    const connection = await runInTransaction(async (tx) => {
+    const connection = await prisma.$transaction(async (tx) => {
       const existing = await tx.dataSourceConnection.findFirst({
         where: {
           tenantId,
@@ -242,6 +238,9 @@ async function linkConnection(tenantId, brandId, payload, userId, scope) {
       );
 
       return linked;
+    }, {
+      maxWait: 15000,
+      timeout: 120000,
     });
 
     invalidateMetricsCacheForBrand(tenantId, brandId);
