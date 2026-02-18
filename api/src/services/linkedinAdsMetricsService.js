@@ -7,6 +7,8 @@ const {
   getIntegrationSettings,
   getIntegrationConfig,
 } = require('../modules/reporting/providers/providerUtils');
+const httpClient = require('../lib/httpClient');
+const rawApiResponseService = require('./rawApiResponseService');
 
 function safeLog(...args) {
   if (process.env.NODE_ENV === 'test') return;
@@ -238,25 +240,45 @@ async function fetchAccountMetrics(integration, options = {}) {
     const [key, value] = entry.split('=');
     url.searchParams.append(key, value);
   });
+  const rawParams = {
+    accountId: String(accountId),
+    fields,
+    pivot,
+    timeGranularity,
+    dateFrom: options.dateFrom || null,
+    dateTo: options.dateTo || null,
+    facetQueries,
+  };
 
   try {
-    /* eslint-disable no-undef */
-    const res = await fetch(url.toString(), {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'X-Restli-Protocol-Version': '2.0.0',
-        'LinkedIn-Version': process.env.LINKEDIN_API_VERSION || '202401',
+    const response = await httpClient.requestJson(
+      url.toString(),
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'X-Restli-Protocol-Version': '2.0.0',
+          'LinkedIn-Version': process.env.LINKEDIN_API_VERSION || '202401',
+        },
       },
+      {
+        provider: 'LINKEDIN_ADS',
+        endpoint: '/adAnalytics',
+        connectionKey: integration?.id || accountId,
+        runId: options?.runId || null,
+      },
+    );
+    const json = response.data || {};
+    await rawApiResponseService.appendRawApiResponse({
+      tenantId: integration?.tenantId || null,
+      brandId: integration?.clientId || null,
+      provider: 'LINKEDIN_ADS',
+      connectionId: integration?.id || null,
+      endpoint: '/adAnalytics',
+      params: rawParams,
+      payload: json,
+      httpStatus: response.status || null,
     });
-
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      safeLog('Resposta nao OK da LinkedIn API', res.status, text);
-      return [];
-    }
-
-    const json = await res.json();
     const elements = Array.isArray(json.elements) ? json.elements : [];
     const filteredElements = filterExcludedRows(elements, excluded);
 
@@ -289,6 +311,26 @@ async function fetchAccountMetrics(integration, options = {}) {
     return metricsRows;
   } catch (err) {
     safeLog('Erro ao chamar LinkedIn API', err?.message || err);
+    const errorPayload = (() => {
+      if (err?.responseBody) {
+        try {
+          return JSON.parse(err.responseBody);
+        } catch (_parseErr) {
+          return { error: err.responseBody };
+        }
+      }
+      return { error: err?.message || String(err) };
+    })();
+    await rawApiResponseService.appendRawApiResponse({
+      tenantId: integration?.tenantId || null,
+      brandId: integration?.clientId || null,
+      provider: 'LINKEDIN_ADS',
+      connectionId: integration?.id || null,
+      endpoint: '/adAnalytics',
+      params: rawParams,
+      payload: errorPayload,
+      httpStatus: err?.status || null,
+    });
     return [];
   }
 }

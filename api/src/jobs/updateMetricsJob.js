@@ -326,6 +326,7 @@ async function processMetricJob(entry) {
       range: rangeInfo.range,
       metricTypes: Array.isArray(payload.metricTypes) ? payload.metricTypes : undefined,
       granularity: payload.granularity || 'day',
+      runId: String(entry.id),
     };
 
     if (providerKey === 'meta' && metaProvider?.fetchAccountMetrics) {

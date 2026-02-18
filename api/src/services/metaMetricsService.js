@@ -25,6 +25,8 @@
 //   - granularity: "day" (default)
 
 const { decrypt } = require('../utils/crypto');
+const httpClient = require('../lib/httpClient');
+const rawApiResponseService = require('./rawApiResponseService');
 
 function safeLog(...args) {
   if (process.env.NODE_ENV === 'test') return;
@@ -310,21 +312,40 @@ async function fetchAccountMetrics(integration, options = {}) {
   }
 
   const url = `${baseUrl}/${encodeURIComponent(accountId)}/insights?${params.toString()}`;
+  const rawParams = {
+    accountId: String(accountId),
+    level: String(level),
+    fields,
+    timeRange: timeRangePayload,
+    filtering: filteringPayload,
+    metricTypes: metricTypes || null,
+  };
 
   try {
-    /* eslint-disable no-undef */
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
+    const response = await httpClient.requestJson(
+      url,
+      {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      },
+      {
+        provider: 'META',
+        endpoint: '/insights',
+        connectionKey: integration?.id || accountId,
+        runId: options?.runId || null,
+      },
+    );
+    const json = response.data || {};
+    await rawApiResponseService.appendRawApiResponse({
+      tenantId: integration?.tenantId || null,
+      brandId: integration?.clientId || null,
+      provider: 'META',
+      connectionId: integration?.id || null,
+      endpoint: '/insights',
+      params: rawParams,
+      payload: json,
+      httpStatus: response.status || null,
     });
-
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      safeLog('Resposta não OK da Meta', res.status, text);
-      return [];
-    }
-
-    const json = await res.json();
 
     const data = Array.isArray(json.data) ? json.data : [];
     if (!data.length) {
@@ -401,6 +422,26 @@ async function fetchAccountMetrics(integration, options = {}) {
       'Erro ao chamar Meta Graph API',
       err && err.message ? err.message : err,
     );
+    const errorPayload = (() => {
+      if (err?.responseBody) {
+        try {
+          return JSON.parse(err.responseBody);
+        } catch (_parseErr) {
+          return { error: err.responseBody };
+        }
+      }
+      return { error: err?.message || String(err) };
+    })();
+    await rawApiResponseService.appendRawApiResponse({
+      tenantId: integration?.tenantId || null,
+      brandId: integration?.clientId || null,
+      provider: 'META',
+      connectionId: integration?.id || null,
+      endpoint: '/insights',
+      params: rawParams,
+      payload: errorPayload,
+      httpStatus: err?.status || null,
+    });
     return [];
   }
 }

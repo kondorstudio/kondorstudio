@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const metaMetricsService = require('../../services/metaMetricsService');
 const automationEngine = require('../../services/automationEngine');
 const syncRunsService = require('../../services/syncRunsService');
+const analyticsWarehouseService = require('../../services/analyticsWarehouseService');
 const { ensureConnectorContract } = require('../contract');
 
 function normalizeRange(range = {}) {
@@ -90,6 +91,7 @@ async function preview(ctx = {}, request = {}) {
       range,
       metricTypes,
       granularity: 'day',
+      runId: run?.id || null,
     });
 
     await safeUpdateRun(run?.id, {
@@ -227,6 +229,7 @@ async function incremental(ctx = {}, cursor = {}) {
       range,
       metricTypes,
       granularity: 'day',
+      runId: run?.id || null,
     });
 
     await safeUpdateRun(run?.id, {
@@ -271,12 +274,13 @@ async function upsertFacts(ctx = {}, facts = []) {
   if (typeof ctx?.upsertFacts === 'function') {
     return ctx.upsertFacts(facts);
   }
-  return {
-    ok: false,
-    skipped: true,
-    reason: 'upsert_not_implemented',
-    rows: Array.isArray(facts) ? facts.length : 0,
-  };
+  return analyticsWarehouseService.upsertConnectorFacts({
+    tenantId: ctx?.tenantId || null,
+    brandId: ctx?.brandId || null,
+    provider: 'META',
+    facts: Array.isArray(facts) ? facts : [],
+    sourceSystem: 'META',
+  });
 }
 
 const metaConnector = ensureConnectorContract(

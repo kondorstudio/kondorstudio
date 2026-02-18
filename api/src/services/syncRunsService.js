@@ -142,10 +142,25 @@ async function recordSyncError(payload = {}, options = {}) {
   });
 }
 
+async function incrementRunRetryCount(runId, incrementBy = 1, options = {}) {
+  const db = options.db || prisma;
+  if (!runId) return null;
+  const amount = toInt(incrementBy, 1);
+  if (amount <= 0) return null;
+
+  return db.syncRun.update({
+    where: { id: String(runId) },
+    data: {
+      retryCount: { increment: amount },
+    },
+  });
+}
+
 module.exports = {
   createRun,
   updateRun,
   createChunk,
   updateChunk,
   recordSyncError,
+  incrementRunRetryCount,
 };

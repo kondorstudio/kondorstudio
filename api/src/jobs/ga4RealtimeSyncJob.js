@@ -47,12 +47,18 @@ async function pollOnce() {
 
   let processed = 0;
   let errors = 0;
+  let skippedNoIntegration = 0;
+  let skippedInvalidProperty = 0;
+  const skippedSamples = [];
 
   safeLog('starting', { properties: slice.length, payload, cacheTtlMs });
 
   for (const target of slice) {
     const propertyId = String(target.externalAccountId || '').replace(/^properties\//, '');
-    if (!propertyId) continue;
+    if (!propertyId) {
+      skippedInvalidProperty += 1;
+      continue;
+    }
 
     try {
       // Resolve which GA4 OAuth integration userId should be used for this property.
@@ -77,6 +83,19 @@ async function pollOnce() {
 
       processed += 1;
     } catch (err) {
+      const code = String(err?.code || '').trim().toUpperCase();
+      if (code === 'GA4_INTEGRATION_NOT_CONNECTED' || code === 'GA4_PROPERTY_NOT_SELECTED') {
+        skippedNoIntegration += 1;
+        if (skippedSamples.length < 5) {
+          skippedSamples.push({
+            tenantId: target.tenantId,
+            propertyId: target.externalAccountId,
+            code,
+          });
+        }
+        continue;
+      }
+
       errors += 1;
       safeLog('sync error', {
         tenantId: target.tenantId,
@@ -87,11 +106,22 @@ async function pollOnce() {
     }
   }
 
-  safeLog('finished', { processed, errors });
-  return { ok: true, processed, errors };
+  safeLog('finished', {
+    processed,
+    errors,
+    skippedNoIntegration,
+    skippedInvalidProperty,
+    ...(skippedSamples.length ? { skippedSamples } : {}),
+  });
+  return {
+    ok: true,
+    processed,
+    errors,
+    skippedNoIntegration,
+    skippedInvalidProperty,
+  };
 }
 
 module.exports = {
   pollOnce,
 };
-

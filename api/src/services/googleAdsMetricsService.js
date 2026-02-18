@@ -30,6 +30,9 @@
 // - Se o campo "metrics.cost_micros" for retornado, ele será convertido para valor monetário
 //   (cost_micros / 1_000_000) e exposto como "spend".
 
+const rawApiResponseService = require('./rawApiResponseService');
+const httpClient = require('../lib/httpClient');
+
 function safeLog(...args) {
   if (process.env.NODE_ENV === 'test') return;
   // eslint-disable-next-line no-console
@@ -262,22 +265,41 @@ async function fetchAccountMetrics(integration, options = {}) {
       credentials.loginCustomerId || credentials.login_customer_id,
     ).replace(/-/g, '');
   }
+  const rawParams = {
+    customerId,
+    query,
+    fields,
+    includeDate,
+    range: range || null,
+    dimensionFilters,
+  };
 
   try {
-    /* eslint-disable no-undef */
-    const res = await fetch(url, {
-      method: 'POST',
-      headers,
-      body,
+    const response = await httpClient.requestJson(
+      url,
+      {
+        method: 'POST',
+        headers,
+        body,
+      },
+      {
+        provider: 'GOOGLE_ADS',
+        endpoint: '/googleAds:search',
+        connectionKey: integration?.id || customerId,
+        runId: options?.runId || null,
+      },
+    );
+    const json = response.data || {};
+    await rawApiResponseService.appendRawApiResponse({
+      tenantId: integration?.tenantId || null,
+      brandId: integration?.clientId || null,
+      provider: 'GOOGLE_ADS',
+      connectionId: integration?.id || null,
+      endpoint: '/googleAds:search',
+      params: rawParams,
+      payload: json,
+      httpStatus: response.status || null,
     });
-
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      safeLog('Resposta não OK da Google Ads API', res.status, text);
-      return [];
-    }
-
-    const json = await res.json();
 
     const results = Array.isArray(json.results) ? json.results : [];
     if (!results.length) {
@@ -367,6 +389,26 @@ async function fetchAccountMetrics(integration, options = {}) {
       'Erro ao chamar Google Ads API',
       err && err.message ? err.message : err,
     );
+    const errorPayload = (() => {
+      if (err?.responseBody) {
+        try {
+          return JSON.parse(err.responseBody);
+        } catch (_parseErr) {
+          return { error: err.responseBody };
+        }
+      }
+      return { error: err?.message || String(err) };
+    })();
+    await rawApiResponseService.appendRawApiResponse({
+      tenantId: integration?.tenantId || null,
+      brandId: integration?.clientId || null,
+      provider: 'GOOGLE_ADS',
+      connectionId: integration?.id || null,
+      endpoint: '/googleAds:search',
+      params: rawParams,
+      payload: errorPayload,
+      httpStatus: err?.status || null,
+    });
     return [];
   }
 }

@@ -4,6 +4,7 @@ const ga4DataService = require('../../services/ga4DataService');
 const { resolveGa4IntegrationContext } = require('../../services/ga4IntegrationResolver');
 const { ensureGa4FactMetrics } = require('../../services/ga4FactMetricsService');
 const syncRunsService = require('../../services/syncRunsService');
+const analyticsWarehouseService = require('../../services/analyticsWarehouseService');
 const { ga4SyncQueue } = require('../../queues');
 const { ensureConnectorContract } = require('../contract');
 
@@ -125,6 +126,7 @@ async function preview(ctx = {}, request = {}) {
       tenantId,
       userId: resolved.userId,
       propertyId: resolved.propertyId,
+      runId: run?.id || null,
       payload: {
         dateRanges: [
           {
@@ -344,12 +346,13 @@ async function upsertFacts(ctx = {}, facts = []) {
   if (typeof ctx?.upsertFacts === 'function') {
     return ctx.upsertFacts(facts);
   }
-  return {
-    ok: false,
-    skipped: true,
-    reason: 'upsert_not_implemented',
-    rows: Array.isArray(facts) ? facts.length : 0,
-  };
+  return analyticsWarehouseService.upsertConnectorFacts({
+    tenantId: ctx?.tenantId || null,
+    brandId: ctx?.brandId || null,
+    provider: 'GA4',
+    facts: Array.isArray(facts) ? facts : [],
+    sourceSystem: 'GA4',
+  });
 }
 
 const ga4Connector = ensureConnectorContract(

@@ -16,6 +16,7 @@ function resetModule(path) {
 }
 
 function buildApp() {
+  const tracker = { buildAuthUrlArgs: null };
   const auth = (req, _res, next) => {
     req.user = { id: 'user-1', role: 'OWNER' };
     req.tenantId = 'tenant-1';
@@ -53,7 +54,10 @@ function buildApp() {
   });
 
   mockModule('../src/lib/googleClient', {
-    buildAuthUrl: () => 'http://example.com/oauth',
+    buildAuthUrl: (args) => {
+      tracker.buildAuthUrlArgs = args;
+      return 'http://example.com/oauth';
+    },
   });
 
   mockModule('../src/services/ga4DataService', {
@@ -76,25 +80,26 @@ function buildApp() {
   app.use(express.json());
   app.use('/api/integrations/ga4', integrationsRouter);
   app.use('/api/analytics', analyticsRouter);
-  return app;
+  return { app, tracker };
 }
 
 test('GET /integrations/ga4/oauth/start returns url', async () => {
-  const app = buildApp();
+  const { app, tracker } = buildApp();
   const res = await request(app).get('/api/integrations/ga4/oauth/start');
   assert.equal(res.statusCode, 200);
   assert.equal(res.body.url, 'http://example.com/oauth');
+  assert.equal(Boolean(tracker.buildAuthUrlArgs?.forceConsent), true);
 });
 
 test('GET /integrations/ga4/properties/sync returns properties', async () => {
-  const app = buildApp();
+  const { app } = buildApp();
   const res = await request(app).get('/api/integrations/ga4/properties/sync');
   assert.equal(res.statusCode, 200);
   assert.equal(res.body.items.length, 1);
 });
 
 test('POST /analytics/ga4/run-report returns data', async () => {
-  const app = buildApp();
+  const { app } = buildApp();
   const res = await request(app)
     .post('/api/analytics/ga4/run-report')
     .send({ propertyId: '123456789', metrics: ['sessions'] });

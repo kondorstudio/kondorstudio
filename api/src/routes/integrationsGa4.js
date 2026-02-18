@@ -14,7 +14,7 @@ const router = express.Router();
 
 router.use(authMiddleware, tenantGuard);
 
-const requireGa4Admin = authMiddleware.requireRole('OWNER', 'ADMIN');
+const requireGa4Admin = authMiddleware.requireRole('OWNER', 'ADMIN', 'SUPER_ADMIN');
 
 router.get('/oauth/start', requireGa4Admin, controller.oauthStart);
 router.get('/status', controller.status);

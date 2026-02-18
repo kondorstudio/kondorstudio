@@ -5,6 +5,11 @@ const ga4MetadataService = require('./ga4MetadataService');
 const ga4QuotaCache = require('./ga4QuotaCacheService');
 const ga4DbCache = require('./ga4DbCacheService');
 const ga4ApiCallLogService = require('./ga4ApiCallLogService');
+const rawApiResponseService = require('./rawApiResponseService');
+const {
+  executeWithReliability,
+  defaultClassifyError,
+} = require('../lib/reliability');
 
 const DATA_API_VERSION = ['v1beta', 'v1alpha'].includes(process.env.GA4_DATA_API_VERSION)
   ? process.env.GA4_DATA_API_VERSION
@@ -27,6 +32,12 @@ const DEFAULT_REALTIME_CACHE_TTL_MS = Math.max(
   0,
   Number(process.env.GA4_REALTIME_CACHE_TTL_MS || 15000),
 );
+
+function toPositiveInt(value, fallback) {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0) return fallback;
+  return Math.floor(num);
+}
 
 function normalizeList(value) {
   if (!value) return [];
@@ -138,6 +149,10 @@ function mapTimeoutError(error, { endpoint, propertyId }) {
 }
 
 function mapGoogleError(error, { endpoint, propertyId } = {}) {
+  if (error?.code === 'RELIABILITY_CIRCUIT_OPEN') {
+    return error;
+  }
+
   const mappedTimeout = mapTimeoutError(error, { endpoint, propertyId });
   if (mappedTimeout !== error) return mappedTimeout;
 
@@ -192,6 +207,34 @@ function mapGoogleError(error, { endpoint, propertyId } = {}) {
     status: payload?.error?.status || null,
   };
   return err;
+}
+
+async function appendGa4RawResponse({
+  tenantId,
+  propertyId,
+  endpoint,
+  request,
+  response,
+  httpStatus,
+  cursor,
+}) {
+  try {
+    await rawApiResponseService.appendRawApiResponse({
+      tenantId,
+      provider: 'GA4',
+      connectionId: propertyId ? String(propertyId) : null,
+      endpoint: String(endpoint || 'ga4'),
+      params: {
+        propertyId: propertyId ? String(propertyId) : null,
+        request: request || null,
+      },
+      payload: response || {},
+      cursor: cursor ? String(cursor) : null,
+      httpStatus: httpStatus || null,
+    });
+  } catch (_err) {
+    // best-effort raw append only
+  }
 }
 
 function extractFilterFieldNames(expression) {
@@ -470,40 +513,62 @@ function createAnalyticsDataClient(accessToken) {
   });
 }
 
-function delay(ms) {
-  const waitMs = Math.max(0, Number(ms) || 0);
-  return new Promise((resolve) => setTimeout(resolve, waitMs));
-}
+function classifyGa4Error(error) {
+  const defaultResult = defaultClassifyError(error);
+  if (defaultResult.retryable) return defaultResult;
 
-function shouldRetry(error) {
-  if (!error) return false;
-  const status = error?.response?.status || error?.status || null;
-  if (status === 429) return true;
-  if (status && status >= 500) return true;
-  return false;
-}
-
-async function callWithRetry(executor, { endpoint, propertyId } = {}) {
-  const maxAttempts = Math.max(1, Number(process.env.GA4_HTTP_MAX_ATTEMPTS || 3));
-  const baseDelayMs = Math.max(0, Number(process.env.GA4_HTTP_RETRY_DELAY_MS || 250));
-
-  let lastErr;
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    try {
-      return await executor();
-    } catch (error) {
-      lastErr = error;
-      if (attempt >= maxAttempts) break;
-      if (!shouldRetry(error)) break;
-      // Exponential backoff with jitter.
-      const backoff = baseDelayMs * 2 ** (attempt - 1);
-      const jitter = Math.floor(Math.random() * Math.min(250, backoff));
-      // eslint-disable-next-line no-await-in-loop
-      await delay(backoff + jitter);
-    }
+  const status = Number(error?.response?.status || error?.status) || null;
+  if ([429, 500, 502, 503, 504].includes(status)) {
+    return {
+      retryable: true,
+      status,
+      code: error?.code || null,
+    };
   }
+  return defaultResult;
+}
 
-  throw mapGoogleError(lastErr, { endpoint, propertyId });
+async function callWithReliability(
+  executor,
+  { endpoint, propertyId, runId, connectionKey } = {},
+) {
+  try {
+    return await executeWithReliability(
+      {
+        provider: 'GA4',
+        connectionKey: connectionKey || propertyId || 'default',
+        runId: runId || null,
+        timeoutMs: GA4_HTTP_TIMEOUT_MS,
+        maxAttempts: toPositiveInt(process.env.GA4_HTTP_MAX_ATTEMPTS, 3),
+        baseDelayMs: toPositiveInt(process.env.GA4_HTTP_RETRY_DELAY_MS, 250),
+        maxDelayMs: toPositiveInt(
+          process.env.GA4_HTTP_MAX_DELAY_MS || process.env.RELIABILITY_MAX_DELAY_MS,
+          5000,
+        ),
+        jitterMs: toPositiveInt(process.env.GA4_HTTP_RETRY_JITTER_MS, 250),
+        rateLimitMax: toPositiveInt(
+          process.env.GA4_RATE_LIMIT_MAX || process.env.RELIABILITY_RATE_LIMIT_MAX,
+          60,
+        ),
+        rateLimitWindowMs: toPositiveInt(
+          process.env.GA4_RATE_LIMIT_WINDOW_MS || process.env.RELIABILITY_RATE_LIMIT_WINDOW_MS,
+          60000,
+        ),
+        circuitFailureThreshold: toPositiveInt(
+          process.env.GA4_CIRCUIT_FAILURE_THRESHOLD || process.env.RELIABILITY_CIRCUIT_FAILURE_THRESHOLD,
+          5,
+        ),
+        circuitOpenMs: toPositiveInt(
+          process.env.GA4_CIRCUIT_OPEN_MS || process.env.RELIABILITY_CIRCUIT_OPEN_MS,
+          30000,
+        ),
+        classifyError: classifyGa4Error,
+      },
+      executor,
+    );
+  } catch (error) {
+    throw mapGoogleError(error, { endpoint, propertyId });
+  }
 }
 
 async function assertSelectedProperty({ tenantId, propertyId }) {
@@ -603,6 +668,7 @@ async function runReport({
   skipSelectionCheck,
   autoPaginate,
   maxRows,
+  runId,
 }) {
   if (!propertyId) {
     const err = new Error('propertyId missing');
@@ -687,7 +753,7 @@ async function runReport({
         if (limit !== null && limit !== undefined) requestBody.limit = String(limit);
         if (offset !== null && offset !== undefined) requestBody.offset = String(offset);
 
-        const res = await callWithRetry(
+        const res = await callWithReliability(
           () =>
             client.properties.runReport(
               {
@@ -696,8 +762,22 @@ async function runReport({
               },
               { timeout: GA4_HTTP_TIMEOUT_MS },
             ),
-          { endpoint: 'runReport', propertyId },
+          {
+            endpoint: 'runReport',
+            propertyId,
+            runId,
+            connectionKey: propertyId,
+          },
         );
+        await appendGa4RawResponse({
+          tenantId,
+          propertyId,
+          endpoint: 'runReport',
+          request: requestBody,
+          response: res?.data || {},
+          httpStatus: 200,
+          cursor: requestBody.offset || null,
+        });
         return normalizeResponse(res?.data || {});
       };
 
@@ -821,6 +901,7 @@ async function checkCompatibility({
   payload,
   rateKey,
   cacheTtlMs,
+  runId,
 }) {
   if (!propertyId) {
     const err = new Error('propertyId missing');
@@ -926,7 +1007,7 @@ async function checkCompatibility({
         requestBody.compatibilityFilter = normalized.compatibilityFilter;
       }
 
-      const res = await callWithRetry(
+      const res = await callWithReliability(
         () =>
           client.properties.checkCompatibility(
             {
@@ -935,10 +1016,23 @@ async function checkCompatibility({
             },
             { timeout: GA4_HTTP_TIMEOUT_MS },
           ),
-        { endpoint: 'checkCompatibility', propertyId },
+        {
+          endpoint: 'checkCompatibility',
+          propertyId,
+          runId,
+          connectionKey: propertyId,
+        },
       );
 
       const json = res?.data || {};
+      await appendGa4RawResponse({
+        tenantId,
+        propertyId,
+        endpoint: 'checkCompatibility',
+        request: requestBody,
+        response: json,
+        httpStatus: 200,
+      });
 
       const metricCompat = Array.isArray(json.metricCompatibilities)
         ? json.metricCompatibilities
@@ -1013,6 +1107,7 @@ async function runRealtimeReport({
   rateKey,
   cacheTtlMs,
   skipSelectionCheck,
+  runId,
 }) {
   if (!propertyId) {
     const err = new Error('propertyId missing');
@@ -1098,7 +1193,7 @@ async function runRealtimeReport({
       if (normalized.orderBys) requestBody.orderBys = normalized.orderBys;
       if (normalized.limit) requestBody.limit = String(normalized.limit);
 
-      const res = await callWithRetry(
+      const res = await callWithReliability(
         () =>
           client.properties.runRealtimeReport(
             {
@@ -1107,8 +1202,21 @@ async function runRealtimeReport({
             },
             { timeout: GA4_HTTP_TIMEOUT_MS },
           ),
-        { endpoint: 'runRealtimeReport', propertyId },
+        {
+          endpoint: 'runRealtimeReport',
+          propertyId,
+          runId,
+          connectionKey: propertyId,
+        },
       );
+      await appendGa4RawResponse({
+        tenantId,
+        propertyId,
+        endpoint: 'runRealtimeReport',
+        request: requestBody,
+        response: res?.data || {},
+        httpStatus: 200,
+      });
 
       const result = normalizeResponse(res?.data || {});
 
@@ -1160,6 +1268,7 @@ async function batchRunReports({
   rateKey,
   cacheTtlMs,
   skipSelectionCheck,
+  runId,
 }) {
   if (!propertyId) {
     const err = new Error('propertyId missing');
@@ -1247,7 +1356,7 @@ async function batchRunReports({
         return requestBody;
       });
 
-      const res = await callWithRetry(
+      const res = await callWithReliability(
         () =>
           client.properties.batchRunReports(
             {
@@ -1256,8 +1365,21 @@ async function batchRunReports({
             },
             { timeout: GA4_HTTP_TIMEOUT_MS },
           ),
-        { endpoint: 'batchRunReports', propertyId },
+        {
+          endpoint: 'batchRunReports',
+          propertyId,
+          runId,
+          connectionKey: propertyId,
+        },
       );
+      await appendGa4RawResponse({
+        tenantId,
+        propertyId,
+        endpoint: 'batchRunReports',
+        request: { requests },
+        response: res?.data || {},
+        httpStatus: 200,
+      });
 
       const rawReports = Array.isArray(res?.data?.reports) ? res.data.reports : [];
       const reports = rawReports.map((r) => normalizeResponse(r || {}));

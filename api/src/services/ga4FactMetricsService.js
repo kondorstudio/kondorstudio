@@ -5,6 +5,7 @@ const {
   resolveBrandGa4ActivePropertyId,
 } = require('./brandGa4SettingsService');
 const { ensureBrandGa4Timezone } = require('./ga4BrandTimezoneService');
+const analyticsWarehouseService = require('./analyticsWarehouseService');
 const { acquireTenantBrandLock } = require('../lib/pgAdvisoryLock');
 const { rangeTouchesToday } = require('../lib/timezone');
 
@@ -879,6 +880,23 @@ async function ensureGa4FactMetrics({
           brandId: String(brandId),
           propertyId: String(propertyId),
         });
+      }
+
+      try {
+        await analyticsWarehouseService.upsertLegacyFactRows({
+          tenantId,
+          brandId,
+          rows: scopedFactRows,
+          sourceSystem: 'GA4',
+        });
+      } catch (warehouseErr) {
+        if (process.env.NODE_ENV !== 'test') {
+          // eslint-disable-next-line no-console
+          console.warn(
+            '[ga4FactMetrics] warehouse projection failed (ignored)',
+            warehouseErr?.message || warehouseErr,
+          );
+        }
       }
 
       if (meta.truncated && process.env.NODE_ENV !== 'test') {

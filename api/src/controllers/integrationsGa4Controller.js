@@ -197,6 +197,7 @@ module.exports = {
       }
 
       const state = ga4OAuthService.buildState({ tenantId, userId });
+      const alwaysConsent = String(process.env.GA4_OAUTH_ALWAYS_CONSENT || 'true').toLowerCase() !== 'false';
       const forceConsent =
         req.query?.forceConsent === '1' ||
         req.query?.forceConsent === 'true' ||
@@ -206,7 +207,7 @@ module.exports = {
       const needsReconnect = integration?.status === 'NEEDS_RECONNECT';
       const url = require('../lib/googleClient').buildAuthUrl({
         state,
-        forceConsent: forceConsent || needsReconnect,
+        forceConsent: alwaysConsent || forceConsent || needsReconnect,
       });
       return res.json({ url });
     } catch (error) {

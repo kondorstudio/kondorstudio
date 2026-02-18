@@ -17,7 +17,7 @@ router.get('/oauth/callback', controller.oauthCallback);
 router.post(
   '/disconnect',
   authMiddleware,
-  authMiddleware.requireRole('OWNER', 'ADMIN'),
+  authMiddleware.requireRole('OWNER', 'ADMIN', 'SUPER_ADMIN'),
   tenantGuard,
   checkSubscription,
   controller.disconnect,
@@ -35,7 +35,7 @@ router.get(
 router.post(
   '/brands/settings',
   authMiddleware,
-  authMiddleware.requireRole('OWNER', 'ADMIN'),
+  authMiddleware.requireRole('OWNER', 'ADMIN', 'SUPER_ADMIN'),
   tenantGuard,
   checkSubscription,
   validate(ga4BrandSettingsSchema),
@@ -44,7 +44,7 @@ router.post(
 router.post(
   '/facts/sync',
   authMiddleware,
-  authMiddleware.requireRole('OWNER', 'ADMIN'),
+  authMiddleware.requireRole('OWNER', 'ADMIN', 'SUPER_ADMIN'),
   tenantGuard,
   checkSubscription,
   validate(ga4FactsSyncSchema),

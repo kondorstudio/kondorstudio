@@ -1,4 +1,5 @@
 const { prisma } = require('../prisma');
+const rawApiResponseService = require('../services/rawApiResponseService');
 
 function safeLog(...args) {
   if (process.env.NODE_ENV === 'test') return;
@@ -11,6 +12,7 @@ async function pollOnce() {
 
   let cacheDeleted = null;
   let callsDeleted = null;
+  let rawDeleted = null;
 
   if (prisma?.ga4ApiCache) {
     const result = await prisma.ga4ApiCache.deleteMany({
@@ -28,11 +30,13 @@ async function pollOnce() {
     callsDeleted = result.count || 0;
   }
 
-  safeLog('prune completed', { cacheDeleted, callsDeleted, retentionDays });
-  return { ok: true, cacheDeleted, callsDeleted, retentionDays };
+  const rawPrune = await rawApiResponseService.purgeExpiredRawApiResponses();
+  rawDeleted = rawPrune?.deleted ?? 0;
+
+  safeLog('prune completed', { cacheDeleted, callsDeleted, rawDeleted, retentionDays });
+  return { ok: true, cacheDeleted, callsDeleted, rawDeleted, retentionDays };
 }
 
 module.exports = {
   pollOnce,
 };
-

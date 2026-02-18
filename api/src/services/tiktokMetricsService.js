@@ -3,6 +3,8 @@
 // - Retorna [] se credenciais estiverem incompletas.
 
 const { resolveAccessToken, getIntegrationSettings, getIntegrationConfig } = require('../modules/reporting/providers/providerUtils');
+const httpClient = require('../lib/httpClient');
+const rawApiResponseService = require('./rawApiResponseService');
 
 function safeLog(...args) {
   if (process.env.NODE_ENV === 'test') return;
@@ -172,24 +174,47 @@ async function fetchAccountMetrics(integration, options = {}) {
     if (filteringPayload.length) {
       params.set('filtering', JSON.stringify(filteringPayload));
     }
+    const rawParams = {
+      advertiserId: String(advertiserId),
+      dataLevel,
+      start,
+      end,
+      metrics: metricsList,
+      dimensions,
+      filtering: filteringPayload,
+      page,
+      pageSize,
+    };
 
     try {
-      /* eslint-disable no-undef */
-      const res = await fetch(`${url}?${params.toString()}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Token': String(accessToken),
+      const response = await httpClient.requestJson(
+        `${url}?${params.toString()}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Token': String(accessToken),
+          },
         },
+        {
+          provider: 'TIKTOK_ADS',
+          endpoint: '/report/integrated/get',
+          connectionKey: integration?.id || advertiserId,
+          runId: options?.runId || null,
+        },
+      );
+      const json = response.data || {};
+      await rawApiResponseService.appendRawApiResponse({
+        tenantId: integration?.tenantId || null,
+        brandId: integration?.clientId || null,
+        provider: 'TIKTOK_ADS',
+        connectionId: integration?.id || null,
+        endpoint: '/report/integrated/get',
+        params: rawParams,
+        payload: json,
+        cursor: String(page),
+        httpStatus: response.status || null,
       });
-
-      if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        safeLog('Resposta nao OK da TikTok API', res.status, text);
-        return rows;
-      }
-
-      const json = await res.json();
       if (json.code && Number(json.code) !== 0) {
         safeLog('TikTok API retornou erro', json.code, json.message || json.error || '');
         return rows;
@@ -214,6 +239,27 @@ async function fetchAccountMetrics(integration, options = {}) {
       page += 1;
     } catch (err) {
       safeLog('Erro ao chamar TikTok API', err?.message || err);
+      const errorPayload = (() => {
+        if (err?.responseBody) {
+          try {
+            return JSON.parse(err.responseBody);
+          } catch (_parseErr) {
+            return { error: err.responseBody };
+          }
+        }
+        return { error: err?.message || String(err) };
+      })();
+      await rawApiResponseService.appendRawApiResponse({
+        tenantId: integration?.tenantId || null,
+        brandId: integration?.clientId || null,
+        provider: 'TIKTOK_ADS',
+        connectionId: integration?.id || null,
+        endpoint: '/report/integrated/get',
+        params: rawParams,
+        payload: errorPayload,
+        cursor: String(page),
+        httpStatus: err?.status || null,
+      });
       return rows;
     }
   }

@@ -3,6 +3,7 @@ const metaMetricsService = require('./metaMetricsService');
 const googleAdsMetricsService = require('./googleAdsMetricsService');
 const tiktokMetricsService = require('./tiktokMetricsService');
 const linkedinAdsMetricsService = require('./linkedinAdsMetricsService');
+const analyticsWarehouseService = require('./analyticsWarehouseService');
 
 const PLATFORM_SOURCE_MAP = {
   META_ADS: 'META_ADS',
@@ -400,6 +401,23 @@ async function syncConnectionFacts({
       await prisma.factKondorMetricsDaily.createMany({
         data: factRows.slice(i, i + chunkSize),
       });
+    }
+
+    try {
+      await analyticsWarehouseService.upsertLegacyFactRows({
+        tenantId,
+        brandId,
+        rows: factRows,
+        sourceSystem: platform,
+      });
+    } catch (err) {
+      if (process.env.NODE_ENV !== 'test') {
+        // eslint-disable-next-line no-console
+        console.warn(
+          '[factMetricsSyncService] warehouse projection failed (ignored)',
+          err?.message || err,
+        );
+      }
     }
 
     markSynced(cacheKey);
