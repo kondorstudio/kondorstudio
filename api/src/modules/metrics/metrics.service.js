@@ -1,9 +1,7 @@
 const { prisma } = require('../../prisma');
-const { ensureGa4FactMetrics } = require('../../services/ga4FactMetricsService');
 const {
   resolveBrandGa4ActivePropertyId,
 } = require('../../services/brandGa4SettingsService');
-const { ensureFactMetrics } = require('../../services/factMetricsSyncService');
 const { buildRollingDateRange } = require('../../lib/timezone');
 
 const SUPPORTED_PLATFORMS = new Set([
@@ -69,10 +67,6 @@ const METRICS_QUERY_CACHE_MAX_ENTRIES = Math.max(
 const METRICS_QUERY_CONCURRENCY_LIMIT = Math.max(
   1,
   Number(process.env.METRICS_QUERY_CONCURRENCY_LIMIT || 4),
-);
-const METRICS_FACT_SYNC_TIMEOUT_MS = Math.max(
-  1_000,
-  Number(process.env.METRICS_FACT_SYNC_TIMEOUT_MS || 20_000),
 );
 const METRICS_QUERY_EXEC_TIMEOUT_MS = Math.max(
   1_000,
@@ -900,7 +894,6 @@ async function executeQueryMetrics(tenantId, payload = {}) {
 
   const { brandId, dateRange, dimensions, metrics, filters, compareTo, limit } =
     payload;
-  const ga4Skips = [];
 
   const brand = await prisma.client.findFirst({
     where: { id: brandId, tenantId },
@@ -998,68 +991,6 @@ async function executeQueryMetrics(tenantId, payload = {}) {
     );
     if (derivedMatch) {
       derivedForSelect = [derivedMatch];
-    }
-  }
-
-  try {
-    const ga4EnsureResult = await withTimeout(
-      () =>
-        ensureGa4FactMetrics({
-          tenantId,
-          brandId,
-          dateRange: effectiveDateRange,
-          metrics,
-          dimensions,
-          filters,
-          requiredPlatforms: payload.requiredPlatforms,
-        }),
-      METRICS_FACT_SYNC_TIMEOUT_MS,
-      {
-        code: 'GA4_FACT_SYNC_TIMEOUT',
-        message: 'Tempo limite ao sincronizar métricas GA4',
-      },
-    );
-
-    if (ga4EnsureResult?.skipped) {
-      const reason = String(ga4EnsureResult.reason || 'unknown');
-      ga4Skips.push({ reason });
-      if (process.env.NODE_ENV !== 'test') {
-        // eslint-disable-next-line no-console
-        console.info('[metrics.service] GA4 skipped in ensureGa4FactMetrics', {
-          tenantId: String(tenantId),
-          brandId: String(brandId),
-          reason,
-        });
-      }
-    }
-  } catch (err) {
-    if (process.env.NODE_ENV !== 'test') {
-      // eslint-disable-next-line no-console
-      console.warn('[metrics.service] ensureGa4FactMetrics warning', err?.message || err);
-    }
-  }
-
-  try {
-    await withTimeout(
-      () =>
-        ensureFactMetrics({
-          tenantId,
-          brandId,
-          dateRange: effectiveDateRange,
-          metrics: Array.from(plan.baseMetrics || []),
-          filters,
-          requiredPlatforms: payload.requiredPlatforms,
-        }),
-      METRICS_FACT_SYNC_TIMEOUT_MS,
-      {
-        code: 'FACT_SYNC_TIMEOUT',
-        message: 'Tempo limite ao sincronizar métricas das integrações',
-      },
-    );
-  } catch (err) {
-    if (process.env.NODE_ENV !== 'test') {
-      // eslint-disable-next-line no-console
-      console.warn('[metrics.service] ensureFactMetrics warning', err?.message || err);
     }
   }
 
@@ -1161,7 +1092,7 @@ async function executeQueryMetrics(tenantId, payload = {}) {
 
   if (isMetricsDebugEnabled()) {
     response.debug = {
-      ga4Skips,
+      syncOnQuery: false,
     };
   }
 

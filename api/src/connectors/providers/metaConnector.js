@@ -129,6 +129,9 @@ async function preview(ctx = {}, request = {}) {
       message: error?.message || 'Meta preview failed',
       details: { mode: 'preview', range },
     });
+    if (run?.id && error && typeof error === 'object') {
+      error.runId = run.id;
+    }
     throw error;
   }
 }
@@ -190,6 +193,9 @@ async function enqueueBackfill(ctx = {}, range = {}) {
       message: error?.message || 'Meta backfill queue failed',
       details: { mode: 'backfill' },
     });
+    if (run?.id && error && typeof error === 'object') {
+      error.runId = run.id;
+    }
     throw error;
   }
 }
@@ -266,6 +272,9 @@ async function incremental(ctx = {}, cursor = {}) {
       message: error?.message || 'Meta incremental failed',
       details: { mode: 'incremental', cursor: range },
     });
+    if (run?.id && error && typeof error === 'object') {
+      error.runId = run.id;
+    }
     throw error;
   }
 }

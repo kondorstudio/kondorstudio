@@ -180,6 +180,9 @@ async function preview(ctx = {}, request = {}) {
       message: error?.message || 'GA4 preview failed',
       details: { mode: 'preview' },
     });
+    if (run?.id && error && typeof error === 'object') {
+      error.runId = run.id;
+    }
     throw error;
   }
 }
@@ -222,6 +225,7 @@ async function enqueueBackfill(ctx = {}, range = {}) {
         includeCampaigns,
         requestedBy: ctx?.userId ? String(ctx.userId) : null,
         runId: run?.id || null,
+        chunkId: ctx?.chunkId ? String(ctx.chunkId) : null,
       },
       {
         removeOnComplete: true,
@@ -261,6 +265,9 @@ async function enqueueBackfill(ctx = {}, range = {}) {
       message: error?.message || 'GA4 backfill queue failed',
       details: { mode: 'backfill' },
     });
+    if (run?.id && error && typeof error === 'object') {
+      error.runId = run.id;
+    }
     throw error;
   }
 }
@@ -338,6 +345,9 @@ async function incremental(ctx = {}, cursor = {}) {
       message: error?.message || 'GA4 incremental failed',
       details: { mode: 'incremental', cursor: { start, end } },
     });
+    if (run?.id && error && typeof error === 'object') {
+      error.runId = run.id;
+    }
     throw error;
   }
 }

@@ -255,6 +255,7 @@ const apiCompatPrefixes = [
   "/admin",
   "/me",
   "/automation",
+  "/sync",
 ];
 
 function shouldRewriteToApi(pathname, method) {
@@ -600,6 +601,7 @@ safeMount("/api/team", require("./routes/team"));
 safeMount("/api/dashboard", require("./routes/dashboard"));
 safeMount("/api/admin", require("./routes/admin"));
 safeMount("/api/me", require("./routes/me"));
+safeMount("/api/sync", require("./routes/sync"));
 try {
   safeMount("/api/automation", require("./routes/automation"));
 } catch {

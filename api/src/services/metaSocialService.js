@@ -6,7 +6,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { encrypt } = require('../utils/crypto');
 const { useTenant } = require('../prisma');
-const { syncAfterConnection } = require('./factMetricsSyncService');
+const syncOrchestrationService = require('../modules/sync/sync.service');
 const connectionStateService = require('./connectionStateService');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'changeme_local_secret';
@@ -261,15 +261,16 @@ async function ensureMetaConnectionsFromCallback({
         externalAccountName,
       });
 
-      // Sync async: evita atrasar o redirect do callback OAuth.
-      syncAfterConnection({
-        tenantId,
-        brandId: clientId,
-        platform: 'META_ADS',
+      // Sync async por fila: evita I/O externo no request de callback OAuth.
+      syncOrchestrationService.enqueueSync('backfill', tenantId, null, {
+        provider: 'META',
+        brandId: String(clientId),
+        integrationId: String(integrationId),
         externalAccountId,
+        days: Math.max(7, Number(process.env.REPORTING_DEFAULT_RANGE_DAYS || 30)),
       }).catch((err) => {
         // eslint-disable-next-line no-console
-        console.warn('[metaSocialService] syncAfterConnection(meta_ads) error', err?.message || err);
+        console.warn('[metaSocialService] enqueueSync(backfill meta_ads) error', err?.message || err);
       });
     }
 

@@ -18,11 +18,15 @@ function resetModule(path) {
 
 function mockMetricsSyncServices() {
   mockModule('../src/services/factMetricsSyncService', {
-    ensureFactMetrics: async () => {},
+    ensureFactMetrics: async () => {
+      throw new Error('ensureFactMetrics should not run inside metrics.query');
+    },
     syncAfterConnection: async () => {},
   });
   mockModule('../src/services/ga4FactMetricsService', {
-    ensureGa4FactMetrics: async () => ({ skipped: true }),
+    ensureGa4FactMetrics: async () => {
+      throw new Error('ensureGa4FactMetrics should not run inside metrics.query');
+    },
   });
 }
 
@@ -515,7 +519,7 @@ test('metrics query allows when GA4 connection exists', async () => {
   assert.equal(res.status, 200);
 });
 
-test('metrics query returns ga4 skip debug info when METRICS_DEBUG=true', async () => {
+test('metrics query exposes debug flag syncOnQuery=false when METRICS_DEBUG=true', async () => {
   const previousDebug = process.env.METRICS_DEBUG;
   process.env.METRICS_DEBUG = 'true';
 
@@ -543,17 +547,6 @@ test('metrics query returns ga4 skip debug info when METRICS_DEBUG=true', async 
     },
   };
 
-  mockModule('../src/services/factMetricsSyncService', {
-    ensureFactMetrics: async () => {},
-    syncAfterConnection: async () => {},
-  });
-  mockModule('../src/services/ga4FactMetricsService', {
-    ensureGa4FactMetrics: async () => ({
-      ok: true,
-      skipped: true,
-      reason: 'platform_excludes_ga4',
-    }),
-  });
   mockModule('../src/prisma', { prisma: fakePrisma });
   resetModule('../src/modules/metrics/metrics.service');
   const service = require('../src/modules/metrics/metrics.service');
@@ -568,8 +561,7 @@ test('metrics query returns ga4 skip debug info when METRICS_DEBUG=true', async 
       filters: [],
     });
 
-    assert.ok(Array.isArray(result.debug?.ga4Skips));
-    assert.equal(result.debug.ga4Skips[0]?.reason, 'platform_excludes_ga4');
+    assert.equal(result.debug?.syncOnQuery, false);
   } finally {
     if (previousDebug === undefined) {
       delete process.env.METRICS_DEBUG;

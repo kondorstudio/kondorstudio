@@ -3,6 +3,7 @@ const { ensureGa4FactMetrics } = require('../services/ga4FactMetricsService');
 const { resolveBrandGa4ActivePropertyId } = require('../services/brandGa4SettingsService');
 const { ensureBrandGa4Timezone } = require('../services/ga4BrandTimezoneService');
 const { upsertBrandGa4Settings } = require('../services/brandGa4SettingsService');
+const syncRunsService = require('../services/syncRunsService');
 const { buildRollingDateRange } = require('../lib/timezone');
 
 function safeLog(...args) {
@@ -20,17 +21,84 @@ function toScalar(value) {
   return value;
 }
 
+async function safeUpdateRun(runId, payload) {
+  if (!runId) return null;
+  try {
+    return await syncRunsService.updateRun(runId, payload);
+  } catch (_) {
+    return null;
+  }
+}
+
+async function safeCreateChunk(payload) {
+  try {
+    return await syncRunsService.createChunk(payload);
+  } catch (_) {
+    return null;
+  }
+}
+
+async function safeUpdateChunk(chunkId, payload) {
+  if (!chunkId) return null;
+  try {
+    return await syncRunsService.updateChunk(chunkId, payload);
+  } catch (_) {
+    return null;
+  }
+}
+
+async function safeRecordError(payload) {
+  try {
+    return await syncRunsService.recordSyncError(payload);
+  } catch (_) {
+    return null;
+  }
+}
+
 async function processJob(payload = {}) {
   const tenantId = payload.tenantId;
   const brandId = payload.brandId;
   const days = Math.max(1, Math.min(365, Number(payload.days || 30)));
   const includeCampaigns = payload.includeCampaigns === true;
+  const runId = payload?.runId ? String(payload.runId) : null;
+  let chunkId = payload?.chunkId ? String(payload.chunkId) : null;
 
   if (!tenantId || !brandId) {
+    await safeUpdateRun(runId, {
+      status: 'FAILED',
+      finishedAt: new Date(),
+    });
     return { ok: false, skipped: true, reason: 'missing_params' };
   }
 
   const startedAt = Date.now();
+
+  await safeUpdateRun(runId, {
+    status: 'RUNNING',
+    startedAt: new Date(),
+  });
+
+  if (!chunkId && runId) {
+    const createdChunk = await safeCreateChunk({
+      runId,
+      tenantId: String(tenantId),
+      brandId: String(brandId),
+      provider: 'GA4',
+      status: 'RUNNING',
+      chunkKey: `ga4-brand-facts-sync:${String(tenantId)}:${String(brandId)}`,
+      startedAt: new Date(),
+      meta: {
+        includeCampaigns,
+        days,
+      },
+    });
+    chunkId = createdChunk?.id || null;
+  } else if (chunkId) {
+    await safeUpdateChunk(chunkId, {
+      status: 'RUNNING',
+      startedAt: new Date(),
+    });
+  }
 
   let propertyId = null;
   try {
@@ -40,6 +108,27 @@ async function processJob(payload = {}) {
   }
 
   if (!propertyId) {
+    await safeUpdateChunk(chunkId, {
+      status: 'FAILED',
+      finishedAt: new Date(),
+      durationMs: Date.now() - startedAt,
+    });
+    await safeUpdateRun(runId, {
+      status: 'FAILED',
+      finishedAt: new Date(),
+      durationMs: Date.now() - startedAt,
+    });
+    await safeRecordError({
+      runId,
+      chunkId,
+      tenantId: String(tenantId),
+      brandId: String(brandId),
+      provider: 'GA4',
+      providerCode: 'GA4_PROPERTY_MISSING',
+      retryable: false,
+      message: 'GA4 property não configurada para a marca',
+      details: { includeCampaigns, days },
+    });
     return { ok: false, skipped: true, reason: 'property_missing' };
   }
 
@@ -71,6 +160,27 @@ async function processJob(payload = {}) {
 
     const rolling = buildRollingDateRange({ days, timeZone: timezone });
     if (!rolling?.start || !rolling?.end) {
+      await safeUpdateChunk(chunkId, {
+        status: 'FAILED',
+        finishedAt: new Date(),
+        durationMs: Date.now() - startedAt,
+      });
+      await safeUpdateRun(runId, {
+        status: 'FAILED',
+        finishedAt: new Date(),
+        durationMs: Date.now() - startedAt,
+      });
+      await safeRecordError({
+        runId,
+        chunkId,
+        tenantId: String(tenantId),
+        brandId: String(brandId),
+        provider: 'GA4',
+        providerCode: 'GA4_DATE_RANGE_FAILED',
+        retryable: false,
+        message: 'Falha ao resolver date range para backfill GA4',
+        details: { includeCampaigns, days },
+      });
       return { ok: false, skipped: true, reason: 'date_range_failed' };
     }
 
@@ -177,6 +287,31 @@ async function processJob(payload = {}) {
       durationMs: Date.now() - startedAt,
     };
 
+    const rowsWritten = Math.max(0, Number(aggCount || 0)) + Math.max(0, Number(campaignCount || 0));
+
+    await safeUpdateChunk(chunkId, {
+      status: 'SUCCESS',
+      rowsRead: rowsWritten,
+      rowsWritten,
+      finishedAt: new Date(),
+      durationMs: result.durationMs,
+      meta: {
+        includeCampaigns,
+        days,
+        dateRange,
+        truncated,
+        maxRows,
+      },
+    });
+
+    await safeUpdateRun(runId, {
+      status: 'SUCCESS',
+      rowsRead: rowsWritten,
+      rowsWritten,
+      finishedAt: new Date(),
+      durationMs: result.durationMs,
+    });
+
     try {
       await upsertBrandGa4Settings(
         {
@@ -228,7 +363,39 @@ async function processJob(payload = {}) {
         { db: prisma },
       );
     } catch (_err) {}
+    await safeUpdateChunk(chunkId, {
+      status: 'FAILED',
+      finishedAt: new Date(),
+      durationMs: Date.now() - startedAt,
+      meta: {
+        includeCampaigns,
+        days,
+      },
+    });
+    await safeUpdateRun(runId, {
+      status: 'FAILED',
+      finishedAt: new Date(),
+      durationMs: Date.now() - startedAt,
+    });
+    await safeRecordError({
+      runId,
+      chunkId,
+      tenantId: tenantId ? String(tenantId) : null,
+      brandId: brandId ? String(brandId) : null,
+      provider: 'GA4',
+      providerCode: safeError.code || 'GA4_BACKFILL_FAILED',
+      httpStatus: safeError.status || null,
+      retryable: false,
+      message: safeError.message,
+      details: {
+        includeCampaigns,
+        days,
+      },
+    });
     safeLog('failed', { tenantId, brandId, propertyId, error: safeError });
+    if (runId && err && typeof err === 'object') {
+      err.runId = runId;
+    }
     throw err;
   }
 }

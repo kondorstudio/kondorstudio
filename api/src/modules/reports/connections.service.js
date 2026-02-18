@@ -1,5 +1,5 @@
 const { prisma } = require('../../prisma');
-const { syncAfterConnection } = require('../../services/factMetricsSyncService');
+const syncOrchestrationService = require('../sync/sync.service');
 const {
   normalizeGa4PropertyId,
   upsertBrandGa4Settings,
@@ -23,6 +23,39 @@ const PLATFORM_SOURCE_MAP = {
 
 function resolveDataSource(platform) {
   return PLATFORM_SOURCE_MAP[platform] || null;
+}
+
+function resolveSyncProvider(platform) {
+  const normalized = String(platform || '').trim().toUpperCase();
+  if (normalized === 'GA4') return 'GA4';
+  if (normalized === 'META_ADS' || normalized === 'FB_IG') return 'META';
+  return null;
+}
+
+function enqueueBackfillAfterLink({
+  tenantId,
+  userId,
+  brandId,
+  platform,
+  externalAccountId,
+}) {
+  const provider = resolveSyncProvider(platform);
+  if (!provider) return;
+
+  syncOrchestrationService
+    .enqueueSync('backfill', tenantId, userId, {
+      provider,
+      brandId,
+      externalAccountId: String(externalAccountId),
+      includeCampaigns: provider === 'GA4',
+      days: Math.max(7, Number(process.env.REPORTING_DEFAULT_RANGE_DAYS || 30)),
+    })
+    .catch((err) => {
+      if (process.env.NODE_ENV !== 'test') {
+        // eslint-disable-next-line no-console
+        console.warn('[connections.service] enqueueBackfillAfterLink warning', err?.message || err);
+      }
+    });
 }
 
 async function ensureBrand(tenantId, brandId) {
@@ -201,8 +234,9 @@ async function linkConnection(tenantId, userId, payload) {
       },
     });
 
-    syncAfterConnection({
+    enqueueBackfillAfterLink({
       tenantId,
+      userId,
       brandId,
       platform,
       externalAccountId: String(normalizedExternalAccountId),
@@ -291,8 +325,9 @@ async function linkConnection(tenantId, userId, payload) {
   // Prevent stale dashboards when a GA4 property is switched/linked via /reports/connections.
   invalidateMetricsCacheForBrand(tenantId, brandId);
 
-  syncAfterConnection({
+  enqueueBackfillAfterLink({
     tenantId,
+    userId,
     brandId,
     platform,
     externalAccountId: String(normalizedExternalAccountId),

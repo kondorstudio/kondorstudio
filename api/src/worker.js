@@ -25,6 +25,7 @@ const automationWhatsAppJob = require('./jobs/automationWhatsAppJob');
 const whatsappApprovalJob = require('./jobs/whatsappApprovalRequestJob');
 const publishScheduledPostsJob = require('./jobs/publishScheduledPostsJob');
 const reportSchedulesService = require('./modules/reporting/reportSchedules.service');
+const syncOrchestrationService = require('./modules/sync/sync.service');
 const ga4FactSyncJob = require('./jobs/ga4FactSyncJob');
 const ga4RealtimeSyncJob = require('./jobs/ga4RealtimeSyncJob');
 const ga4BrandFactsSyncJob = require('./jobs/ga4BrandFactsSyncJob');
@@ -199,6 +200,14 @@ const ga4SyncWorker = ga4SyncQueue
         }
         if (job.name === 'ga4-prune') {
           await runPollOnce(ga4PruneJob, 'ga4PruneJob');
+          return;
+        }
+        if (
+          job.name === 'sync-preview' ||
+          job.name === 'sync-backfill' ||
+          job.name === 'sync-incremental'
+        ) {
+          await syncOrchestrationService.processSyncQueueJob(job);
           return;
         }
 
