@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const { encrypt } = require('../utils/crypto');
 const { useTenant } = require('../prisma');
 const { syncAfterConnection } = require('./factMetricsSyncService');
+const connectionStateService = require('./connectionStateService');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'changeme_local_secret';
 
@@ -91,6 +92,38 @@ function resolveScopes(kind) {
 function buildOwnerKey(clientId, kind) {
   if (!clientId) return 'AGENCY';
   return `${clientId}:${normalizeKind(kind)}`;
+}
+
+async function syncMetaConnectionState({
+  tenantId,
+  clientId,
+  kind,
+  integrationId,
+  status,
+  reasonCode,
+  reasonMessage,
+  nextAction,
+}) {
+  if (!tenantId) return null;
+  try {
+    return await connectionStateService.upsertConnectionState({
+      tenantId,
+      brandId: clientId || null,
+      provider: 'META',
+      connectionId: integrationId || null,
+      connectionKey: buildOwnerKey(clientId, kind),
+      status: status || connectionStateService.STATUS.ERROR,
+      reasonCode: reasonCode !== undefined ? reasonCode : null,
+      reasonMessage: reasonMessage !== undefined ? reasonMessage : null,
+      nextAction: nextAction !== undefined ? nextAction : null,
+    });
+  } catch (err) {
+    if (process.env.NODE_ENV !== 'test') {
+      // eslint-disable-next-line no-console
+      console.warn('[metaSocialService] failed to sync connection state', err?.message || err);
+    }
+    return null;
+  }
 }
 
 async function ensureDataSourceConnection(db, payload) {
@@ -561,6 +594,7 @@ async function fetchInstagramBusinessDiscovery({
 
 module.exports = {
   normalizeKind,
+  buildOwnerKey,
   resolvePageAccessToken,
   fetchInstagramBusinessDiscovery,
   graphDelete,
@@ -832,6 +866,17 @@ module.exports = {
         err?.message || err,
       );
     }
+
+    await syncMetaConnectionState({
+      tenantId,
+      clientId,
+      kind,
+      integrationId: persistedIntegrationId,
+      status: connectionStateService.STATUS.CONNECTED,
+      reasonCode: null,
+      reasonMessage: null,
+      nextAction: null,
+    });
 
     return {
       tenantId,

@@ -16,6 +16,7 @@ const { buildRollingDateRange } = require('../lib/timezone');
 const { getRedisClient } = require('../lib/redisClient');
 const { ga4SyncQueue } = require('../queues');
 const { prisma, useTenant } = require('../prisma');
+const connectionStateService = require('../services/connectionStateService');
 
 function getFrontUrl() {
   return (
@@ -306,6 +307,17 @@ module.exports = {
         });
       }
 
+      await connectionStateService.upsertConnectionState({
+        tenantId,
+        provider: 'GA4',
+        connectionKey: 'ga4_oauth',
+        connectionId: integrations[0]?.id || null,
+        status: connectionStateService.STATUS.DISCONNECTED,
+        reasonCode: 'MANUAL_DISCONNECT',
+        reasonMessage: null,
+        nextAction: null,
+      });
+
       return res.json({
         ok: true,
         disconnected: integrations.length > 0,
@@ -328,10 +340,17 @@ module.exports = {
       const integration = await req.db.integrationGoogleGa4.findFirst({
         where: { tenantId: String(tenantId) },
       });
+      const state = await connectionStateService.getConnectionState({
+        tenantId,
+        provider: 'GA4',
+        connectionKey: 'ga4_oauth',
+      });
 
       if (!integration) {
         return res.json({
-          status: 'DISCONNECTED',
+          status: state?.status || 'DISCONNECTED',
+          legacyStatus: 'DISCONNECTED',
+          connectionState: state || null,
           googleAccountEmail: null,
           properties: [],
           selectedProperty: null,
@@ -355,9 +374,15 @@ module.exports = {
       }
 
       const selectedProperty = properties.find((p) => p.isSelected) || null;
+      const normalizedStatus =
+        integration.status === 'NEEDS_RECONNECT'
+          ? 'REAUTH_REQUIRED'
+          : integration.status;
 
       return res.json({
-        status: integration.status,
+        status: state?.status || normalizedStatus,
+        legacyStatus: integration.status,
+        connectionState: state || null,
         lastError: integration.lastError || null,
         googleAccountEmail: integration.googleAccountEmail || null,
         properties,

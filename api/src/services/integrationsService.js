@@ -2,6 +2,7 @@
 // Gerencia integrações (Meta, Google, TikTok, WhatsApp) com suporte a ownerType/ownerKey
 
 const { prisma } = require('../prisma');
+const connectionStateService = require('./connectionStateService');
 
 function toDateOrNull(v) {
   if (!v && v !== 0) return null;
@@ -15,6 +16,14 @@ function sanitizeScopes(scopes) {
   if (Array.isArray(scopes)) return scopes.map((s) => String(s));
   if (typeof scopes === 'string') return scopes.split(',').map((s) => s.trim()).filter(Boolean);
   return [];
+}
+
+function hasConnectionStateModel() {
+  return Boolean(
+    prisma &&
+      prisma.connectionState &&
+      typeof prisma.connectionState.findMany === 'function',
+  );
 }
 
 function buildOwnerFields(data = {}) {
@@ -58,6 +67,96 @@ function sanitizeIntegrationResponse(record) {
     cloned.config = nextConfig;
   }
   return cloned;
+}
+
+function buildStatePayloadFromIntegration(record, overrides = {}) {
+  if (!record) return null;
+  const provider = String(record.provider || '').toUpperCase();
+  if (!provider) return null;
+  return {
+    tenantId: String(record.tenantId),
+    brandId: record.clientId ? String(record.clientId) : null,
+    provider,
+    connectionId: record.id ? String(record.id) : null,
+    connectionKey: record.ownerKey || record.id || 'default',
+    status: connectionStateService.normalizeConnectionStatus(
+      overrides.status || record.status,
+      connectionStateService.STATUS.ERROR,
+    ),
+    reasonCode:
+      overrides.reasonCode !== undefined
+        ? overrides.reasonCode
+        : record.lastError
+          ? 'INTEGRATION_ERROR'
+          : null,
+    reasonMessage:
+      overrides.reasonMessage !== undefined
+        ? overrides.reasonMessage
+        : record.lastError || null,
+    nextAction:
+      overrides.nextAction !== undefined
+        ? overrides.nextAction
+        : connectionStateService.normalizeConnectionStatus(
+              overrides.status || record.status,
+              connectionStateService.STATUS.ERROR,
+            ) === connectionStateService.STATUS.REAUTH_REQUIRED
+          ? 'Reconnect account'
+          : null,
+    metadata: overrides.metadata,
+  };
+}
+
+async function syncConnectionState(record, overrides = {}) {
+  const payload = buildStatePayloadFromIntegration(record, overrides);
+  if (!payload) return null;
+  return connectionStateService.upsertConnectionState(payload);
+}
+
+async function attachConnectionState(records = []) {
+  const list = Array.isArray(records) ? records : [];
+  if (!list.length || !hasConnectionStateModel()) return list;
+
+  const stateKeys = Array.from(
+    new Set(
+      list
+        .map((record) =>
+          connectionStateService.buildStateKey({
+            tenantId: record.tenantId,
+            provider: record.provider,
+            brandId: record.clientId || null,
+            connectionKey: record.ownerKey || record.id || 'default',
+          }),
+        )
+        .filter(Boolean),
+    ),
+  );
+
+  if (!stateKeys.length) return list;
+
+  const states = await prisma.connectionState.findMany({
+    where: { stateKey: { in: stateKeys } },
+  });
+  const stateMap = new Map(states.map((state) => [state.stateKey, state]));
+
+  return list.map((record) => {
+    const stateKey = connectionStateService.buildStateKey({
+      tenantId: record.tenantId,
+      provider: record.provider,
+      brandId: record.clientId || null,
+      connectionKey: record.ownerKey || record.id || 'default',
+    });
+    const state = stateMap.get(stateKey) || null;
+    return {
+      ...record,
+      connectionStatus:
+        state?.status ||
+        connectionStateService.normalizeConnectionStatus(
+          record.status,
+          connectionStateService.STATUS.DISCONNECTED,
+        ),
+      connectionState: state,
+    };
+  });
 }
 
 async function ensureIntegrationBelongsToTenant(tenantId, integrationId) {
@@ -123,9 +222,10 @@ module.exports = {
       }),
       prisma.integration.count({ where }),
     ]);
+    const withState = await attachConnectionState(items);
 
     return {
-      items: items.map((item) => sanitizeIntegrationResponse(item)),
+      items: withState.map((item) => sanitizeIntegrationResponse(item)),
       total,
       page,
       perPage,
@@ -153,6 +253,7 @@ module.exports = {
     };
 
     const created = await prisma.integration.create({ data: payload });
+    await syncConnectionState(created);
     return sanitizeIntegrationResponse(created);
   },
 
@@ -161,7 +262,8 @@ module.exports = {
     const record = await prisma.integration.findFirst({
       where: { id, tenantId },
     });
-    return sanitizeIntegrationResponse(record);
+    const [withState] = await attachConnectionState(record ? [record] : []);
+    return sanitizeIntegrationResponse(withState || null);
   },
 
   async update(tenantId, id, data = {}) {
@@ -190,13 +292,21 @@ module.exports = {
       updateData.clientId = owner.clientId;
     }
 
-    await prisma.integration.update({ where: { id }, data: updateData });
-    return this.getById(tenantId, id);
+    const updated = await prisma.integration.update({ where: { id }, data: updateData });
+    await syncConnectionState(updated);
+    const [withState] = await attachConnectionState([updated]);
+    return sanitizeIntegrationResponse(withState);
   },
 
   async remove(tenantId, id) {
     const existing = await ensureIntegrationBelongsToTenant(tenantId, id);
     if (!existing) return false;
+    await syncConnectionState(existing, {
+      status: connectionStateService.STATUS.DISCONNECTED,
+      reasonCode: 'INTEGRATION_REMOVED',
+      reasonMessage: 'Integration removed',
+      nextAction: null,
+    });
     await prisma.integration.delete({ where: { id } });
     return true;
   },
@@ -230,6 +340,7 @@ module.exports = {
     };
 
     const created = await prisma.integration.create({ data: payload });
+    await syncConnectionState(created);
     return sanitizeIntegrationResponse(created);
   },
 
@@ -237,12 +348,19 @@ module.exports = {
     const existing = await ensureIntegrationBelongsToTenant(tenantId, id);
     if (!existing) return null;
 
-    await prisma.integration.update({
+    const updated = await prisma.integration.update({
       where: { id },
       data: { status: 'INACTIVE', accessToken: null, refreshToken: null },
     });
+    await syncConnectionState(updated, {
+      status: connectionStateService.STATUS.DISCONNECTED,
+      reasonCode: 'MANUAL_DISCONNECT',
+      reasonMessage: null,
+      nextAction: null,
+    });
 
-    return this.getById(tenantId, id);
+    const [withState] = await attachConnectionState([updated]);
+    return sanitizeIntegrationResponse(withState);
   },
 
   async queueIntegrationJob(tenantId, integrationId, type, payload = {}) {

@@ -40,9 +40,11 @@ export default function Ga4IntegrationPage() {
   });
 
   const status = data?.status || "DISCONNECTED";
+  const legacyStatus = data?.legacyStatus || status;
   const properties = data?.properties || [];
   const selectedProperty = data?.selectedProperty || null;
-  const needsReconnect = status === "NEEDS_RECONNECT";
+  const needsReconnect =
+    status === "REAUTH_REQUIRED" || status === "NEEDS_RECONNECT" || legacyStatus === "NEEDS_RECONNECT";
   const googleEmail = data?.googleAccountEmail || null;
 
   useEffect(() => {
@@ -170,12 +172,12 @@ export default function Ga4IntegrationPage() {
     if (status === "CONNECTED") {
       setReauthNotice("");
     }
-    if (status === "NEEDS_RECONNECT") {
+    if (status === "REAUTH_REQUIRED" || status === "NEEDS_RECONNECT" || legacyStatus === "NEEDS_RECONNECT") {
       setReauthNotice(
         "Sua conexão com o GA4 expirou ou foi revogada. Reconecte para continuar."
       );
     }
-  }, [status]);
+  }, [status, legacyStatus]);
 
   const demoRows = demoData?.rows || [];
 

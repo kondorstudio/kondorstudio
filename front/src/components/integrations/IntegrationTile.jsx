@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button.jsx";
 function statusLabel(status) {
   const value = String(status || "").toLowerCase();
   if (value === "connected" || value === "active") return "Conectado";
+  if (value === "reauth_required" || value === "needs_reconnect") return "Reconectar";
   if (value === "error") return "Erro";
   if (value === "soon") return "Em breve";
   return "Desconectado";
@@ -14,7 +15,7 @@ function statusClass(status) {
   if (value === "connected" || value === "active") {
     return "border-emerald-200 text-emerald-700 bg-emerald-50";
   }
-  if (value === "error") {
+  if (value === "error" || value === "reauth_required" || value === "needs_reconnect") {
     return "border-red-200 text-red-600 bg-red-50";
   }
   if (value === "soon") {

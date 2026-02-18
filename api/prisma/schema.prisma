@@ -64,6 +64,7 @@ enum IntegrationStatus {
   ERROR
   CONNECTED
   DISCONNECTED
+  REAUTH_REQUIRED
 }
 
 enum IntegrationOwnerType {
@@ -91,7 +92,38 @@ enum Ga4IntegrationStatus {
   CONNECTED
   DISCONNECTED
   NEEDS_RECONNECT
+  REAUTH_REQUIRED
   ERROR
+}
+
+enum ConnectionStateStatus {
+  CONNECTED
+  DISCONNECTED
+  ERROR
+  REAUTH_REQUIRED
+}
+
+enum SyncRunType {
+  PREVIEW
+  BACKFILL
+  INCREMENTAL
+}
+
+enum SyncRunStatus {
+  QUEUED
+  RUNNING
+  SUCCESS
+  PARTIAL_SUCCESS
+  FAILED
+  CANCELLED
+}
+
+enum SyncChunkStatus {
+  QUEUED
+  RUNNING
+  SUCCESS
+  FAILED
+  CANCELLED
 }
 
 enum Ga4ApiCacheKind {
@@ -1440,6 +1472,113 @@ model IntegrationJob {
   @@index([integrationId])
   @@index([status])
   @@map("integration_jobs")
+}
+
+model ConnectionState {
+  id            String                @id @default(uuid())
+  stateKey      String                @unique
+  tenantId      String
+  brandId       String?
+  provider      String
+  connectionId  String?
+  connectionKey String                @default("default")
+  status        ConnectionStateStatus @default(DISCONNECTED)
+  reasonCode    String?
+  reasonMessage String?
+  nextAction    String?
+  nextRetryAt   DateTime?
+  lastSuccessAt DateTime?
+  lastErrorAt   DateTime?
+  metadata      Json?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  @@index([tenantId])
+  @@index([tenantId, provider, status])
+  @@index([tenantId, brandId, provider])
+  @@index([connectionId])
+  @@map("connection_state")
+}
+
+model SyncRun {
+  id            String       @id @default(uuid())
+  tenantId      String
+  brandId       String?
+  provider      String
+  connectionId  String?
+  connectionKey String?
+  runType       SyncRunType
+  status        SyncRunStatus @default(QUEUED)
+  periodStart   DateTime?
+  periodEnd     DateTime?
+  cursorStart   String?
+  cursorEnd     String?
+  rowsRead      Int          @default(0)
+  rowsWritten   Int          @default(0)
+  retryCount    Int          @default(0)
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  durationMs    Int?
+  meta          Json?
+  chunks        SyncChunk[]
+  errors        SyncError[]
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([tenantId, provider, status, createdAt])
+  @@index([tenantId, brandId, provider, createdAt])
+  @@index([connectionId, createdAt])
+  @@map("sync_runs")
+}
+
+model SyncChunk {
+  id          String          @id @default(uuid())
+  runId        String
+  run          SyncRun         @relation(fields: [runId], references: [id], onDelete: Cascade)
+  tenantId     String?
+  brandId      String?
+  provider     String?
+  status       SyncChunkStatus @default(QUEUED)
+  cursorStart  String?
+  cursorEnd    String?
+  chunkKey     String?
+  attempt      Int             @default(0)
+  rowsRead     Int             @default(0)
+  rowsWritten  Int             @default(0)
+  durationMs   Int?
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  meta         Json?
+  errors       SyncError[]
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@index([runId, status])
+  @@index([tenantId, brandId, provider, createdAt])
+  @@map("sync_chunks")
+}
+
+model SyncError {
+  id           String    @id @default(uuid())
+  runId        String?
+  run          SyncRun?  @relation(fields: [runId], references: [id], onDelete: SetNull)
+  chunkId      String?
+  chunk        SyncChunk? @relation(fields: [chunkId], references: [id], onDelete: SetNull)
+  tenantId     String?
+  brandId      String?
+  provider     String?
+  connectionId String?
+  httpStatus   Int?
+  providerCode String?
+  retryable    Boolean   @default(false)
+  message      String
+  details      Json?
+  createdAt    DateTime  @default(now())
+
+  @@index([runId, createdAt])
+  @@index([chunkId, createdAt])
+  @@index([tenantId, provider, createdAt])
+  @@map("sync_errors")
 }
 
 model IntegrationGoogleGa4 {

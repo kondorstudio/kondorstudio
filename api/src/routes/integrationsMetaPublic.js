@@ -2,6 +2,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 
 const metaSocialService = require('../services/metaSocialService');
+const connectionStateService = require('../services/connectionStateService');
 
 const router = express.Router();
 
@@ -36,6 +37,7 @@ function decodeState(state) {
   try {
     const payload = jwt.verify(String(state), JWT_SECRET);
     return {
+      tenantId: payload?.tenantId ? String(payload.tenantId) : null,
       kind: payload?.kind ? String(payload.kind) : null,
       clientId: payload?.clientId ? String(payload.clientId) : null,
     };
@@ -43,11 +45,34 @@ function decodeState(state) {
     try {
       const payload = jwt.decode(String(state));
       return {
+        tenantId: payload?.tenantId ? String(payload.tenantId) : null,
         kind: payload?.kind ? String(payload.kind) : null,
         clientId: payload?.clientId ? String(payload.clientId) : null,
       };
     } catch {
       return {};
+    }
+  }
+}
+
+async function markMetaOauthErrorState(decoded, reasonCode, reasonMessage) {
+  const tenantId = decoded?.tenantId ? String(decoded.tenantId) : null;
+  if (!tenantId) return;
+  try {
+    await connectionStateService.upsertConnectionState({
+      tenantId,
+      brandId: decoded?.clientId ? String(decoded.clientId) : null,
+      provider: 'META',
+      connectionKey: metaSocialService.buildOwnerKey(decoded?.clientId || null, decoded?.kind || 'meta_business'),
+      status: connectionStateService.STATUS.ERROR,
+      reasonCode: reasonCode || 'META_OAUTH_ERROR',
+      reasonMessage: reasonMessage || 'Meta OAuth callback failed',
+      nextAction: 'Reconnect Meta account',
+    });
+  } catch (err) {
+    if (process.env.NODE_ENV !== 'test') {
+      // eslint-disable-next-line no-console
+      console.warn('[integrationsMetaPublic] failed to save oauth error state', err?.message || err);
     }
   }
 }
@@ -59,6 +84,7 @@ router.get('/callback', async (req, res) => {
   const decoded = decodeState(state);
 
   if (metaError) {
+    await markMetaOauthErrorState(decoded, 'META_OAUTH_ERROR', String(metaError));
     const redirectUrl = buildRedirectUrl('error', decoded);
     if (getPublicAppBase()) {
       return res.redirect(302, redirectUrl);
@@ -69,6 +95,7 @@ router.get('/callback', async (req, res) => {
   const code = req.query && req.query.code;
 
   if (!code || !state) {
+    await markMetaOauthErrorState(decoded, 'META_OAUTH_MISSING_CODE_OR_STATE', 'missing code or state');
     const redirectUrl = buildRedirectUrl('error', decoded);
     if (getPublicAppBase()) {
       return res.redirect(302, redirectUrl);
@@ -84,6 +111,11 @@ router.get('/callback', async (req, res) => {
     }
     return res.json({ ok: true, ...result });
   } catch (err) {
+    await markMetaOauthErrorState(
+      decoded,
+      err?.code || 'META_OAUTH_CALLBACK_FAILED',
+      err?.message || 'meta_oauth_failed',
+    );
     const redirectUrl = buildRedirectUrl('error', decoded);
     if (getPublicAppBase()) {
       return res.redirect(302, redirectUrl);

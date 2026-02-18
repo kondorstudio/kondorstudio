@@ -130,7 +130,9 @@ export default function IntegrationConnectDialog({
 
   const hasMetaOauthConnection = useMemo(() => {
     if (!isMetaProvider || !effectiveExisting) return false;
-    const status = String(effectiveExisting.status || "").toUpperCase();
+    const status = String(
+      effectiveExisting.connectionStatus || effectiveExisting.status || ""
+    ).toUpperCase();
     return status === "CONNECTED";
   }, [isMetaProvider, effectiveExisting]);
 

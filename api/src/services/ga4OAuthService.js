@@ -4,12 +4,41 @@ const jwt = require('jsonwebtoken');
 const { prisma, useTenant } = require('../prisma');
 const googleClient = require('../lib/googleClient');
 const { encrypt, decrypt } = require('../lib/crypto');
+const connectionStateService = require('./connectionStateService');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'changeme_local_secret';
 const STATE_PURPOSE = 'ga4_oauth_state';
 const TOKEN_SKEW_MS = Number(process.env.GA4_TOKEN_SKEW_MS || 300000);
 const REFRESH_LOCK_TTL_MS = Number(process.env.GA4_REFRESH_LOCK_TTL_MS || 10000);
 const refreshLocks = new Map();
+const GA4_CONNECTION_PROVIDER = 'GA4';
+const GA4_CONNECTION_KEY = 'ga4_oauth';
+
+async function syncGa4ConnectionState(payload = {}) {
+  try {
+    await connectionStateService.upsertConnectionState({
+      provider: GA4_CONNECTION_PROVIDER,
+      connectionKey: GA4_CONNECTION_KEY,
+      ...payload,
+    });
+  } catch (error) {
+    if (process.env.NODE_ENV !== 'test') {
+      // eslint-disable-next-line no-console
+      console.warn('[ga4OAuthService] failed to sync connection state', error?.message || error);
+    }
+  }
+}
+
+function mapGa4StatusToConnectionStatus(status) {
+  const value = String(status || '').trim().toUpperCase();
+  if (!value) return connectionStateService.STATUS.ERROR;
+  if (value === 'CONNECTED') return connectionStateService.STATUS.CONNECTED;
+  if (value === 'DISCONNECTED') return connectionStateService.STATUS.DISCONNECTED;
+  if (value === 'NEEDS_RECONNECT' || value === 'REAUTH_REQUIRED') {
+    return connectionStateService.STATUS.REAUTH_REQUIRED;
+  }
+  return connectionStateService.STATUS.ERROR;
+}
 
 function isMockMode() {
   return process.env.GA4_MOCK_MODE === 'true';
@@ -109,7 +138,18 @@ async function ensureMockIntegration(tenantId, userId) {
     where: { tenantId: String(tenantId) },
   });
 
-  if (existing && existing.status === 'CONNECTED') return existing;
+  if (existing && existing.status === 'CONNECTED') {
+    await syncGa4ConnectionState({
+      tenantId,
+      connectionId: existing.id,
+      status: connectionStateService.STATUS.CONNECTED,
+      reasonCode: null,
+      reasonMessage: null,
+      nextAction: null,
+      lastSuccessAt: new Date(),
+    });
+    return existing;
+  }
 
   const data = {
     userId: String(userId),
@@ -123,13 +163,33 @@ async function ensureMockIntegration(tenantId, userId) {
   };
 
   if (existing) {
-    return db.integrationGoogleGa4.update({
+    const updated = await db.integrationGoogleGa4.update({
       where: { id: existing.id },
       data,
     });
+    await syncGa4ConnectionState({
+      tenantId,
+      connectionId: updated.id,
+      status: connectionStateService.STATUS.CONNECTED,
+      reasonCode: null,
+      reasonMessage: null,
+      nextAction: null,
+      lastSuccessAt: new Date(),
+    });
+    return updated;
   }
 
-  return db.integrationGoogleGa4.create({ data });
+  const created = await db.integrationGoogleGa4.create({ data });
+  await syncGa4ConnectionState({
+    tenantId,
+    connectionId: created.id,
+    status: connectionStateService.STATUS.CONNECTED,
+    reasonCode: null,
+    reasonMessage: null,
+    nextAction: null,
+    lastSuccessAt: new Date(),
+  });
+  return created;
 }
 
 async function getIntegration(tenantId) {
@@ -149,10 +209,20 @@ async function markIntegrationError(tenantId, userId, message) {
       : existing.status === 'NEEDS_RECONNECT'
       ? 'NEEDS_RECONNECT'
       : 'ERROR';
-  return prisma.integrationGoogleGa4.update({
+  const updated = await prisma.integrationGoogleGa4.update({
     where: { id: existing.id },
     data: { status: nextStatus, lastError: message || 'GA4 error' },
   });
+  await syncGa4ConnectionState({
+    tenantId,
+    connectionId: updated.id,
+    status: connectionStateService.STATUS.ERROR,
+    reasonCode: 'GA4_ERROR',
+    reasonMessage: message || 'GA4 error',
+    nextAction: 'Check credentials and retry',
+    lastErrorAt: new Date(),
+  });
+  return updated;
 }
 
 async function resetIntegration(
@@ -163,7 +233,7 @@ async function resetIntegration(
 ) {
   const existing = await getIntegration(tenantId);
   if (!existing) return null;
-  return prisma.integrationGoogleGa4.update({
+  const updated = await prisma.integrationGoogleGa4.update({
     where: { id: existing.id },
     data: {
       status,
@@ -173,6 +243,23 @@ async function resetIntegration(
       tokenExpiry: clearTokens ? null : existing.tokenExpiry,
     },
   });
+  await syncGa4ConnectionState({
+    tenantId,
+    connectionId: updated.id,
+    status: mapGa4StatusToConnectionStatus(status),
+    reasonCode: status === 'DISCONNECTED' ? 'MANUAL_DISCONNECT' : 'GA4_ERROR',
+    reasonMessage: message || 'GA4 error',
+    nextAction:
+      status === 'NEEDS_RECONNECT' || status === 'REAUTH_REQUIRED'
+        ? 'Reconnect GA4 account'
+        : status === 'DISCONNECTED'
+          ? null
+          : 'Check credentials and retry',
+    lastErrorAt:
+      status === 'CONNECTED' || status === 'DISCONNECTED' ? null : new Date(),
+    lastSuccessAt: status === 'CONNECTED' ? new Date() : undefined,
+  });
+  return updated;
 }
 
 async function markIntegrationNeedsReconnect(
@@ -183,7 +270,7 @@ async function markIntegrationNeedsReconnect(
 ) {
   const existing = await getIntegration(tenantId);
   if (!existing) return null;
-  return prisma.integrationGoogleGa4.update({
+  const updated = await prisma.integrationGoogleGa4.update({
     where: { id: existing.id },
     data: {
       status: 'NEEDS_RECONNECT',
@@ -193,6 +280,16 @@ async function markIntegrationNeedsReconnect(
       tokenExpiry: clearTokens ? null : existing.tokenExpiry,
     },
   });
+  await syncGa4ConnectionState({
+    tenantId,
+    connectionId: updated.id,
+    status: connectionStateService.STATUS.REAUTH_REQUIRED,
+    reasonCode: 'REAUTH_REQUIRED',
+    reasonMessage: message || 'REAUTH_REQUIRED',
+    nextAction: 'Reconnect GA4 account',
+    lastErrorAt: new Date(),
+  });
+  return updated;
 }
 
 async function upsertIntegration({
@@ -221,13 +318,33 @@ async function upsertIntegration({
   };
 
   if (existing) {
-    return db.integrationGoogleGa4.update({
+    const updated = await db.integrationGoogleGa4.update({
       where: { id: existing.id },
       data,
     });
+    await syncGa4ConnectionState({
+      tenantId,
+      connectionId: updated.id,
+      status: connectionStateService.STATUS.CONNECTED,
+      reasonCode: null,
+      reasonMessage: null,
+      nextAction: null,
+      lastSuccessAt: new Date(),
+    });
+    return updated;
   }
 
-  return db.integrationGoogleGa4.create({ data });
+  const created = await db.integrationGoogleGa4.create({ data });
+  await syncGa4ConnectionState({
+    tenantId,
+    connectionId: created.id,
+    status: connectionStateService.STATUS.CONNECTED,
+    reasonCode: null,
+    reasonMessage: null,
+    nextAction: null,
+    lastSuccessAt: new Date(),
+  });
+  return created;
 }
 
 async function exchangeCode({ code, state }) {
@@ -373,7 +490,7 @@ async function getValidAccessToken({ tenantId, userId }) {
     const accessTokenEnc = encrypt(String(tokenResponse.access_token));
     const tokenExpiry = resolveExpiry(tokenResponse);
 
-    await prisma.integrationGoogleGa4.update({
+    const updated = await prisma.integrationGoogleGa4.update({
       where: { id: integration.id },
       data: {
         accessToken: accessTokenEnc,
@@ -381,6 +498,15 @@ async function getValidAccessToken({ tenantId, userId }) {
         status: 'CONNECTED',
         lastError: null,
       },
+    });
+    await syncGa4ConnectionState({
+      tenantId,
+      connectionId: updated.id,
+      status: connectionStateService.STATUS.CONNECTED,
+      reasonCode: null,
+      reasonMessage: null,
+      nextAction: null,
+      lastSuccessAt: new Date(),
     });
 
     return tokenResponse.access_token;
@@ -391,7 +517,7 @@ async function disconnect({ tenantId, userId, clearTokens = true }) {
   const integration = await getIntegration(tenantId);
   if (!integration) return null;
 
-  return prisma.integrationGoogleGa4.update({
+  const updated = await prisma.integrationGoogleGa4.update({
     where: { id: integration.id },
     data: {
       status: 'DISCONNECTED',
@@ -401,6 +527,16 @@ async function disconnect({ tenantId, userId, clearTokens = true }) {
       tokenExpiry: clearTokens ? null : integration.tokenExpiry,
     },
   });
+  await syncGa4ConnectionState({
+    tenantId,
+    connectionId: updated.id,
+    status: connectionStateService.STATUS.DISCONNECTED,
+    reasonCode: 'MANUAL_DISCONNECT',
+    reasonMessage: null,
+    nextAction: null,
+    lastErrorAt: null,
+  });
+  return updated;
 }
 
 module.exports = {

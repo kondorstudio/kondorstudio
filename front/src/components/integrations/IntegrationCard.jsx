@@ -6,10 +6,12 @@ import { Trash2 } from "lucide-react";
 
 function StatusBadge({ status }) {
   const s = (status || "disconnected").toLowerCase();
+  const isConnected = s === "connected" || s === "active";
+  const isError = s === "error" || s === "reauth_required" || s === "needs_reconnect";
   const cls =
-    s === "connected"
+    isConnected
       ? "border-emerald-200 text-emerald-700"
-      : s === "error"
+      : isError
         ? "border-red-200 text-red-700"
         : "border-purple-200 text-purple-700";
 

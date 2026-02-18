@@ -402,6 +402,11 @@ function buildIntegrationKey(provider, ownerKey) {
   return `${provider}:${ownerKey || DEFAULT_OWNER_KEY}`;
 }
 
+function resolveIntegrationStatus(record) {
+  if (!record) return "DISCONNECTED";
+  return record.connectionStatus || record.status || "DISCONNECTED";
+}
+
 function isConnectedStatus(status) {
   const value = String(status || "").toLowerCase();
   return value === "connected" || value === "active";
@@ -464,12 +469,12 @@ export default function Integrations() {
             integration.provider === item.provider &&
             (!item.kind || integration.settings?.kind === item.kind)
         );
-        return acc + (matches.some((entry) => isConnectedStatus(entry.status)) ? 1 : 0);
+        return acc + (matches.some((entry) => isConnectedStatus(resolveIntegrationStatus(entry))) ? 1 : 0);
       }
       const record = integrationsByKey.get(
         buildIntegrationKey(item.provider, item.ownerKey)
       );
-      return acc + (isConnectedStatus(record?.status) ? 1 : 0);
+      return acc + (isConnectedStatus(resolveIntegrationStatus(record)) ? 1 : 0);
     }, 0);
   }, [connectableCatalog, integrations, integrationsByKey]);
 
@@ -496,7 +501,7 @@ export default function Integrations() {
       const record = integrationsByKey.get(
         buildIntegrationKey(item.provider, item.ownerKey)
       );
-      return acc + (isConnectedStatus(record?.status) ? 1 : 0);
+      return acc + (isConnectedStatus(resolveIntegrationStatus(record)) ? 1 : 0);
     }, 0);
   }, [agencyIntegrations, integrationsByKey]);
 
@@ -510,7 +515,7 @@ export default function Integrations() {
           integration.provider === item.provider &&
           (!item.kind || integration.settings?.kind === item.kind)
       );
-      return acc + (matches.some((entry) => isConnectedStatus(entry.status)) ? 1 : 0);
+      return acc + (matches.some((entry) => isConnectedStatus(resolveIntegrationStatus(entry))) ? 1 : 0);
     }, 0);
   }, [connectableClientIntegrations, integrations, selectedClientId]);
 
@@ -655,7 +660,7 @@ export default function Integrations() {
                         buildIntegrationKey(integration.provider, integration.ownerKey)
                       );
                 const tileStatus =
-                  integration.scope === "client" ? "disconnected" : record?.status;
+                  integration.scope === "client" ? "disconnected" : resolveIntegrationStatus(record);
                 const Icon = integration.icon;
                 return (
                   <IntegrationTile
@@ -750,7 +755,7 @@ export default function Integrations() {
                     (!integration.kind || entry.settings?.kind === integration.kind)
                 );
                 const connectedClients = clientMatches.filter((entry) =>
-                  isConnectedStatus(entry.status)
+                  isConnectedStatus(resolveIntegrationStatus(entry))
                 );
                 const isSoon = Boolean(integration.comingSoon);
                 const tileStatus = isSoon
