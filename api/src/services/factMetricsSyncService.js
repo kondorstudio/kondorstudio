@@ -4,6 +4,7 @@ const googleAdsMetricsService = require('./googleAdsMetricsService');
 const tiktokMetricsService = require('./tiktokMetricsService');
 const linkedinAdsMetricsService = require('./linkedinAdsMetricsService');
 const analyticsWarehouseService = require('./analyticsWarehouseService');
+const { upsertFactMetricsDailyRows } = require('./factMetricsRepository');
 
 const PLATFORM_SOURCE_MAP = {
   META_ADS: 'META_ADS',
@@ -383,25 +384,7 @@ async function syncConnectionFacts({
       return;
     }
 
-    await prisma.factKondorMetricsDaily.deleteMany({
-      where: {
-        tenantId,
-        brandId,
-        platform,
-        accountId: String(externalAccountId),
-        date: {
-          gte: new Date(dateRange.start),
-          lte: new Date(dateRange.end),
-        },
-      },
-    });
-
-    const chunkSize = Math.max(100, Number(process.env.FACT_METRICS_INSERT_CHUNK || 500));
-    for (let i = 0; i < factRows.length; i += chunkSize) {
-      await prisma.factKondorMetricsDaily.createMany({
-        data: factRows.slice(i, i + chunkSize),
-      });
-    }
+    await upsertFactMetricsDailyRows(factRows, { db: prisma });
 
     try {
       await analyticsWarehouseService.upsertLegacyFactRows({

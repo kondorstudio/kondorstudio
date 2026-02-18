@@ -1282,28 +1282,32 @@ model BrandGa4Settings {
 }
 
 model FactKondorMetricsDaily {
-  id          String              @id @default(uuid())
-  tenantId    String
-  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  brandId     String
-  brand       Client              @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  date        DateTime            @db.Date
-  platform    BrandSourcePlatform
-  accountId   String
-  campaignId  String?
-  adsetId     String?
-  adId        String?
-  currency    String
-  impressions BigInt
-  clicks      BigInt
-  spend       Decimal             @db.Decimal(18, 6)
-  conversions Decimal             @db.Decimal(18, 6)
-  revenue     Decimal             @db.Decimal(18, 6)
-  sessions    BigInt?
-  leads       BigInt?
+  id           String              @id @default(uuid())
+  tenantId     String
+  tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  brandId      String
+  brand        Client              @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  date         DateTime            @db.Date
+  platform     BrandSourcePlatform
+  accountId    String
+  campaignId   String?
+  adsetId      String?
+  adId         String?
+  dimensionKey String              @default("__all__")
+  currency     String
+  impressions  BigInt
+  clicks       BigInt
+  spend        Decimal             @db.Decimal(18, 6)
+  conversions  Decimal             @db.Decimal(18, 6)
+  revenue      Decimal             @db.Decimal(18, 6)
+  sessions     BigInt?
+  leads        BigInt?
 
+  @@unique([tenantId, brandId, platform, accountId, date, dimensionKey], map: "fact_kondor_metrics_daily_natural_key")
   @@index([tenantId, brandId, date])
   @@index([tenantId, brandId, platform, date])
+  @@index([tenantId, brandId, platform, accountId, date])
+  @@index([tenantId, brandId, platform, campaignId, date])
   @@map("fact_kondor_metrics_daily")
 }
 

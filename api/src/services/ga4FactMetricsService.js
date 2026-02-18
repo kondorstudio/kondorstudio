@@ -6,6 +6,7 @@ const {
 } = require('./brandGa4SettingsService');
 const { ensureBrandGa4Timezone } = require('./ga4BrandTimezoneService');
 const analyticsWarehouseService = require('./analyticsWarehouseService');
+const { upsertFactMetricsDailyRows } = require('./factMetricsRepository');
 const { acquireTenantBrandLock } = require('../lib/pgAdvisoryLock');
 const { rangeTouchesToday } = require('../lib/timezone');
 
@@ -825,7 +826,6 @@ async function ensureGa4FactMetrics({
         });
       }
 
-      const chunkSize = Math.max(100, Number(process.env.GA4_FACT_INSERT_CHUNK || 500));
       let skippedByPropertySwitch = false;
 
       await prisma.$transaction(
@@ -850,26 +850,7 @@ async function ensureGa4FactMetrics({
             return;
           }
 
-          await tx.factKondorMetricsDaily.deleteMany({
-            where: {
-              tenantId,
-              brandId,
-              platform: 'GA4',
-              accountId: propertyId,
-              campaignId: writingCampaignFacts ? { not: null } : null,
-              date: {
-                gte: new Date(dateRange.start),
-                lte: new Date(dateRange.end),
-              },
-            },
-          });
-
-          for (let i = 0; i < scopedFactRows.length; i += chunkSize) {
-            // eslint-disable-next-line no-await-in-loop
-            await tx.factKondorMetricsDaily.createMany({
-              data: scopedFactRows.slice(i, i + chunkSize),
-            });
-          }
+          await upsertFactMetricsDailyRows(scopedFactRows, { db: tx });
         },
         { timeout: FACT_WRITE_TX_TIMEOUT_MS, maxWait: 10_000 },
       );

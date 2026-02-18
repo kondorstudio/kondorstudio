@@ -22,8 +22,8 @@ function setupService({ hasFacts = true, metricsRows = [], fetchDelayMs = 0 } = 
   const calls = {
     fetch: 0,
     count: 0,
-    deleteMany: 0,
-    createManyRows: 0,
+    upsertCalls: 0,
+    upsertRows: 0,
   };
 
   const prisma = {
@@ -54,12 +54,6 @@ function setupService({ hasFacts = true, metricsRows = [], fetchDelayMs = 0 } = 
         calls.count += 1;
         return hasFacts ? 1 : 0;
       },
-      deleteMany: async () => {
-        calls.deleteMany += 1;
-      },
-      createMany: async ({ data }) => {
-        calls.createManyRows += Array.isArray(data) ? data.length : 0;
-      },
     },
   };
 
@@ -79,6 +73,13 @@ function setupService({ hasFacts = true, metricsRows = [], fetchDelayMs = 0 } = 
   });
   mockModule('../src/services/linkedinAdsMetricsService', {
     fetchAccountMetrics: async () => [],
+  });
+  mockModule('../src/services/factMetricsRepository', {
+    upsertFactMetricsDailyRows: async (rows) => {
+      calls.upsertCalls += 1;
+      calls.upsertRows += Array.isArray(rows) ? rows.length : 0;
+      return { ok: true, rows: Array.isArray(rows) ? rows.length : 0 };
+    },
   });
 
   resetModule('../src/services/factMetricsSyncService');
@@ -103,8 +104,8 @@ test('ensureFactMetrics skips provider fetch when historical range already has f
 
   assert.equal(calls.count, 1);
   assert.equal(calls.fetch, 0);
-  assert.equal(calls.deleteMany, 0);
-  assert.equal(calls.createManyRows, 0);
+  assert.equal(calls.upsertCalls, 0);
+  assert.equal(calls.upsertRows, 0);
 });
 
 test('ensureFactMetrics refreshes open range (today) even when facts already exist', async () => {
@@ -125,8 +126,8 @@ test('ensureFactMetrics refreshes open range (today) even when facts already exi
 
   assert.equal(calls.count, 1);
   assert.equal(calls.fetch, 1);
-  assert.equal(calls.deleteMany, 1);
-  assert.equal(calls.createManyRows, 1);
+  assert.equal(calls.upsertCalls, 1);
+  assert.equal(calls.upsertRows, 1);
 });
 
 test('ensureFactMetrics deduplicates concurrent sync for same connection/range', async () => {
@@ -154,6 +155,6 @@ test('ensureFactMetrics deduplicates concurrent sync for same connection/range',
 
   assert.equal(calls.count, 1);
   assert.equal(calls.fetch, 1);
-  assert.equal(calls.deleteMany, 1);
-  assert.equal(calls.createManyRows, 1);
+  assert.equal(calls.upsertCalls, 1);
+  assert.equal(calls.upsertRows, 1);
 });
