@@ -302,6 +302,7 @@ model Tenant {
   projects                       Project[]
   posts                          Post[]
   integrations                   Integration[]
+  credentialsVault               CredentialVault[]
   integrationGoogleGa4           IntegrationGoogleGa4[]
   integrationGoogleGa4Properties IntegrationGoogleGa4Property[]
   analyticsDashboards            AnalyticsDashboard[]
@@ -1448,6 +1449,7 @@ model Integration {
   integrationJobs       IntegrationJob[]
   dataSourceConnections DataSourceConnection[]
   metrics               Metric[]               @relation("IntegrationMetrics")
+  credentialsVault      CredentialVault[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1458,6 +1460,26 @@ model Integration {
   @@index([ownerType, ownerKey])
   @@index([clientId])
   @@map("integrations")
+}
+
+model CredentialVault {
+  id            String       @id @default(uuid())
+  secretRef     String       @unique
+  tenantId      String
+  tenant        Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  provider      String
+  integrationId String?
+  integration   Integration? @relation(fields: [integrationId], references: [id], onDelete: SetNull)
+  kind          String
+  secretEnc     String
+  meta          Json?
+  rotatedAt     DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([tenantId, provider, kind])
+  @@index([integrationId])
+  @@map("credential_vault")
 }
 
 model IntegrationJob {

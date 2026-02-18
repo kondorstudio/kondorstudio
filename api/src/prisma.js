@@ -11,6 +11,7 @@
 //  - exporta $raw / $executeRaw para consultas arbitrárias quando necessário
 
 const { PrismaClient } = require('@prisma/client');
+const { assertNoLooseCredentials } = require('./lib/credentialGuard');
 
 const DEFAULT_PRISMA_CONNECTION_LIMIT = Math.max(
   1,
@@ -78,6 +79,50 @@ const prisma = new PrismaClient({
     .split(',')
     .map((l) => l.trim())
     .filter(Boolean),
+});
+
+function extractJsonValue(value) {
+  if (
+    value &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    Object.prototype.hasOwnProperty.call(value, 'set') &&
+    Object.keys(value).length === 1
+  ) {
+    return value.set;
+  }
+  return value;
+}
+
+function validateIntegrationDataPayload(data, contextLabel) {
+  if (!data || typeof data !== 'object') return;
+  const settings = extractJsonValue(data.settings);
+  const config = extractJsonValue(data.config);
+  if (settings !== undefined) {
+    assertNoLooseCredentials(settings, `${contextLabel}.settings`);
+  }
+  if (config !== undefined) {
+    assertNoLooseCredentials(config, `${contextLabel}.config`);
+  }
+}
+
+prisma.$use(async (params, next) => {
+  if (params?.model === 'Integration' && params?.args?.data) {
+    const action = String(params.action || '').toLowerCase();
+    const label = `integration.${action || 'write'}`;
+
+    if (action === 'upsert') {
+      validateIntegrationDataPayload(params.args.create, `${label}.create`);
+      validateIntegrationDataPayload(params.args.update, `${label}.update`);
+    } else if (action === 'createmany' && Array.isArray(params.args.data)) {
+      params.args.data.forEach((item, index) => {
+        validateIntegrationDataPayload(item, `${label}.data[${index}]`);
+      });
+    } else {
+      validateIntegrationDataPayload(params.args.data, `${label}.data`);
+    }
+  }
+  return next(params);
 });
 
 // Graceful shutdown para evitar conexões pendentes em serverless/containers
@@ -259,6 +304,7 @@ function useTenant(tenantId) {
     'report',
     'upload',
     'integration',
+    'credentialVault',
     'integrationJob',
     'integrationGoogleGa4',
     'integrationGoogleGa4Property',

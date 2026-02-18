@@ -8,7 +8,7 @@ const {
   getIntegrationConfig,
 } = require('../modules/reporting/providers/providerUtils');
 const httpClient = require('../lib/httpClient');
-const rawApiResponseService = require('./rawApiResponseService');
+const rawStoreService = require('./rawStoreService');
 
 function safeLog(...args) {
   if (process.env.NODE_ENV === 'test') return;
@@ -269,7 +269,7 @@ async function fetchAccountMetrics(integration, options = {}) {
       },
     );
     const json = response.data || {};
-    await rawApiResponseService.appendRawApiResponse({
+    await rawStoreService.appendRawApiResponse({
       tenantId: integration?.tenantId || null,
       brandId: integration?.clientId || null,
       provider: 'LINKEDIN_ADS',
@@ -321,7 +321,7 @@ async function fetchAccountMetrics(integration, options = {}) {
       }
       return { error: err?.message || String(err) };
     })();
-    await rawApiResponseService.appendRawApiResponse({
+    await rawStoreService.appendRawApiResponse({
       tenantId: integration?.tenantId || null,
       brandId: integration?.clientId || null,
       provider: 'LINKEDIN_ADS',

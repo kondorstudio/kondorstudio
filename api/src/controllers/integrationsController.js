@@ -31,7 +31,7 @@ module.exports = {
       return res.json(integration);
     } catch (err) {
       console.error('Error creating integration:', err);
-      return res.status(500).json({ error: 'server error' });
+      return res.status(err?.status || 500).json({ error: err?.message || 'server error' });
     }
   },
 
@@ -57,7 +57,7 @@ module.exports = {
       return res.json(updated);
     } catch (err) {
       console.error('Error updating integration:', err);
-      return res.status(500).json({ error: 'server error' });
+      return res.status(err?.status || 500).json({ error: err?.message || 'server error' });
     }
   },
 
@@ -84,7 +84,7 @@ module.exports = {
       return res.json(integration);
     } catch (err) {
       console.error('Error connecting client integration:', err);
-      return res.status(400).json({ error: err.message || 'Erro ao conectar integração' });
+      return res.status(err?.status || 400).json({ error: err?.message || 'Erro ao conectar integração' });
     }
   },
 
@@ -97,6 +97,23 @@ module.exports = {
     } catch (err) {
       console.error('Error disconnecting integration:', err);
       return res.status(500).json({ error: 'server error' });
+    }
+  },
+
+  async storeCredential(req, res) {
+    try {
+      const id = req.params.id;
+      const result = await integrationsService.storeCredentialRef(
+        req.tenantId,
+        id,
+        req.body || {},
+      );
+      if (!result) return res.status(404).json({ error: 'integration not found' });
+      return res.json(result);
+    } catch (err) {
+      console.error('Error storing integration credential:', err);
+      const status = err?.status || 500;
+      return res.status(status).json({ error: err?.message || 'server error' });
     }
   },
 };

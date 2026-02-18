@@ -3,6 +3,7 @@
 
 const { prisma } = require('../prisma');
 const connectionStateService = require('./connectionStateService');
+const credentialsService = require('./credentialsService');
 
 function toDateOrNull(v) {
   if (!v && v !== 0) return null;
@@ -67,6 +68,22 @@ function sanitizeIntegrationResponse(record) {
     cloned.config = nextConfig;
   }
   return cloned;
+}
+
+function normalizeObject(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return { ...value };
+}
+
+function mergeCredentialRefIntoConfig(config, kind, secretRef) {
+  const nextConfig = normalizeObject(config);
+  const refs = normalizeObject(nextConfig.credentialsRefs);
+  refs[String(kind || 'default')] = String(secretRef);
+  nextConfig.credentialsRefs = refs;
+  if (!nextConfig.credentialRef) {
+    nextConfig.credentialRef = String(secretRef);
+  }
+  return nextConfig;
 }
 
 function buildStatePayloadFromIntegration(record, overrides = {}) {
@@ -252,7 +269,24 @@ module.exports = {
       clientId: owner.clientId,
     };
 
-    const created = await prisma.integration.create({ data: payload });
+    let created = await prisma.integration.create({ data: payload });
+
+    if (data.credentials !== undefined) {
+      const kind = String(data.credentialKind || data.kind || 'default');
+      const stored = await credentialsService.storeCredential({
+        tenantId,
+        provider: created.provider,
+        integrationId: created.id,
+        kind,
+        secret: data.credentials,
+      });
+      const nextConfig = mergeCredentialRefIntoConfig(created.config, kind, stored.secretRef);
+      created = await prisma.integration.update({
+        where: { id: created.id },
+        data: { config: nextConfig },
+      });
+    }
+
     await syncConnectionState(created);
     return sanitizeIntegrationResponse(created);
   },
@@ -292,7 +326,28 @@ module.exports = {
       updateData.clientId = owner.clientId;
     }
 
-    const updated = await prisma.integration.update({ where: { id }, data: updateData });
+    if (data.config !== undefined) {
+      updateData.config = data.config;
+    }
+
+    let updated = await prisma.integration.update({ where: { id }, data: updateData });
+
+    if (data.credentials !== undefined) {
+      const kind = String(data.credentialKind || data.kind || 'default');
+      const stored = await credentialsService.storeCredential({
+        tenantId,
+        provider: existing.provider,
+        integrationId: existing.id,
+        kind,
+        secret: data.credentials,
+      });
+      const nextConfig = mergeCredentialRefIntoConfig(updated.config, kind, stored.secretRef);
+      updated = await prisma.integration.update({
+        where: { id },
+        data: { config: nextConfig },
+      });
+    }
+
     await syncConnectionState(updated);
     const [withState] = await attachConnectionState([updated]);
     return sanitizeIntegrationResponse(withState);
@@ -339,9 +394,61 @@ module.exports = {
       clientId: owner.clientId,
     };
 
-    const created = await prisma.integration.create({ data: payload });
+    let created = await prisma.integration.create({ data: payload });
+
+    if (data.credentials !== undefined) {
+      const kind = String(data.credentialKind || data.kind || 'default');
+      const stored = await credentialsService.storeCredential({
+        tenantId,
+        provider,
+        integrationId: created.id,
+        kind,
+        secret: data.credentials,
+      });
+      const nextConfig = mergeCredentialRefIntoConfig(created.config, kind, stored.secretRef);
+      created = await prisma.integration.update({
+        where: { id: created.id },
+        data: { config: nextConfig },
+      });
+    }
+
     await syncConnectionState(created);
     return sanitizeIntegrationResponse(created);
+  },
+
+  async storeCredentialRef(tenantId, integrationId, data = {}) {
+    const integration = await ensureIntegrationBelongsToTenant(tenantId, integrationId);
+    if (!integration) return null;
+
+    const secret = data.secret !== undefined ? data.secret : data.credentials;
+    if (secret === undefined) {
+      const err = new Error('secret is required');
+      err.code = 'CREDENTIAL_SECRET_REQUIRED';
+      err.status = 400;
+      throw err;
+    }
+
+    const kind = String(data.kind || 'default');
+    const stored = await credentialsService.storeCredential({
+      tenantId,
+      provider: integration.provider,
+      integrationId: integration.id,
+      kind,
+      secret,
+      meta: data.meta || null,
+    });
+
+    const nextConfig = mergeCredentialRefIntoConfig(integration.config, kind, stored.secretRef);
+    const updated = await prisma.integration.update({
+      where: { id: integration.id },
+      data: { config: nextConfig },
+    });
+
+    return {
+      integration: sanitizeIntegrationResponse(updated),
+      kind,
+      secretRef: stored.secretRef,
+    };
   },
 
   async disconnect(tenantId, id) {

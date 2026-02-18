@@ -254,5 +254,6 @@ router.get('/:id', integrationsController.getById);
 router.put('/:id', integrationsController.update);
 router.delete('/:id', integrationsController.remove);
 router.post('/:id/disconnect', integrationsController.disconnect);
+router.post('/:id/credentials', integrationsController.storeCredential);
 
 module.exports = router;

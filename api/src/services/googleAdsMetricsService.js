@@ -30,7 +30,7 @@
 // - Se o campo "metrics.cost_micros" for retornado, ele será convertido para valor monetário
 //   (cost_micros / 1_000_000) e exposto como "spend".
 
-const rawApiResponseService = require('./rawApiResponseService');
+const rawStoreService = require('./rawStoreService');
 const httpClient = require('../lib/httpClient');
 
 function safeLog(...args) {
@@ -290,7 +290,7 @@ async function fetchAccountMetrics(integration, options = {}) {
       },
     );
     const json = response.data || {};
-    await rawApiResponseService.appendRawApiResponse({
+    await rawStoreService.appendRawApiResponse({
       tenantId: integration?.tenantId || null,
       brandId: integration?.clientId || null,
       provider: 'GOOGLE_ADS',
@@ -399,7 +399,7 @@ async function fetchAccountMetrics(integration, options = {}) {
       }
       return { error: err?.message || String(err) };
     })();
-    await rawApiResponseService.appendRawApiResponse({
+    await rawStoreService.appendRawApiResponse({
       tenantId: integration?.tenantId || null,
       brandId: integration?.clientId || null,
       provider: 'GOOGLE_ADS',

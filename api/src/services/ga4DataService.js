@@ -5,7 +5,7 @@ const ga4MetadataService = require('./ga4MetadataService');
 const ga4QuotaCache = require('./ga4QuotaCacheService');
 const ga4DbCache = require('./ga4DbCacheService');
 const ga4ApiCallLogService = require('./ga4ApiCallLogService');
-const rawApiResponseService = require('./rawApiResponseService');
+const rawStoreService = require('./rawStoreService');
 const {
   executeWithReliability,
   defaultClassifyError,
@@ -219,7 +219,7 @@ async function appendGa4RawResponse({
   cursor,
 }) {
   try {
-    await rawApiResponseService.appendRawApiResponse({
+    await rawStoreService.appendRawApiResponse({
       tenantId,
       provider: 'GA4',
       connectionId: propertyId ? String(propertyId) : null,

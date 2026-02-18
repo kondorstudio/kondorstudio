@@ -1,5 +1,5 @@
 const { prisma } = require('../prisma');
-const rawApiResponseService = require('../services/rawApiResponseService');
+const rawStoreService = require('../services/rawStoreService');
 
 function safeLog(...args) {
   if (process.env.NODE_ENV === 'test') return;
@@ -30,7 +30,7 @@ async function pollOnce() {
     callsDeleted = result.count || 0;
   }
 
-  const rawPrune = await rawApiResponseService.purgeExpiredRawApiResponses();
+  const rawPrune = await rawStoreService.purgeExpiredRawApiResponses();
   rawDeleted = rawPrune?.deleted ?? 0;
 
   safeLog('prune completed', { cacheDeleted, callsDeleted, rawDeleted, retentionDays });

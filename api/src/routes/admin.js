@@ -1429,7 +1429,9 @@ router.patch('/integrations/:id', requireAdminPermission('integrations.write'), 
     return res.json({ integration: updated });
   } catch (error) {
     console.error('[ADMIN] PATCH /integrations/:id error', error);
-    return res.status(500).json({ error: 'Erro ao atualizar integração' });
+    return res
+      .status(error?.status || 500)
+      .json({ error: error?.message || 'Erro ao atualizar integração' });
   }
 });
 
