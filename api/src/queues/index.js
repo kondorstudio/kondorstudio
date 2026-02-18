@@ -3,6 +3,9 @@ const { Queue } = require('bullmq');
 const Redis = require('ioredis');
 
 const redisDisabled = process.env.REDIS_DISABLED === 'true' || process.env.NODE_ENV === 'test';
+const BULLMQ_PREFIX =
+  process.env.BULLMQ_PREFIX ||
+  `kondor:${String(process.env.NODE_ENV || 'development').trim().toLowerCase()}`;
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 const connection = redisDisabled
@@ -18,7 +21,13 @@ if (connection) {
   });
 }
 
-const createQueue = (name) => (redisDisabled ? null : new Queue(name, { connection }));
+const createQueue = (name) =>
+  redisDisabled
+    ? null
+    : new Queue(name, {
+        connection,
+        prefix: BULLMQ_PREFIX,
+      });
 
 // Filas principais do sistema
 const metricsSyncQueue = createQueue('metrics-sync');
@@ -39,4 +48,5 @@ module.exports = {
   dashboardRefreshQueue,
   reportScheduleQueue,
   ga4SyncQueue,
+  BULLMQ_PREFIX,
 };

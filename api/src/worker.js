@@ -11,6 +11,7 @@ const {
   dashboardRefreshQueue,
   reportScheduleQueue,
   ga4SyncQueue,
+  BULLMQ_PREFIX,
 } = require('./queues');
 const { prisma } = require('./prisma');
 const emailService = require('./services/emailService');
@@ -38,6 +39,10 @@ const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 const connection = new Redis(REDIS_URL, {
   maxRetriesPerRequest: null,
 });
+const workerOptions = {
+  connection,
+  prefix: BULLMQ_PREFIX,
+};
 
 // Períodos de agendamento (ms)
 const METRICS_AGG_PERIOD_MS = Number(process.env.METRICS_AGG_PERIOD_MS) || 3600000; // 1h
@@ -103,7 +108,7 @@ const metricsWorker = metricsSyncQueue
         await runPollOnce(updateMetricsJob, 'updateMetricsJob');
         await runPollOnce(refreshMetaTokensJob, 'refreshMetaTokensJob');
       },
-      { connection },
+      workerOptions,
     )
   : null;
 
@@ -114,7 +119,7 @@ const reportsWorker = reportsQueue
         console.log('[reports] processing job', job.id, job.name);
         await runPollOnce(reportGenerationJob, 'reportGenerationJob');
       },
-      { connection },
+      workerOptions,
     )
   : null;
 
@@ -125,7 +130,7 @@ const reportGenerateWorker = reportGenerateQueue
         console.log('[reporting] processing job', job.id, job.name);
         await reportingGenerateJob.processJob(job.data || {});
       },
-      { connection },
+      workerOptions,
     )
   : null;
 
@@ -136,7 +141,7 @@ const dashboardRefreshWorker = dashboardRefreshQueue
         console.log('[dashboardRefresh] processing job', job.id, job.name);
         await dashboardRefreshJob.processJob(job.data || {});
       },
-      { connection },
+      workerOptions,
     )
   : null;
 
@@ -147,7 +152,7 @@ const reportScheduleWorker = reportScheduleQueue
         console.log('[reportSchedule] processing job', job.id, job.name);
         await reportScheduleJob.processJob(job.data || {});
       },
-      { connection },
+      workerOptions,
     )
   : null;
 
@@ -166,7 +171,7 @@ const whatsappWorker = whatsappQueue
         console.log('[whatsapp] processing job', job.id, job.name);
         await runPollOnce(automationWhatsAppJob, 'automationWhatsAppJob');
       },
-      { connection },
+      workerOptions,
     )
   : null;
 
@@ -177,7 +182,7 @@ const publishingWorker = publishingQueue
         console.log('[publish] processing job', job.id, job.name);
         await runPublishPoll();
       },
-      { connection },
+      workerOptions,
     )
   : null;
 
@@ -214,7 +219,7 @@ const ga4SyncWorker = ga4SyncQueue
         // Fallback for unexpected scheduler ids.
         await runPollOnce(ga4FactSyncJob, 'ga4FactSyncJob');
       },
-      { connection },
+      workerOptions,
     )
   : null;
 
