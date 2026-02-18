@@ -14,26 +14,89 @@ function normalizeValue(value) {
   return JSON.stringify(value, null, 2);
 }
 
-function buildSettings(fields, formData, kind) {
-  const settings = { kind };
-  fields.forEach((field) => {
-    let value = formData[field.name];
-    if (typeof value === "string") value = value.trim();
-    if (!value) return;
+const SENSITIVE_FIELD_NAMES = new Set([
+  "accessToken",
+  "refreshToken",
+  "token",
+  "apiKey",
+  "appSecret",
+  "clientSecret",
+  "serviceAccountJson",
+  "verifyToken",
+  "password",
+  "secret",
+  "privateKey",
+  "developerToken",
+]);
 
-    if (field.format === "json") {
-      try {
-        settings[field.name] = JSON.parse(value);
-        return;
-      } catch (_) {
-        settings[field.name] = value;
-        return;
-      }
+function isCredentialField(field) {
+  if (!field) return false;
+  if (field.secret === true) return true;
+  if (field.type === "password") return true;
+  return SENSITIVE_FIELD_NAMES.has(String(field.name || ""));
+}
+
+function parseFieldValue(field, formData) {
+  let value = formData[field.name];
+  if (typeof value === "string") value = value.trim();
+  if (!value) return null;
+
+  if (field.format === "json") {
+    try {
+      return JSON.parse(value);
+    } catch (_) {
+      return value;
+    }
+  }
+
+  return value;
+}
+
+function buildSettingsAndCredentials(fields, formData, kind) {
+  const settings = { kind };
+  const credentials = [];
+  fields.forEach((field) => {
+    const parsedValue = parseFieldValue(field, formData);
+    if (parsedValue === null || parsedValue === undefined) return;
+
+    if (isCredentialField(field)) {
+      credentials.push({
+        kind: String(field.name || "default"),
+        secret: parsedValue,
+      });
+      return;
     }
 
-    settings[field.name] = value;
+    settings[field.name] = parsedValue;
   });
-  return settings;
+  return { settings, credentials };
+}
+
+function resolveCredentialRef(integration, fieldName) {
+  const config =
+    integration?.config && typeof integration.config === "object" && !Array.isArray(integration.config)
+      ? integration.config
+      : {};
+  const refs =
+    config.credentialsRefs && typeof config.credentialsRefs === "object" && !Array.isArray(config.credentialsRefs)
+      ? config.credentialsRefs
+      : {};
+  return refs[fieldName] || refs.default || config.credentialRef || "";
+}
+
+async function persistCredentials(integrationId, credentials = []) {
+  const refs = {};
+  for (const credential of credentials) {
+    const response = await base44.jsonFetch(`/integrations/${integrationId}/credentials`, {
+      method: "POST",
+      body: JSON.stringify({
+        kind: credential.kind,
+        secret: credential.secret,
+      }),
+    });
+    refs[credential.kind] = response?.secretRef || "";
+  }
+  return refs;
 }
 
 function buildClientOwnerKey(clientId, definition) {
@@ -79,6 +142,10 @@ export default function IntegrationConnectDialog({
   const initialValues = useMemo(() => {
     const base = {};
     fields.forEach((field) => {
+      if (isCredentialField(field)) {
+        base[field.name] = "";
+        return;
+      }
       base[field.name] = normalizeValue(effectiveExisting?.settings?.[field.name] ?? "");
     });
     return base;
@@ -179,45 +246,56 @@ export default function IntegrationConnectDialog({
   const connectMutation = useMutation({
     mutationFn: async () => {
       if (!definition) throw new Error("Integração inválida.");
-      const settings = buildSettings(fields, formData, definition.kind);
+      const { settings, credentials } = buildSettingsAndCredentials(fields, formData, definition.kind);
+      let integration = null;
       if (isClientScope) {
         if (!selectedClientId) {
           throw new Error("Selecione um cliente antes de salvar.");
         }
         if (effectiveExisting?.id) {
-          return base44.entities.Integration.update(effectiveExisting.id, {
+          integration = await base44.entities.Integration.update(effectiveExisting.id, {
             status: "CONNECTED",
             settings,
           });
+        } else {
+          integration = await base44.jsonFetch(
+            `/integrations/clients/${selectedClientId}/integrations/${definition.provider}/connect`,
+            {
+              method: "POST",
+              body: JSON.stringify({
+                providerName: definition.title,
+                status: "CONNECTED",
+                settings,
+                ownerKey: buildClientOwnerKey(selectedClientId, definition),
+              }),
+            }
+          );
         }
-        return base44.jsonFetch(
-          `/integrations/clients/${selectedClientId}/integrations/${definition.provider}/connect`,
-          {
-            method: "POST",
-            body: JSON.stringify({
-              providerName: definition.title,
-              status: "CONNECTED",
-              settings,
-              ownerKey: buildClientOwnerKey(selectedClientId, definition),
-            }),
-          }
-        );
-      }
-
-      if (existing?.id) {
-        return base44.entities.Integration.update(existing.id, {
+      } else if (existing?.id) {
+        integration = await base44.entities.Integration.update(existing.id, {
+          status: "CONNECTED",
+          settings,
+        });
+      } else {
+        integration = await base44.entities.Integration.create({
+          provider: definition.provider,
+          providerName: definition.title,
+          ownerType: "AGENCY",
+          ownerKey: definition.ownerKey,
           status: "CONNECTED",
           settings,
         });
       }
-      return base44.entities.Integration.create({
-        provider: definition.provider,
-        providerName: definition.title,
-        ownerType: "AGENCY",
-        ownerKey: definition.ownerKey,
-        status: "CONNECTED",
-        settings,
-      });
+
+      if (!integration?.id) {
+        throw new Error("Resposta inválida ao salvar integração.");
+      }
+
+      if (credentials.length > 0) {
+        await persistCredentials(integration.id, credentials);
+      }
+
+      return integration;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["integrations"] });
@@ -493,60 +571,64 @@ export default function IntegrationConnectDialog({
               </div>
             ) : null}
 
-            {fields.map((field) => (
-              <div key={field.name} className="space-y-2">
-                <Label>{field.label}</Label>
-                {field.type === "textarea" ? (
-                  <Textarea
-                    rows={field.rows || 6}
-                    value={formData[field.name] || ""}
-                    onChange={(event) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        [field.name]: event.target.value,
-                      }))
-                    }
-                    placeholder={field.placeholder}
-                    required={field.required}
-                  />
-                ) : (
-                  <Input
-                    type={field.type || "text"}
-                    value={formData[field.name] || ""}
-                    onChange={(event) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        [field.name]: event.target.value,
-                      }))
-                    }
-                    placeholder={field.placeholder}
-                    required={
-                      field.required &&
-                      !(
-                        isMetaProvider &&
-                        hasMetaOauthConnection &&
-                        field.name === "accessToken"
-                      )
-                    }
-                    disabled={
-                      isMetaProvider &&
-                      hasMetaOauthConnection &&
-                      field.name === "accessToken"
-                    }
-                  />
-                )}
-                {field.helper ? (
-                  <p className="text-[11px] text-gray-500">{field.helper}</p>
-                ) : null}
-                {isMetaProvider &&
-                hasMetaOauthConnection &&
-                field.name === "accessToken" ? (
-                  <p className="text-[11px] text-emerald-700">
-                    Conectado via Meta. O token já foi salvo automaticamente.
-                  </p>
-                ) : null}
-              </div>
-            ))}
+            {fields.map((field) => {
+              const isSecretField = isCredentialField(field);
+              const hasStoredCredential =
+                isSecretField && Boolean(resolveCredentialRef(effectiveExisting, field.name));
+              const shouldDisableMetaToken =
+                isMetaProvider && hasMetaOauthConnection && field.name === "accessToken";
+              const isRequired =
+                Boolean(field.required) && !shouldDisableMetaToken && !hasStoredCredential;
+
+              return (
+                <div key={field.name} className="space-y-2">
+                  <Label>{field.label}</Label>
+                  {field.type === "textarea" ? (
+                    <Textarea
+                      rows={field.rows || 6}
+                      value={formData[field.name] || ""}
+                      onChange={(event) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          [field.name]: event.target.value,
+                        }))
+                      }
+                      placeholder={field.placeholder}
+                      required={isRequired}
+                    />
+                  ) : (
+                    <Input
+                      type={field.type || "text"}
+                      value={formData[field.name] || ""}
+                      onChange={(event) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          [field.name]: event.target.value,
+                        }))
+                      }
+                      placeholder={field.placeholder}
+                      required={isRequired}
+                      disabled={shouldDisableMetaToken}
+                    />
+                  )}
+                  {field.helper ? (
+                    <p className="text-[11px] text-gray-500">{field.helper}</p>
+                  ) : null}
+                  {isSecretField && hasStoredCredential ? (
+                    <p className="text-[11px] text-emerald-700">
+                      Credencial protegida já salva. Preencha apenas se quiser atualizar.
+                    </p>
+                  ) : null}
+                  {isMetaProvider &&
+                  hasMetaOauthConnection &&
+                  field.name === "accessToken" ? (
+                    <p className="text-[11px] text-emerald-700">
+                      Conectado via Meta. O token já foi salvo automaticamente.
+                    </p>
+                  ) : null}
+                </div>
+              );
+            })}
 
             <div className="flex flex-wrap justify-end gap-3 pt-2">
               <Button
