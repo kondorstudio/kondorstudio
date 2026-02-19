@@ -447,6 +447,18 @@ export default function Integrations() {
   const location = useLocation();
   const queryClient = useQueryClient();
   const integrationTileRefs = React.useRef({});
+  const routeClientId = useMemo(() => {
+    const params = new URLSearchParams(location.search || "");
+    return params.get("clientId") || params.get("brandId") || "";
+  }, [location.search]);
+
+  const buildGa4Path = useMemo(() => {
+    const candidateClientId = selectedClientId || initialClientId || routeClientId;
+    const query = candidateClientId
+      ? `?clientId=${encodeURIComponent(candidateClientId)}`
+      : "";
+    return `/integrations/ga4${query}`;
+  }, [initialClientId, routeClientId, selectedClientId]);
 
   const {
     data: integrations = [],
@@ -738,7 +750,7 @@ export default function Integrations() {
                       }
                       onConnect={() => {
                         if (integration.key === "google-analytics") {
-                          navigate("/integrations/ga4");
+                          navigate(buildGa4Path);
                           return;
                         }
                         setActiveKey(integration.key);
@@ -866,7 +878,7 @@ export default function Integrations() {
                       disabled={!selectedClientId && !isSoon}
                       onConnect={() => {
                         if (integration.key === "google-analytics") {
-                          navigate("/integrations/ga4");
+                          navigate(buildGa4Path);
                           return;
                         }
                         if (isSoon) {

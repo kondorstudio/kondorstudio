@@ -33,6 +33,10 @@ export default function Ga4IntegrationPage() {
   const [reauthNotice, setReauthNotice] = useState("");
   const [demoData, setDemoData] = useState(null);
   const [demoError, setDemoError] = useState("");
+  const [brandBindingError, setBrandBindingError] = useState("");
+  const [brandBindingNotice, setBrandBindingNotice] = useState("");
+  const scopedBrandId =
+    queryParams.get("clientId") || queryParams.get("brandId") || "";
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["ga4-status"],
@@ -91,8 +95,31 @@ export default function Ga4IntegrationPage() {
   });
 
   const selectMutation = useMutation({
-    mutationFn: (propertyId) => base44.ga4.selectProperty(propertyId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["ga4-status"] }),
+    mutationFn: async (propertyId) => {
+      const selected = await base44.ga4.selectProperty(propertyId);
+      if (scopedBrandId) {
+        await base44.ga4.upsertBrandSettings({
+          brandId: scopedBrandId,
+          propertyId,
+        });
+      }
+      return selected;
+    },
+    onSuccess: () => {
+      setBrandBindingError("");
+      if (scopedBrandId) {
+        setBrandBindingNotice("Propriedade GA4 vinculada à marca para relatórios.");
+      }
+      queryClient.invalidateQueries({ queryKey: ["ga4-status"] });
+    },
+    onError: (err) => {
+      const message =
+        err?.data?.error ||
+        err?.message ||
+        "Falha ao selecionar propriedade.";
+      setBrandBindingError(message);
+      setBrandBindingNotice("");
+    },
   });
 
   const disconnectMutation = useMutation({
@@ -309,6 +336,17 @@ export default function Ga4IntegrationPage() {
                 </Button>
                 {syncError ? (
                   <p className="text-xs text-rose-600">{syncError}</p>
+                ) : null}
+                {brandBindingError ? (
+                  <p className="text-xs text-rose-600">{brandBindingError}</p>
+                ) : null}
+                {brandBindingNotice ? (
+                  <p className="text-xs text-emerald-700">{brandBindingNotice}</p>
+                ) : null}
+                {scopedBrandId ? (
+                  <p className="text-xs text-[var(--text-muted)]">
+                    Marca alvo: {scopedBrandId}
+                  </p>
                 ) : null}
                 {properties.length ? (
                   <div className="flex flex-col gap-3">

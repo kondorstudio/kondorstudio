@@ -308,6 +308,22 @@ async function setBrandGa4ActiveProperty(
   return runner(async (tx) => {
     await acquireTenantBrandLock(tx, tenantId, brandId);
 
+    const propertyRecord = await tx.integrationGoogleGa4Property.findFirst({
+      where: {
+        tenantId: String(tenantId),
+        propertyId: String(normalizedPropertyId),
+      },
+      select: {
+        integrationId: true,
+        displayName: true,
+        integration: {
+          select: {
+            userId: true,
+          },
+        },
+      },
+    });
+
     const existingConnections = await tx.brandSourceConnection.findMany({
       where: {
         tenantId: String(tenantId),
@@ -333,15 +349,7 @@ async function setBrandGa4ActiveProperty(
 
     // If the brand has never linked this property, create a GA4 connection row for it.
     if (!target) {
-      const prop = await tx.integrationGoogleGa4Property.findFirst({
-        where: {
-          tenantId: String(tenantId),
-          propertyId: String(normalizedPropertyId),
-        },
-        select: { displayName: true },
-      });
-
-      if (!prop) {
+      if (!propertyRecord) {
         const err = new Error('Propriedade GA4 não encontrada para este tenant');
         err.code = 'GA4_PROPERTY_NOT_AVAILABLE';
         err.status = 400;
@@ -349,7 +357,9 @@ async function setBrandGa4ActiveProperty(
         throw err;
       }
 
-      const displayName = prop?.displayName ? String(prop.displayName) : null;
+      const displayName = propertyRecord?.displayName
+        ? String(propertyRecord.displayName)
+        : null;
       const resolvedName = nameOverride || displayName || `Property ${normalizedPropertyId}`;
 
       target = await tx.brandSourceConnection.create({
@@ -387,6 +397,72 @@ async function setBrandGa4ActiveProperty(
       },
       data: { status: 'DISCONNECTED' },
     });
+
+    if (tx.dataSourceConnection) {
+      const ga4Meta = {
+        propertyId: String(normalizedPropertyId),
+        ga4IntegrationId: propertyRecord?.integrationId
+          ? String(propertyRecord.integrationId)
+          : null,
+        ga4UserId: propertyRecord?.integration?.userId
+          ? String(propertyRecord.integration.userId)
+          : null,
+      };
+      const ga4DisplayName =
+        nameOverride ||
+        target.externalAccountName ||
+        propertyRecord?.displayName ||
+        `Property ${normalizedPropertyId}`;
+
+      const existingGa4DataConnection = await tx.dataSourceConnection.findFirst({
+        where: {
+          tenantId: String(tenantId),
+          brandId: String(brandId),
+          source: 'GA4',
+          externalAccountId: String(normalizedPropertyId),
+        },
+        select: { id: true },
+      });
+
+      let activeGa4DataConnectionId = null;
+      if (existingGa4DataConnection?.id) {
+        const updated = await tx.dataSourceConnection.update({
+          where: { id: existingGa4DataConnection.id },
+          data: {
+            integrationId: null,
+            displayName: String(ga4DisplayName),
+            status: 'CONNECTED',
+            meta: ga4Meta,
+          },
+        });
+        activeGa4DataConnectionId = updated.id;
+      } else {
+        const created = await tx.dataSourceConnection.create({
+          data: {
+            tenantId: String(tenantId),
+            brandId: String(brandId),
+            source: 'GA4',
+            integrationId: null,
+            externalAccountId: String(normalizedPropertyId),
+            displayName: String(ga4DisplayName),
+            status: 'CONNECTED',
+            meta: ga4Meta,
+          },
+        });
+        activeGa4DataConnectionId = created.id;
+      }
+
+      await tx.dataSourceConnection.updateMany({
+        where: {
+          tenantId: String(tenantId),
+          brandId: String(brandId),
+          source: 'GA4',
+          status: 'CONNECTED',
+          id: { not: activeGa4DataConnectionId },
+        },
+        data: { status: 'DISCONNECTED' },
+      });
+    }
 
     if (tx.factKondorMetricsDaily) {
       await tx.factKondorMetricsDaily.deleteMany({
