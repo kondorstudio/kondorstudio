@@ -1422,6 +1422,26 @@ const Admin = {
     return jsonFetch(`/admin/jobs${qs}`, { method: "GET" });
   },
 
+  async syncSummary(params = {}) {
+    const qs = buildQuery(params);
+    return jsonFetch(`/admin/observability/sync/summary${qs}`, { method: "GET" });
+  },
+
+  async syncRuns(params = {}) {
+    const qs = buildQuery(params);
+    return jsonFetch(`/admin/observability/sync/runs${qs}`, { method: "GET" });
+  },
+
+  async syncRun(id) {
+    if (!id) throw new Error("runId é obrigatório");
+    return jsonFetch(`/admin/observability/sync/runs/${id}`, { method: "GET" });
+  },
+
+  async credentialsCompliance(params = {}) {
+    const qs = buildQuery(params);
+    return jsonFetch(`/admin/compliance/credentials${qs}`, { method: "GET" });
+  },
+
   async impersonate(userId) {
     if (!userId) throw new Error("userId é obrigatório");
     return jsonFetch(`/admin/impersonate`, {

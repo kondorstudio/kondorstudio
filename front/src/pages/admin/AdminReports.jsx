@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/apiClient/base44Client";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card.jsx";
 import { Badge } from "@/components/ui/badge.jsx";
-import { Activity, Building2, Users, CreditCard, Plug } from "lucide-react";
+import { Activity, Building2, Users, CreditCard, Plug, ShieldAlert } from "lucide-react";
 
 function formatCurrency(value) {
   if (typeof value !== "number") return "—";
@@ -20,10 +20,18 @@ export default function AdminReports() {
     queryFn: () => base44.admin.overview(),
   });
 
+  const { data: complianceData, isLoading: complianceLoading } = useQuery({
+    queryKey: ["admin-credentials-compliance"],
+    queryFn: () => base44.admin.credentialsCompliance({ sampleSize: 10 }),
+  });
+
   const tenants = data?.overview?.tenants || {};
   const users = data?.overview?.usuarios || {};
   const billing = data?.overview?.billing || {};
   const integrations = data?.overview?.integrations || {};
+
+  const complianceTotals = complianceData?.totals || {};
+  const exposedSamples = complianceData?.samples?.exposedIntegrations || [];
 
   const cards = [
     {
@@ -58,13 +66,32 @@ export default function AdminReports() {
     },
   ];
 
+  const complianceCards = [
+    {
+      label: "Vault entries",
+      value: complianceTotals.vaultEntries,
+    },
+    {
+      label: "Integracoes expostas",
+      value: complianceTotals.integrationsExposed,
+    },
+    {
+      label: "Com credentialRef",
+      value: complianceTotals.integrationsWithCredentialRef,
+    },
+    {
+      label: "Raw columns",
+      value: complianceTotals.rawColumns,
+    },
+  ];
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
         <p className="text-sm uppercase tracking-wide text-gray-500">Relatórios</p>
         <h1 className="text-3xl font-bold text-gray-900">Métricas executivas</h1>
         <p className="text-gray-600">
-          Resumo consolidado de usuarios, faturamento e integracoes.
+          Resumo consolidado de usuarios, faturamento, integracoes e compliance.
         </p>
       </div>
 
@@ -84,14 +111,76 @@ export default function AdminReports() {
               </CardHeader>
               <CardContent>
                 <p className="text-3xl font-semibold text-gray-900">{value}</p>
-                <p className="text-xs text-gray-500 mt-1">
-                  Atualizado em tempo real
-                </p>
+                <p className="text-xs text-gray-500 mt-1">Atualizado em tempo real</p>
               </CardContent>
             </Card>
           );
         })}
       </div>
+
+      <Card className="border border-gray-200">
+        <CardHeader className="flex items-center justify-between">
+          <CardTitle className="text-base text-gray-900">Compliance de credenciais</CardTitle>
+          <Badge variant="outline" className="text-xs">
+            Sprint 6
+          </Badge>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {complianceCards.map((item) => (
+            <div key={item.label} className="rounded-lg border border-gray-100 p-3">
+              <p className="text-xs uppercase tracking-wide text-gray-500">{item.label}</p>
+              <p className="text-2xl font-semibold text-gray-900 mt-1">
+                {complianceLoading ? "—" : item.value ?? 0}
+              </p>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <Card className="border border-gray-200">
+        <CardHeader className="flex items-center justify-between">
+          <CardTitle className="text-base text-gray-900">Amostra de integrações expostas</CardTitle>
+          <Badge
+            variant={(complianceTotals.integrationsExposed || 0) > 0 ? "danger" : "success"}
+            className="text-xs"
+          >
+            {(complianceTotals.integrationsExposed || 0) > 0 ? "Ação necessária" : "Sem exposição"}
+          </Badge>
+        </CardHeader>
+        <CardContent>
+          {exposedSamples.length === 0 ? (
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <ShieldAlert className="w-4 h-4 text-emerald-600" />
+              Nenhuma integração exposta na amostra atual.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {exposedSamples.map((item) => (
+                <div
+                  key={item.id}
+                  className="rounded-lg border border-gray-100 p-3 text-sm text-gray-700"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-medium text-gray-900">{item.provider}</p>
+                    <Badge variant="outline" className="text-xs">{item.status || "—"}</Badge>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Tenant: {item.tenantId || "—"}</p>
+                  <p className="text-xs text-gray-500 mt-1">Atualizado: {item.updatedAt ? new Date(item.updatedAt).toLocaleString("pt-BR") : "—"}</p>
+                  <p className="text-xs text-rose-700 mt-1">
+                    {[
+                      item.exposure?.hasRawColumns ? "raw-columns" : null,
+                      item.exposure?.hasRawSettings ? "raw-settings" : null,
+                      item.exposure?.hasRawConfig ? "raw-config" : null,
+                    ]
+                      .filter(Boolean)
+                      .join(", ") || "exposição detectada"}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card className="border border-gray-200">
         <CardHeader className="flex items-center justify-between">

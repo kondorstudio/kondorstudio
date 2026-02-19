@@ -8,6 +8,8 @@ const { prisma } = require('../prisma');
 const { createAccessToken } = require('../utils/jwt');
 const { hashPassword } = require('../utils/hash');
 const stripeService = require('../services/stripeService');
+const syncObservabilityService = require('../modules/observability/syncObservability.service');
+const credentialsComplianceService = require('../modules/compliance/credentialsCompliance.service');
 const crypto = require('crypto');
 
 const router = express.Router();
@@ -315,6 +317,7 @@ router.get('/overview', requireAdminPermission('tenants.read'), async (req, res)
   try {
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
     const [
       totalTenants,
@@ -358,10 +361,92 @@ router.get('/overview', requireAdminPermission('tenants.read'), async (req, res)
       },
     });
 
+    let recentErrorLogs = [];
+    let recentFailedJobs = [];
+
+    try {
+      [recentErrorLogs, recentFailedJobs] = await Promise.all([
+        prisma.systemLog.findMany({
+          where: {
+            level: 'ERROR',
+            tenantId: { not: null },
+            createdAt: { gte: twentyFourHoursAgo },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 500,
+          include: {
+            tenant: { select: { id: true, name: true, status: true } },
+          },
+        }),
+        prisma.jobLog.findMany({
+          where: {
+            status: 'FAILED',
+            createdAt: { gte: twentyFourHoursAgo },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 500,
+        }),
+      ]);
+    } catch (highlightError) {
+      console.warn('[ADMIN] overview highlights fallback:', highlightError?.message || highlightError);
+    }
+
     const churnRate =
       activeTenants + churnedTenants > 0
         ? Number(((churnedTenants / (activeTenants + churnedTenants)) * 100).toFixed(2))
         : 0;
+
+    const tenantErrorMap = recentErrorLogs.reduce((acc, log) => {
+      if (!log.tenantId) return acc;
+      if (!acc[log.tenantId]) {
+        acc[log.tenantId] = {
+          id: log.tenant?.id || log.tenantId,
+          tenantId: log.tenantId,
+          name: log.tenant?.name || 'Tenant',
+          status: log.tenant?.status || null,
+          statusLabel: STATUS_LABELS[log.tenant?.status] || log.tenant?.status || null,
+          totalErrors: 0,
+          lastErrorAt: null,
+        };
+      }
+      acc[log.tenantId].totalErrors += 1;
+      if (
+        !acc[log.tenantId].lastErrorAt ||
+        new Date(log.createdAt) > new Date(acc[log.tenantId].lastErrorAt)
+      ) {
+        acc[log.tenantId].lastErrorAt = log.createdAt;
+      }
+      return acc;
+    }, {});
+
+    const tenantsWithErrors = Object.values(tenantErrorMap)
+      .sort((a, b) => b.totalErrors - a.totalErrors)
+      .slice(0, 8);
+
+    const queueFailureMap = recentFailedJobs.reduce((acc, job) => {
+      const key = `${job.queue || 'unknown'}::${job.status || 'FAILED'}`;
+      if (!acc[key]) {
+        acc[key] = {
+          queue: job.queue || 'unknown',
+          status: job.status || 'FAILED',
+          totalFailures: 0,
+          tenantId: job.tenantId || null,
+          lastFailureAt: null,
+        };
+      }
+      acc[key].totalFailures += 1;
+      if (
+        !acc[key].lastFailureAt ||
+        new Date(job.createdAt) > new Date(acc[key].lastFailureAt)
+      ) {
+        acc[key].lastFailureAt = job.createdAt;
+      }
+      return acc;
+    }, {});
+
+    const failingQueues = Object.values(queueFailureMap)
+      .sort((a, b) => b.totalFailures - a.totalFailures)
+      .slice(0, 8);
 
     return res.json({
       overview: {
@@ -385,6 +470,10 @@ router.get('/overview', requireAdminPermission('tenants.read'), async (req, res)
         integrations: {
           connected: connectedIntegrations,
         },
+      },
+      highlights: {
+        tenantsWithErrors,
+        failingQueues,
       },
       status: 'ok',
       generatedAt: now.toISOString(),
@@ -1237,6 +1326,78 @@ router.get('/jobs', requireAdminPermission('jobs.read'), async (req, res) => {
   } catch (error) {
     console.error('[ADMIN] GET /jobs error', error);
     return res.status(500).json({ error: 'Erro ao listar jobs' });
+  }
+});
+
+// GET /api/admin/observability/sync/summary
+router.get('/observability/sync/summary', requireAdminPermission('jobs.read'), async (req, res) => {
+  try {
+    const summary = await syncObservabilityService.getSyncSummary({
+      sinceHours: req.query.sinceHours,
+      provider: req.query.provider,
+      tenantId: req.query.tenantId,
+      brandId: req.query.brandId,
+      status: req.query.status,
+      runType: req.query.runType,
+      from: req.query.from,
+      to: req.query.to,
+    });
+
+    return res.json({ summary });
+  } catch (error) {
+    console.error('[ADMIN] GET /observability/sync/summary error', error);
+    return res.status(500).json({ error: 'Erro ao carregar resumo de sync' });
+  }
+});
+
+// GET /api/admin/observability/sync/runs
+router.get('/observability/sync/runs', requireAdminPermission('jobs.read'), async (req, res) => {
+  try {
+    const data = await syncObservabilityService.listSyncRuns({
+      page: req.query.page,
+      pageSize: req.query.pageSize,
+      provider: req.query.provider,
+      tenantId: req.query.tenantId,
+      brandId: req.query.brandId,
+      status: req.query.status,
+      runType: req.query.runType,
+      from: req.query.from,
+      to: req.query.to,
+      since: req.query.since,
+      until: req.query.until,
+    });
+    return res.json(data);
+  } catch (error) {
+    console.error('[ADMIN] GET /observability/sync/runs error', error);
+    return res.status(500).json({ error: 'Erro ao listar sync runs' });
+  }
+});
+
+// GET /api/admin/observability/sync/runs/:id
+router.get('/observability/sync/runs/:id', requireAdminPermission('jobs.read'), async (req, res) => {
+  try {
+    const data = await syncObservabilityService.getSyncRunDetail(req.params.id);
+    if (!data) {
+      return res.status(404).json({ error: 'Sync run não encontrado' });
+    }
+    return res.json(data);
+  } catch (error) {
+    console.error('[ADMIN] GET /observability/sync/runs/:id error', error);
+    return res.status(500).json({ error: 'Erro ao carregar sync run' });
+  }
+});
+
+// GET /api/admin/compliance/credentials
+router.get('/compliance/credentials', requireAdminPermission('reports.read'), async (req, res) => {
+  try {
+    const report = await credentialsComplianceService.getCredentialsComplianceReport({
+      tenantId: req.query.tenantId,
+      sampleSize: req.query.sampleSize,
+    });
+    return res.json(report);
+  } catch (error) {
+    console.error('[ADMIN] GET /compliance/credentials error', error);
+    return res.status(500).json({ error: 'Erro ao carregar compliance de credenciais' });
   }
 });
 

@@ -12,6 +12,7 @@ const tenantMiddleware = require('../middleware/tenant');
 const reportsService = require('../services/reportsService');
 const automationEngine = require('../services/automationEngine');
 const { prisma } = require('../prisma');
+const { legacyRouteGuard } = require('../modules/observability/legacyRoute.middleware');
 let whatsappProvider = null;
 let uploadsService = null;
 
@@ -36,6 +37,12 @@ try {
 }
 
 // Protegido e multi-tenant
+router.use(
+  legacyRouteGuard({
+    kind: 'reports-legacy',
+    successorPath: '/api/reports/dashboards',
+  }),
+);
 router.use(authMiddleware);
 router.use(tenantMiddleware);
 

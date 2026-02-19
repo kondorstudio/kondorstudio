@@ -183,3 +183,24 @@ Auditoria e cleanup do módulo de Relatórios no front e back, consolidando V2 c
 2. Criar pipeline V2 para exports/schedules (substituir `reportExports.service` V1).
 3. Remover `/api/reporting` e `/api/reports` após janela de compatibilidade.
 4. Limpar tabelas e migrações antigas em fase separada.
+
+## 8) Sprint 6 (Observabilidade + Compliance + Sunset)
+
+### Novos endpoints admin
+- `GET /api/admin/observability/sync/summary` — resumo de `sync_runs/chunks/errors` por janela.
+- `GET /api/admin/observability/sync/runs` — listagem paginada de runs com filtros.
+- `GET /api/admin/observability/sync/runs/:id` — detalhe de run com chunks/errors.
+- `GET /api/admin/compliance/credentials` — diagnóstico de credenciais legadas vs `credential_vault`.
+
+### Sunset de rotas legadas
+- `/api/reporting` e `/api/reports` passam por guard de legado:
+  - headers `Deprecation`, `Sunset` (opcional), `Link` para sucessor V2.
+  - telemetria de uso em `system_logs` (`source=LEGACY_ROUTE`).
+  - kill switch por env para responder `410`.
+
+### Variáveis de ambiente (compatibilidade/sunset)
+- `REPORTING_V1_ENABLED=true`
+- `REPORTS_LEGACY_ENABLED=true`
+- `LEGACY_ROUTES_MODE=warn` (`block` para desligar)
+- `LEGACY_ROUTES_SUNSET_AT=`
+- `LEGACY_ROUTE_LOG_TTL_MS=60000`

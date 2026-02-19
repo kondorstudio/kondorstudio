@@ -8,9 +8,16 @@ const express = require('express');
 const authMiddleware = require('../middleware/auth');
 const tenantMiddleware = require('../middleware/tenant');
 const reportingRouter = require('../modules/reporting/reporting.routes');
+const { legacyRouteGuard } = require('../modules/observability/legacyRoute.middleware');
 
 const router = express.Router();
 
+router.use(
+  legacyRouteGuard({
+    kind: 'reporting-v1',
+    successorPath: '/api/reports/dashboards',
+  }),
+);
 router.use(authMiddleware);
 router.use(tenantMiddleware);
 router.use('/', reportingRouter);
