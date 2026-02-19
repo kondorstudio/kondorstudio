@@ -83,12 +83,13 @@ function formatPlatform(platform) {
   return PLATFORM_LABELS[platform] || platform;
 }
 
-function buildConnectionsPath(brandId, platform) {
+function buildIntegrationsPath(brandId, platform) {
   const params = new URLSearchParams();
-  if (brandId) params.set("brandId", brandId);
+  if (brandId) params.set("clientId", brandId);
   if (platform) params.set("platform", platform);
+  params.set("from", "reports_v2");
   const query = params.toString();
-  return `/relatorios/v2/conexoes${query ? `?${query}` : ""}`;
+  return `/integrations${query ? `?${query}` : ""}`;
 }
 
 function describeIssue(issue) {
@@ -644,7 +645,7 @@ export default function ReportsV2Viewer() {
               platforms: platform ? [platform] : [],
             }))
           }
-          onAdd={() => navigate(buildConnectionsPath(dashboard?.brandId))}
+          onAdd={() => navigate(buildIntegrationsPath(dashboard?.brandId))}
         />
 
         {refreshNotice ? (
@@ -681,7 +682,7 @@ export default function ReportsV2Viewer() {
                 <Button
                   variant="secondary"
                   onClick={() =>
-                    navigate(buildConnectionsPath(dashboard.brandId, missingPlatforms[0]))
+                    navigate(buildIntegrationsPath(dashboard.brandId, missingPlatforms[0]))
                   }
                 >
                   Gerenciar conexões
@@ -989,7 +990,7 @@ export default function ReportsV2Viewer() {
                 const firstPlatform = missingPlatforms[0] || null;
                 setBlockedAction(null);
                 if (missingPlatforms.length) {
-                  navigate(buildConnectionsPath(dashboard?.brandId, firstPlatform));
+                  navigate(buildIntegrationsPath(dashboard?.brandId, firstPlatform));
                   return;
                 }
                 navigate(`/relatorios/v2/${dashboard?.id}/edit`);

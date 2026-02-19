@@ -148,7 +148,13 @@ export default function ReportsV2Home() {
           <div className="flex flex-wrap gap-2">
             <Button
               variant="secondary"
-              onClick={() => navigate("/relatorios/v2/conexoes")}
+              onClick={() => {
+                const params = new URLSearchParams();
+                if (brandId) params.set("clientId", brandId);
+                params.set("from", "reports_v2");
+                const query = params.toString();
+                navigate(`/integrations${query ? `?${query}` : ""}`);
+              }}
             >
               Conexões por marca
             </Button>

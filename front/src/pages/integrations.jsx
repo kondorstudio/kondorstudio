@@ -28,6 +28,15 @@ import { useActiveClient } from "@/hooks/useActiveClient.js";
 import { SelectNative } from "@/components/ui/select-native.jsx";
 
 const DEFAULT_OWNER_KEY = "AGENCY";
+const REPORTS_PLATFORM_TO_INTEGRATION_KEY = {
+  META_ADS: "meta-ads",
+  GOOGLE_ADS: "google-ads",
+  TIKTOK_ADS: "tiktok-ads",
+  LINKEDIN_ADS: "linkedin-ads",
+  GA4: "google-analytics",
+  GMB: "google-business",
+  FB_IG: "facebook",
+};
 
 const INTEGRATION_CATALOG = [
   {
@@ -432,10 +441,12 @@ export default function Integrations() {
   const [activeKey, setActiveKey] = useState(null);
   const [comingSoonDefinition, setComingSoonDefinition] = useState(null);
   const [initialClientId, setInitialClientId] = useState("");
+  const [highlightIntegrationKey, setHighlightIntegrationKey] = useState("");
   const [activeClientId, setActiveClientId] = useActiveClient();
   const [selectedClientId, setSelectedClientId] = useState(activeClientId || "");
   const location = useLocation();
   const queryClient = useQueryClient();
+  const integrationTileRefs = React.useRef({});
 
   const {
     data: integrations = [],
@@ -543,8 +554,13 @@ export default function Integrations() {
   useEffect(() => {
     const params = new URLSearchParams(location.search || "");
     const metaStatus = params.get("meta");
+    const fromReportsClientId = params.get("clientId") || params.get("brandId");
     if (params.get("whatsapp") === "connected" || metaStatus === "connected") {
       queryClient.invalidateQueries({ queryKey: ["integrations"] });
+    }
+
+    if (fromReportsClientId) {
+      setInitialClientId(fromReportsClientId);
     }
 
     if (metaStatus === "connected") {
@@ -554,6 +570,33 @@ export default function Integrations() {
       setInitialClientId(clientId || "");
     }
   }, [location.search, queryClient]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search || "");
+    const platform = String(params.get("platform") || "").trim().toUpperCase();
+    const mappedIntegrationKey = REPORTS_PLATFORM_TO_INTEGRATION_KEY[platform];
+    if (!mappedIntegrationKey) return;
+
+    setHighlightIntegrationKey(mappedIntegrationKey);
+
+    const scrollTimer = window.setTimeout(() => {
+      const target = integrationTileRefs.current[mappedIntegrationKey];
+      if (target && typeof target.scrollIntoView === "function") {
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 120);
+
+    const clearTimer = window.setTimeout(() => {
+      setHighlightIntegrationKey((current) =>
+        current === mappedIntegrationKey ? "" : current
+      );
+    }, 4000);
+
+    return () => {
+      window.clearTimeout(scrollTimer);
+      window.clearTimeout(clearTimer);
+    };
+  }, [location.search]);
 
   useEffect(() => {
     if (activeClientId === selectedClientId) return;
@@ -670,27 +713,39 @@ export default function Integrations() {
                 const tileStatus =
                   integration.scope === "client" ? "disconnected" : resolveIntegrationStatus(record);
                 const Icon = integration.icon;
+                const isHighlighted = highlightIntegrationKey === integration.key;
                 return (
-                  <IntegrationTile
+                  <div
                     key={integration.key}
-                    title={integration.title}
-                    subtitle={integration.subtitle}
-                    description={integration.description}
-                    status={tileStatus}
-                    accentClass={integration.accentClass}
-                    icon={<Icon className="w-5 h-5 text-white" />}
-                    actionLabel={
-                      isConnectedStatus(tileStatus) ? "Gerenciar conexão" : "Conectar"
-                    }
-                    onConnect={() => {
-                      if (integration.key === "google-analytics") {
-                        navigate("/integrations/ga4");
-                        return;
-                      }
-                      setActiveKey(integration.key);
-                      setInitialClientId("");
+                    ref={(node) => {
+                      if (node) integrationTileRefs.current[integration.key] = node;
                     }}
-                  />
+                    className={
+                      isHighlighted
+                        ? "rounded-2xl ring-2 ring-[var(--primary)] ring-offset-2 ring-offset-white"
+                        : ""
+                    }
+                  >
+                    <IntegrationTile
+                      title={integration.title}
+                      subtitle={integration.subtitle}
+                      description={integration.description}
+                      status={tileStatus}
+                      accentClass={integration.accentClass}
+                      icon={<Icon className="w-5 h-5 text-white" />}
+                      actionLabel={
+                        isConnectedStatus(tileStatus) ? "Gerenciar conexão" : "Conectar"
+                      }
+                      onConnect={() => {
+                        if (integration.key === "google-analytics") {
+                          navigate("/integrations/ga4");
+                          return;
+                        }
+                        setActiveKey(integration.key);
+                        setInitialClientId("");
+                      }}
+                    />
+                  </div>
                 );
               })}
             </div>
@@ -778,40 +833,52 @@ export default function Integrations() {
                     ? "Disponível em breve"
                     : "Selecione um cliente para conectar";
                 const Icon = integration.icon;
+                const isHighlighted = highlightIntegrationKey === integration.key;
                 return (
-                  <IntegrationTile
+                  <div
                     key={integration.key}
-                    title={integration.title}
-                    subtitle={integration.subtitle}
-                    description={integration.description}
-                    status={tileStatus}
-                    accentClass={integration.accentClass}
-                    icon={<Icon className="w-5 h-5 text-white" />}
-                    meta={tileMeta}
-                    actionLabel={
-                      integration.key === "google-analytics"
-                        ? "Abrir GA4"
-                        : isSoon
-                        ? "Saiba mais"
-                        : isConnectedStatus(tileStatus)
-                        ? "Gerenciar conexão"
-                        : "Conectar"
-                    }
-                    disabled={!selectedClientId && !isSoon}
-                    onConnect={() => {
-                      if (integration.key === "google-analytics") {
-                        navigate("/integrations/ga4");
-                        return;
-                      }
-                      if (isSoon) {
-                        setComingSoonDefinition(integration);
-                        return;
-                      }
-                      if (!selectedClientId) return;
-                      setActiveKey(integration.key);
-                      setInitialClientId(selectedClientId);
+                    ref={(node) => {
+                      if (node) integrationTileRefs.current[integration.key] = node;
                     }}
-                  />
+                    className={
+                      isHighlighted
+                        ? "rounded-2xl ring-2 ring-[var(--primary)] ring-offset-2 ring-offset-white"
+                        : ""
+                    }
+                  >
+                    <IntegrationTile
+                      title={integration.title}
+                      subtitle={integration.subtitle}
+                      description={integration.description}
+                      status={tileStatus}
+                      accentClass={integration.accentClass}
+                      icon={<Icon className="w-5 h-5 text-white" />}
+                      meta={tileMeta}
+                      actionLabel={
+                        integration.key === "google-analytics"
+                          ? "Abrir GA4"
+                          : isSoon
+                          ? "Saiba mais"
+                          : isConnectedStatus(tileStatus)
+                          ? "Gerenciar conexão"
+                          : "Conectar"
+                      }
+                      disabled={!selectedClientId && !isSoon}
+                      onConnect={() => {
+                        if (integration.key === "google-analytics") {
+                          navigate("/integrations/ga4");
+                          return;
+                        }
+                        if (isSoon) {
+                          setComingSoonDefinition(integration);
+                          return;
+                        }
+                        if (!selectedClientId) return;
+                        setActiveKey(integration.key);
+                        setInitialClientId(selectedClientId);
+                      }}
+                    />
+                  </div>
                 );
               })}
             </div>

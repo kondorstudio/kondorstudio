@@ -74,6 +74,15 @@ function formatPlatformList(list) {
     .join(", ");
 }
 
+function buildIntegrationsPath(brandId, platform) {
+  const params = new URLSearchParams();
+  if (brandId) params.set("clientId", brandId);
+  if (platform) params.set("platform", platform);
+  params.set("from", "reports_v2");
+  const query = params.toString();
+  return `/integrations${query ? `?${query}` : ""}`;
+}
+
 function formatMetricValue(metricKey, value, meta, formatOverride = "auto") {
   if (value === null || value === undefined || value === "") return "-";
   const number = typeof value === "number" ? value : Number(value);
@@ -554,11 +563,7 @@ export default function WidgetRenderer({
           isPublic
             ? undefined
             : () => {
-                  const params = new URLSearchParams();
-                  if (brandId) params.set("brandId", brandId);
-                  if (healthIssue.platform) params.set("platform", healthIssue.platform);
-                  const query = params.toString();
-                  navigate(`/relatorios/v2/conexoes${query ? `?${query}` : ""}`);
+                  navigate(buildIntegrationsPath(brandId, healthIssue.platform));
                 }
         }
         compact={isCompact}
@@ -653,10 +658,7 @@ export default function WidgetRenderer({
         onAction={
           isPublic
             ? undefined
-            : () =>
-                navigate(
-                  `/relatorios/v2/conexoes${brandId ? `?brandId=${brandId}` : ""}`
-                )
+            : () => navigate(buildIntegrationsPath(brandId))
         }
         compact={isCompact}
         className="border-0 bg-transparent p-0"

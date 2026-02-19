@@ -381,7 +381,13 @@ function LayoutContent() {
                   <Button
                     size="sm"
                     variant="secondary"
-                    onClick={() => navigate("/relatorios/v2/conexoes")}
+                    onClick={() => {
+                      const params = new URLSearchParams();
+                      if (activeClientId) params.set("clientId", activeClientId);
+                      params.set("from", "reports_v2");
+                      const query = params.toString();
+                      navigate(`/integrations${query ? `?${query}` : ""}`);
+                    }}
                   >
                     Gerenciar conexoes
                   </Button>

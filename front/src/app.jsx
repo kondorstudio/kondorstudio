@@ -1,6 +1,6 @@
 // front/src/app.jsx
 import React, { Suspense, lazy } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 
 import Layout from "./layout.jsx";
 import PrivateRoute from "./components/privateRoute.jsx";
@@ -26,9 +26,6 @@ const ReportsV2Templates = lazy(() =>
 );
 const ReportsV2Viewer = lazy(() => import("./pages/reportsV2/ReportsV2Viewer.jsx"));
 const ReportsV2Editor = lazy(() => import("./pages/reportsV2/ReportsV2Editor.jsx"));
-const ReportsV2Connections = lazy(() =>
-  import("./pages/reportsV2/ReportsV2Connections.jsx")
-);
 const AnalyticsDashboards = lazy(() => import("./pages/analytics/dashboards.jsx"));
 const AnalyticsDashboardBuilder = lazy(() =>
   import("./pages/analytics/dashboardBuilder.jsx")
@@ -76,6 +73,11 @@ const PublicReportViewer = lazy(() =>
 // ✅ Novas páginas públicas (Meta exige URLs públicas válidas)
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy.jsx"));
 const Terms = lazy(() => import("./pages/Terms.jsx"));
+
+function ReportsV2ConnectionsRedirect() {
+  const location = useLocation();
+  return <Navigate to={`/integrations${location.search || ""}`} replace />;
+}
 
 export default function App() {
   return (
@@ -138,7 +140,10 @@ export default function App() {
             />
             <Route path="/relatorios/v2" element={<ReportsV2Home />} />
             <Route path="/relatorios/v2/templates" element={<ReportsV2Templates />} />
-            <Route path="/relatorios/v2/conexoes" element={<ReportsV2Connections />} />
+            <Route
+              path="/relatorios/v2/conexoes"
+              element={<ReportsV2ConnectionsRedirect />}
+            />
             <Route path="/relatorios/v2/:id" element={<ReportsV2Viewer />} />
             <Route path="/relatorios/v2/:id/edit" element={<ReportsV2Editor />} />
             <Route path="/competitors" element={<Competitors />} />
