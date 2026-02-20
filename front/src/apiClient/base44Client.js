@@ -999,7 +999,12 @@ const PublicReports = {
 
 const GA4 = {
   async oauthStart(options = {}) {
-    const qs = buildQuery(options?.force ? { force: 1 } : {});
+    const qs = buildQuery({
+      ...(options?.force ? { force: 1 } : {}),
+      ...(options?.forceConsent ? { forceConsent: 1 } : {}),
+      ...(options?.clientId ? { clientId: options.clientId } : {}),
+      ...(options?.brandId ? { brandId: options.brandId } : {}),
+    });
     return jsonFetch(`/integrations/ga4/oauth/start${qs}`, { method: "GET" });
   },
 
@@ -1100,11 +1105,15 @@ const GA4 = {
     return jsonFetch("/integrations/ga4/properties", { method: "GET" });
   },
 
-  async selectProperty(propertyId) {
-    if (!propertyId) throw new Error("propertyId obrigatorio");
+  async selectProperty(input) {
+    const payload =
+      typeof input === "string" || typeof input === "number"
+        ? { propertyId: String(input) }
+        : { ...(input || {}) };
+    if (!payload.propertyId) throw new Error("propertyId obrigatorio");
     return jsonFetch("/integrations/ga4/properties/select", {
       method: "POST",
-      body: JSON.stringify({ propertyId }),
+      body: JSON.stringify(payload),
     });
   },
 

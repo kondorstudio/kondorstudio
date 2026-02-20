@@ -93,10 +93,26 @@ function withRefreshLock(tenantId, executor) {
   return promise;
 }
 
-function buildState({ tenantId, userId }) {
+function normalizeStateContext(value) {
+  const raw = String(value || '').trim();
+  return raw || null;
+}
+
+function buildState({ tenantId, userId, clientId, brandId }) {
   const nonce = crypto.randomBytes(16).toString('hex');
+  const payload = {
+    tenantId,
+    userId,
+    nonce,
+    purpose: STATE_PURPOSE,
+  };
+  const normalizedClientId = normalizeStateContext(clientId);
+  const normalizedBrandId = normalizeStateContext(brandId);
+  if (normalizedClientId) payload.clientId = normalizedClientId;
+  if (normalizedBrandId) payload.brandId = normalizedBrandId;
+
   return jwt.sign(
-    { tenantId, userId, nonce, purpose: STATE_PURPOSE },
+    payload,
     JWT_SECRET,
     { expiresIn: '10m' }
   );
@@ -120,6 +136,12 @@ function verifyState(state) {
     const err = new Error('Invalid OAuth state purpose');
     err.status = 400;
     throw err;
+  }
+  if (payload.clientId !== undefined) {
+    payload.clientId = normalizeStateContext(payload.clientId);
+  }
+  if (payload.brandId !== undefined) {
+    payload.brandId = normalizeStateContext(payload.brandId);
   }
   return payload;
 }

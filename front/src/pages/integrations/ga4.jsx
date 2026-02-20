@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/apiClient/base44Client";
@@ -23,10 +23,35 @@ function useQueryParams() {
   return useMemo(() => new URLSearchParams(location.search), [location.search]);
 }
 
+function buildScopeNotice(payload = {}, fallbackScope) {
+  const scopeApplied = payload?.scopeApplied || fallbackScope || "LEGACY_INTEGRATION_ONLY";
+  const affectedTotal = Number(payload?.affectedBrandsTotal || 0);
+  const affectedSucceeded = Number(payload?.affectedBrandsSucceeded || 0);
+  const affectedFailed = Number(payload?.affectedBrandsFailed || 0);
+  const syncQueued = Number(payload?.syncQueuedTotal || 0);
+  const syncSkipped = Number(payload?.syncSkippedTotal || 0);
+
+  if (scopeApplied === "SINGLE_BRAND") {
+    return `Propriedade aplicada na marca. Sync enfileirado: ${syncQueued}.`;
+  }
+
+  if (scopeApplied === "ALL_BRANDS") {
+    return `Propriedade aplicada em ${affectedSucceeded}/${affectedTotal} marcas. Falhas: ${affectedFailed}. Sync enfileirado: ${syncQueued}, pulado: ${syncSkipped}.`;
+  }
+
+  return "Propriedade da integração atualizada.";
+}
+
 export default function Ga4IntegrationPage() {
   const queryClient = useQueryClient();
   const queryParams = useQueryParams();
-  const [selectedPropertyId, setSelectedPropertyId] = useState("");
+
+  const clientIdParam = queryParams.get("clientId") || "";
+  const brandIdParam = queryParams.get("brandId") || "";
+  const scopedBrandId = brandIdParam || clientIdParam || "";
+  const selectedApplyMode = scopedBrandId ? "SINGLE_BRAND" : "ALL_BRANDS";
+
+  const [draftSelectedPropertyId, setDraftSelectedPropertyId] = useState("");
   const [connectError, setConnectError] = useState("");
   const [disconnectError, setDisconnectError] = useState("");
   const [syncError, setSyncError] = useState("");
@@ -35,8 +60,7 @@ export default function Ga4IntegrationPage() {
   const [demoError, setDemoError] = useState("");
   const [brandBindingError, setBrandBindingError] = useState("");
   const [brandBindingNotice, setBrandBindingNotice] = useState("");
-  const scopedBrandId =
-    queryParams.get("clientId") || queryParams.get("brandId") || "";
+  const lastServerSelectedPropertyRef = useRef("");
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["ga4-status"],
@@ -47,20 +71,74 @@ export default function Ga4IntegrationPage() {
   const legacyStatus = data?.legacyStatus || status;
   const properties = data?.properties || [];
   const selectedProperty = data?.selectedProperty || null;
+  const serverSelectedPropertyId = selectedProperty?.propertyId
+    ? String(selectedProperty.propertyId)
+    : "";
+
   const needsReconnect =
-    status === "REAUTH_REQUIRED" || status === "NEEDS_RECONNECT" || legacyStatus === "NEEDS_RECONNECT";
+    status === "REAUTH_REQUIRED" ||
+    status === "NEEDS_RECONNECT" ||
+    legacyStatus === "NEEDS_RECONNECT";
+
   const googleEmail = data?.googleAccountEmail || null;
 
+  const { data: brandSettingsData, error: brandSettingsError } = useQuery({
+    queryKey: ["ga4-brand-settings", scopedBrandId],
+    queryFn: () => base44.ga4.getBrandSettings({ brandId: scopedBrandId }),
+    enabled: Boolean(scopedBrandId && status === "CONNECTED"),
+    retry: false,
+  });
+
+  const brandActivePropertyId = brandSettingsData?.settings?.propertyId
+    ? String(brandSettingsData.settings.propertyId)
+    : "";
+
   useEffect(() => {
-    if (!properties.length) return;
-    if (selectedProperty?.propertyId) {
-      setSelectedPropertyId(selectedProperty.propertyId);
+    if (serverSelectedPropertyId === lastServerSelectedPropertyRef.current) {
       return;
     }
-    if (!selectedPropertyId) {
-      setSelectedPropertyId(properties[0].propertyId);
+
+    lastServerSelectedPropertyRef.current = serverSelectedPropertyId;
+    if (!serverSelectedPropertyId) return;
+
+    const existsInList = properties.some(
+      (item) => String(item?.propertyId || "") === serverSelectedPropertyId,
+    );
+
+    if (existsInList) {
+      setDraftSelectedPropertyId(serverSelectedPropertyId);
     }
-  }, [properties, selectedProperty, selectedPropertyId]);
+  }, [properties, serverSelectedPropertyId]);
+
+  useEffect(() => {
+    if (!properties.length) {
+      if (draftSelectedPropertyId) setDraftSelectedPropertyId("");
+      return;
+    }
+
+    const propertyIds = new Set(
+      properties.map((item) => String(item?.propertyId || "")).filter(Boolean),
+    );
+
+    if (draftSelectedPropertyId && propertyIds.has(draftSelectedPropertyId)) {
+      return;
+    }
+
+    if (serverSelectedPropertyId && propertyIds.has(serverSelectedPropertyId)) {
+      setDraftSelectedPropertyId(serverSelectedPropertyId);
+      return;
+    }
+
+    setDraftSelectedPropertyId(String(properties[0]?.propertyId || ""));
+  }, [properties, draftSelectedPropertyId, serverSelectedPropertyId]);
+
+  const oauthContext = useMemo(
+    () => ({
+      ...(clientIdParam ? { clientId: clientIdParam } : {}),
+      ...(brandIdParam ? { brandId: brandIdParam } : {}),
+    }),
+    [brandIdParam, clientIdParam],
+  );
 
   const connectMutation = useMutation({
     mutationFn: (options) => base44.ga4.oauthStart(options),
@@ -95,22 +173,24 @@ export default function Ga4IntegrationPage() {
   });
 
   const selectMutation = useMutation({
-    mutationFn: async (propertyId) => {
-      const selected = await base44.ga4.selectProperty(propertyId);
+    mutationFn: async (propertyId) =>
+      base44.ga4.selectProperty({
+        propertyId,
+        applyMode: selectedApplyMode,
+        ...(scopedBrandId ? { brandId: scopedBrandId } : {}),
+        syncAfterSelect: true,
+        includeCampaigns: false,
+        syncDays: 30,
+      }),
+    onSuccess: (payload) => {
+      setBrandBindingError("");
+      setBrandBindingNotice(buildScopeNotice(payload || {}, selectedApplyMode));
+      queryClient.invalidateQueries({ queryKey: ["ga4-status"] });
       if (scopedBrandId) {
-        await base44.ga4.upsertBrandSettings({
-          brandId: scopedBrandId,
-          propertyId,
+        queryClient.invalidateQueries({
+          queryKey: ["ga4-brand-settings", scopedBrandId],
         });
       }
-      return selected;
-    },
-    onSuccess: () => {
-      setBrandBindingError("");
-      if (scopedBrandId) {
-        setBrandBindingNotice("Propriedade GA4 vinculada à marca para relatórios.");
-      }
-      queryClient.invalidateQueries({ queryKey: ["ga4-status"] });
     },
     onError: (err) => {
       const message =
@@ -127,6 +207,11 @@ export default function Ga4IntegrationPage() {
     onSuccess: () => {
       setDisconnectError("");
       queryClient.invalidateQueries({ queryKey: ["ga4-status"] });
+      if (scopedBrandId) {
+        queryClient.invalidateQueries({
+          queryKey: ["ga4-brand-settings", scopedBrandId],
+        });
+      }
     },
     onError: (err) => {
       const message =
@@ -144,14 +229,19 @@ export default function Ga4IntegrationPage() {
   useEffect(() => {
     if (connectedParam === "1") {
       queryClient.invalidateQueries({ queryKey: ["ga4-status"] });
+      if (scopedBrandId) {
+        queryClient.invalidateQueries({
+          queryKey: ["ga4-brand-settings", scopedBrandId],
+        });
+      }
     }
-  }, [connectedParam, queryClient]);
+  }, [connectedParam, queryClient, scopedBrandId]);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
     const handleReauth = () => {
       setReauthNotice(
-        "Sua conexão com o GA4 expirou ou foi revogada. Reconecte para continuar."
+        "Sua conexão com o GA4 expirou ou foi revogada. Reconecte para continuar.",
       );
       queryClient.invalidateQueries({ queryKey: ["ga4-status"] });
     };
@@ -162,7 +252,7 @@ export default function Ga4IntegrationPage() {
   const demoMutation = useMutation({
     mutationFn: () =>
       base44.ga4.demoReport(
-        selectedPropertyId ? { propertyId: selectedPropertyId } : {}
+        draftSelectedPropertyId ? { propertyId: draftSelectedPropertyId } : {},
       ),
     onSuccess: (payload) => {
       setDemoError("");
@@ -193,15 +283,19 @@ export default function Ga4IntegrationPage() {
   useEffect(() => {
     setDemoData(null);
     setDemoError("");
-  }, [selectedPropertyId, status]);
+  }, [draftSelectedPropertyId, status]);
 
   useEffect(() => {
     if (status === "CONNECTED") {
       setReauthNotice("");
     }
-    if (status === "REAUTH_REQUIRED" || status === "NEEDS_RECONNECT" || legacyStatus === "NEEDS_RECONNECT") {
+    if (
+      status === "REAUTH_REQUIRED" ||
+      status === "NEEDS_RECONNECT" ||
+      legacyStatus === "NEEDS_RECONNECT"
+    ) {
       setReauthNotice(
-        "Sua conexão com o GA4 expirou ou foi revogada. Reconecte para continuar."
+        "Sua conexão com o GA4 expirou ou foi revogada. Reconecte para continuar.",
       );
     }
   }, [status, legacyStatus]);
@@ -240,22 +334,16 @@ export default function Ga4IntegrationPage() {
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             {isLoading ? (
-              <p className="text-sm text-[var(--text-muted)]">
-                Carregando status...
-              </p>
+              <p className="text-sm text-[var(--text-muted)]">Carregando status...</p>
             ) : error ? (
-              <p className="text-sm text-rose-600">
-                Falha ao carregar status.
-              </p>
+              <p className="text-sm text-rose-600">Falha ao carregar status.</p>
             ) : (
               <>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <p className="text-sm text-[var(--text-muted)]">Status</p>
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-lg font-semibold text-[var(--text)]">
-                        {status}
-                      </p>
+                      <p className="text-lg font-semibold text-[var(--text)]">{status}</p>
                       {needsReconnect ? (
                         <span className="rounded-full border border-purple-200 bg-purple-50 px-2 py-0.5 text-xs font-semibold text-purple-700">
                           Reconectar
@@ -263,20 +351,28 @@ export default function Ga4IntegrationPage() {
                       ) : null}
                     </div>
                     {googleEmail ? (
-                      <p className="text-xs text-[var(--text-muted)]">
-                        {googleEmail}
-                      </p>
+                      <p className="text-xs text-[var(--text-muted)]">{googleEmail}</p>
                     ) : null}
                     {selectedProperty ? (
                       <p className="text-xs text-[var(--text-muted)]">
-                        Propriedade: {selectedProperty.displayName} (
-                        {selectedProperty.propertyId})
+                        Propriedade da integração: {selectedProperty.displayName} ({selectedProperty.propertyId})
+                      </p>
+                    ) : null}
+                    {scopedBrandId ? (
+                      <p className="text-xs text-[var(--text-muted)]">Marca no contexto: {scopedBrandId}</p>
+                    ) : null}
+                    {brandActivePropertyId ? (
+                      <p className="text-xs text-[var(--text-muted)]">
+                        Propriedade ativa da marca: {brandActivePropertyId}
+                      </p>
+                    ) : null}
+                    {brandSettingsError ? (
+                      <p className="text-xs text-amber-700">
+                        Nao foi possivel carregar a propriedade ativa da marca.
                       </p>
                     ) : null}
                     {data?.lastError ? (
-                      <p className="text-xs text-rose-600">
-                        {data.lastError}
-                      </p>
+                      <p className="text-xs text-rose-600">{data.lastError}</p>
                     ) : null}
                   </div>
                   <div className="flex items-center gap-2">
@@ -292,7 +388,7 @@ export default function Ga4IntegrationPage() {
                       <Button
                         onClick={() => {
                           setConnectError("");
-                          connectMutation.mutate({ force: true });
+                          connectMutation.mutate({ force: true, ...oauthContext });
                         }}
                         disabled={connectMutation.isPending}
                       >
@@ -301,15 +397,12 @@ export default function Ga4IntegrationPage() {
                     )}
                   </div>
                 </div>
-                {connectError ? (
-                  <p className="text-xs text-rose-600">{connectError}</p>
-                ) : null}
+                {connectError ? <p className="text-xs text-rose-600">{connectError}</p> : null}
                 {disconnectError ? (
                   <p className="text-xs text-rose-600">{disconnectError}</p>
                 ) : null}
                 <p className="text-xs text-[var(--text-muted)]">
-                  Apenas leitura via API. Nenhum script do GA4 sera instalado no
-                  front.
+                  Apenas leitura via API. Nenhum script do GA4 sera instalado no front.
                 </p>
               </>
             )}
@@ -334,27 +427,34 @@ export default function Ga4IntegrationPage() {
                 >
                   Sincronizar propriedades
                 </Button>
-                {syncError ? (
-                  <p className="text-xs text-rose-600">{syncError}</p>
-                ) : null}
+                {syncError ? <p className="text-xs text-rose-600">{syncError}</p> : null}
                 {brandBindingError ? (
                   <p className="text-xs text-rose-600">{brandBindingError}</p>
                 ) : null}
                 {brandBindingNotice ? (
                   <p className="text-xs text-emerald-700">{brandBindingNotice}</p>
                 ) : null}
+
+                <p className="text-xs text-[var(--text-muted)]">
+                  Escopo ao salvar: {scopedBrandId ? "esta marca" : "todas as marcas do tenant"}.
+                </p>
                 {scopedBrandId ? (
-                  <p className="text-xs text-[var(--text-muted)]">
-                    Marca alvo: {scopedBrandId}
+                  <p className="text-xs text-[var(--text-muted)]">Marca alvo: {scopedBrandId}</p>
+                ) : null}
+
+                {brandActivePropertyId &&
+                serverSelectedPropertyId &&
+                brandActivePropertyId !== serverSelectedPropertyId ? (
+                  <p className="text-xs text-amber-700">
+                    A propriedade ativa da marca difere da selecionada na integração. Salve a seleção para reconciliar.
                   </p>
                 ) : null}
+
                 {properties.length ? (
                   <div className="flex flex-col gap-3">
                     <SelectNative
-                      value={selectedPropertyId}
-                      onChange={(event) =>
-                        setSelectedPropertyId(event.target.value)
-                      }
+                      value={draftSelectedPropertyId}
+                      onChange={(event) => setDraftSelectedPropertyId(event.target.value)}
                     >
                       {properties.map((prop) => (
                         <option key={prop.id} value={prop.propertyId}>
@@ -364,15 +464,12 @@ export default function Ga4IntegrationPage() {
                     </SelectNative>
                     {!selectedProperty ? (
                       <p className="text-xs text-purple-600">
-                        Nenhuma propriedade selecionada. Selecione uma para
-                        habilitar relatórios e dashboards.
+                        Nenhuma propriedade selecionada. Selecione uma para habilitar relatórios e dashboards.
                       </p>
                     ) : null}
                     <Button
-                      onClick={() => selectMutation.mutate(selectedPropertyId)}
-                      disabled={
-                        !selectedPropertyId || selectMutation.isPending
-                      }
+                      onClick={() => selectMutation.mutate(draftSelectedPropertyId)}
+                      disabled={!draftSelectedPropertyId || selectMutation.isPending}
                     >
                       Selecionar propriedade
                     </Button>
@@ -409,13 +506,9 @@ export default function Ga4IntegrationPage() {
                       ? "Gerando..."
                       : "Gerar Dashboard Demo"}
                   </Button>
-                  <span className="text-xs text-[var(--text-muted)]">
-                    Ultimos 7 dias
-                  </span>
+                  <span className="text-xs text-[var(--text-muted)]">Ultimos 7 dias</span>
                 </div>
-                {demoError ? (
-                  <p className="text-xs text-rose-600">{demoError}</p>
-                ) : null}
+                {demoError ? <p className="text-xs text-rose-600">{demoError}</p> : null}
                 {demoRows.length ? (
                   <div className="h-64 w-full">
                     <ResponsiveContainer width="100%" height="100%">

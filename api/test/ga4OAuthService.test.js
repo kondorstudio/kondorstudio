@@ -123,6 +123,26 @@ test('exchangeCode fails when refresh_token missing and no stored token', async 
   );
 });
 
+test('buildState/verifyState preserves optional clientId and brandId context', async () => {
+  const { service } = loadService({
+    tokenResponse: null,
+    existingIntegration: null,
+  });
+
+  const state = service.buildState({
+    tenantId: 't1',
+    userId: 'u1',
+    clientId: 'c1',
+    brandId: 'b1',
+  });
+
+  const payload = service.verifyState(state);
+  assert.equal(payload.tenantId, 't1');
+  assert.equal(payload.userId, 'u1');
+  assert.equal(payload.clientId, 'c1');
+  assert.equal(payload.brandId, 'b1');
+});
+
 test('getValidAccessToken marks NEEDS_RECONNECT on access token decrypt failure', async () => {
   const { service, calls } = loadService({
     tokenResponse: null,

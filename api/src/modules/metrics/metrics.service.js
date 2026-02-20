@@ -453,9 +453,15 @@ function buildCompareRange(start, end, mode) {
   return null;
 }
 
-function buildWhereClause({ filters = [], ga4PropertyId, applyGa4Scoping } = {}) {
+function buildWhereClause({
+  filters = [],
+  ga4PropertyId,
+  applyGa4Scoping,
+  startAt = 1,
+} = {}) {
   const clauses = [];
   const params = [];
+  const nextParam = () => Number(startAt) + params.length;
 
   (filters || []).forEach((filter) => {
     if (!filter?.field) return;
@@ -463,15 +469,25 @@ function buildWhereClause({ filters = [], ga4PropertyId, applyGa4Scoping } = {})
     if (!column) return;
 
     if (filter.field === 'platform') {
+      if (filter.op === 'in') {
+        const platforms = toArray(filter.value)
+          .map((entry) => normalizePlatform(entry))
+          .filter(Boolean);
+        if (!platforms.length) return;
+        clauses.push(`"${column}" = ANY($${nextParam()})`);
+        params.push(platforms);
+        return;
+      }
+
       const platform = normalizePlatform(filter.value);
       if (!platform) return;
-      clauses.push(`"${column}" = $${params.length + 1}`);
+      clauses.push(`"${column}" = $${nextParam()}`);
       params.push(platform);
       return;
     }
 
     if (filter.op === 'eq') {
-      clauses.push(`"${column}" = $${params.length + 1}`);
+      clauses.push(`"${column}" = $${nextParam()}`);
       params.push(String(filter.value));
       return;
     }
@@ -479,13 +495,16 @@ function buildWhereClause({ filters = [], ga4PropertyId, applyGa4Scoping } = {})
     if (filter.op === 'in') {
       const values = toArray(filter.value).map((v) => String(v)).filter(Boolean);
       if (!values.length) return;
-      clauses.push(`"${column}" = ANY($${params.length + 1})`);
+      clauses.push(`"${column}" = ANY($${nextParam()})`);
       params.push(values);
     }
   });
 
   if (applyGa4Scoping && ga4PropertyId) {
-    clauses.push(`("ga4_property_id" IS NULL OR "ga4_property_id" = $${params.length + 1})`);
+    // Canonical GA4 scoping: GA4 rows are partitioned by accountId (= propertyId).
+    clauses.push(
+      `("platform" <> 'GA4' OR "accountId" = $${nextParam()})`,
+    );
     params.push(String(ga4PropertyId));
   }
 
@@ -572,6 +591,7 @@ async function runAggregates({
     filters,
     ga4PropertyId,
     applyGa4Scoping,
+    startAt: 5,
   });
 
   const whereParams = [String(tenantId), String(brandId), String(dateFrom), String(dateTo)];
@@ -604,8 +624,8 @@ async function runAggregates({
 
   const baseSql = `
     FROM "fact_kondor_metrics_daily"
-    WHERE "tenant_id" = $1
-      AND "brand_id" = $2
+    WHERE "tenantId" = $1
+      AND "brandId" = $2
       AND "date" >= $3::date
       AND "date" <= $4::date
       ${filterSql}

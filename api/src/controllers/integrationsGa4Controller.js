@@ -2,6 +2,7 @@ const ga4OAuthService = require('../services/ga4OAuthService');
 const ga4AdminService = require('../services/ga4AdminService');
 const ga4DataService = require('../services/ga4DataService');
 const ga4MetadataService = require('../services/ga4MetadataService');
+const { applyPropertyScopeSelection } = require('../services/ga4PropertyScopeService');
 const { ensureGa4FactMetrics } = require('../services/ga4FactMetricsService');
 const {
   resolveBrandGa4ActivePropertyId,
@@ -17,6 +18,12 @@ const { getRedisClient } = require('../lib/redisClient');
 const { ga4SyncQueue } = require('../queues');
 const { prisma, useTenant } = require('../prisma');
 const connectionStateService = require('../services/connectionStateService');
+
+const GA4_STATUS_MISMATCH_LOG_TTL_MS = Math.max(
+  0,
+  Number(process.env.GA4_STATUS_MISMATCH_LOG_TTL_MS || 300_000),
+);
+const ga4StatusMismatchLogState = new Map();
 
 function getFrontUrl() {
   return (
@@ -81,6 +88,94 @@ function normalizeGa4Error(error) {
   }
 
   return message;
+}
+
+function extractOauthContext(query = {}) {
+  const clientId = query?.clientId ? String(query.clientId) : null;
+  const brandId = query?.brandId ? String(query.brandId) : null;
+  return {
+    clientId: clientId || null,
+    brandId: brandId || null,
+  };
+}
+
+function buildRedirectContextParams(payload = {}) {
+  const params = {};
+  if (payload?.clientId) {
+    params.clientId = String(payload.clientId);
+  }
+  if (payload?.brandId) {
+    params.brandId = String(payload.brandId);
+  }
+  return params;
+}
+
+async function ensureOauthContextBelongsToTenant({ tenantId, clientId, brandId }) {
+  const ids = [clientId, brandId]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
+  if (!ids.length) return;
+
+  const uniqueIds = Array.from(new Set(ids));
+  const found = await prisma.client.count({
+    where: {
+      tenantId: String(tenantId),
+      id: { in: uniqueIds },
+    },
+  });
+
+  if (found !== uniqueIds.length) {
+    const err = new Error('Marca não encontrada');
+    err.status = 404;
+    err.code = 'BRAND_NOT_FOUND';
+    throw err;
+  }
+}
+
+function shouldLogStatusMismatch(cacheKey) {
+  if (!cacheKey || GA4_STATUS_MISMATCH_LOG_TTL_MS <= 0) return true;
+  const now = Date.now();
+  const prev = Number(ga4StatusMismatchLogState.get(cacheKey) || 0);
+  if (prev && now - prev < GA4_STATUS_MISMATCH_LOG_TTL_MS) {
+    return false;
+  }
+  ga4StatusMismatchLogState.set(cacheKey, now);
+  if (ga4StatusMismatchLogState.size > 200) {
+    const oldestKey = ga4StatusMismatchLogState.keys().next().value;
+    if (oldestKey) ga4StatusMismatchLogState.delete(oldestKey);
+  }
+  return true;
+}
+
+async function logStatusScopeMismatch({ tenantId, selectedPropertyId }) {
+  const normalizedPropertyId = String(selectedPropertyId || '').trim();
+  if (!tenantId || !normalizedPropertyId) return;
+
+  const [totalBrandsWithSettings, mismatchBrands] = await Promise.all([
+    prisma.brandGa4Settings.count({
+      where: { tenantId: String(tenantId) },
+    }),
+    prisma.brandGa4Settings.count({
+      where: {
+        tenantId: String(tenantId),
+        propertyId: { not: normalizedPropertyId },
+      },
+    }),
+  ]);
+
+  if (!totalBrandsWithSettings || mismatchBrands <= 0) return;
+  const cacheKey = `${String(tenantId)}:${normalizedPropertyId}:${mismatchBrands}`;
+  if (!shouldLogStatusMismatch(cacheKey)) return;
+
+  if (process.env.NODE_ENV !== 'test') {
+    // eslint-disable-next-line no-console
+    console.warn('[ga4] GA4_PROPERTY_SCOPE_MISMATCH', {
+      tenantId: String(tenantId),
+      selectedPropertyId: normalizedPropertyId,
+      mismatchBrands,
+      totalBrandsWithSettings,
+    });
+  }
 }
 
 function respondReauth(res, error) {
@@ -197,16 +292,33 @@ module.exports = {
     try {
       const tenantId = req.tenantId;
       const userId = req.user?.id;
+      const oauthContext = extractOauthContext(req.query || {});
       if (!tenantId || !userId) {
         return res.status(400).json({ error: 'tenantId or userId missing' });
       }
 
+      await ensureOauthContextBelongsToTenant({
+        tenantId,
+        clientId: oauthContext.clientId,
+        brandId: oauthContext.brandId,
+      });
+
       if (ga4OAuthService.isMockMode()) {
         await ga4OAuthService.ensureMockIntegration(tenantId, userId);
-        return res.json({ url: buildRedirectUrl({ connected: 1, mock: 1 }) });
+        return res.json({
+          url: buildRedirectUrl({
+            connected: 1,
+            mock: 1,
+            ...oauthContext,
+          }),
+        });
       }
 
-      const state = ga4OAuthService.buildState({ tenantId, userId });
+      const state = ga4OAuthService.buildState({
+        tenantId,
+        userId,
+        ...oauthContext,
+      });
       const alwaysConsent = String(process.env.GA4_OAUTH_ALWAYS_CONSENT || 'true').toLowerCase() !== 'false';
       const forceConsent =
         req.query?.forceConsent === '1' ||
@@ -234,18 +346,29 @@ module.exports = {
   async oauthCallback(req, res) {
     const { code, state, error: oauthError, error_description: errorDesc } =
       req.query || {};
+    let statePayload = null;
+
+    if (state) {
+      try {
+        statePayload = ga4OAuthService.verifyState(state);
+      } catch (_) {
+        statePayload = null;
+      }
+    }
+    const redirectContext = buildRedirectContextParams(statePayload || {});
 
     if (oauthError) {
       const redirectUrl = buildRedirectUrl({
         connected: 0,
         error: oauthError,
         message: errorDesc || 'OAuth error',
+        ...redirectContext,
       });
       return res.redirect(redirectUrl);
     }
 
     try {
-      const payload = ga4OAuthService.verifyState(state);
+      const payload = statePayload || ga4OAuthService.verifyState(state);
       await ga4OAuthService.exchangeCode({ code, state });
       try {
         await ga4AdminService.syncProperties({
@@ -260,11 +383,15 @@ module.exports = {
             connected: 0,
             error: syncError?.code || 'sync_failed',
             message: message || 'Failed to sync GA4 properties',
+            ...buildRedirectContextParams(payload),
           });
           return res.redirect(redirectUrl);
         }
       }
-      const redirectUrl = buildRedirectUrl({ connected: 1 });
+      const redirectUrl = buildRedirectUrl({
+        connected: 1,
+        ...buildRedirectContextParams(payload),
+      });
       return res.redirect(redirectUrl);
     } catch (error) {
       const message = normalizeGa4Error(error);
@@ -277,6 +404,7 @@ module.exports = {
         connected: 0,
         error: error.code || 'oauth_failed',
         message: message || 'OAuth failed',
+        ...redirectContext,
       });
       return res.redirect(redirectUrl);
     }
@@ -396,6 +524,12 @@ module.exports = {
       }
 
       const selectedProperty = properties.find((p) => p.isSelected) || null;
+      try {
+        await logStatusScopeMismatch({
+          tenantId,
+          selectedPropertyId: selectedProperty?.propertyId || null,
+        });
+      } catch (_err) {}
       const normalizedStatus =
         integration.status === 'NEEDS_RECONNECT'
           ? 'REAUTH_REQUIRED'
@@ -466,7 +600,14 @@ module.exports = {
     try {
       const tenantId = req.tenantId;
       const userId = req.user?.id;
-      const { propertyId } = req.body || {};
+      const {
+        propertyId,
+        brandId,
+        applyMode,
+        syncAfterSelect,
+        includeCampaigns,
+        syncDays,
+      } = req.body || {};
       if (!tenantId || !userId) {
         return res.status(400).json({ error: 'tenantId or userId missing' });
       }
@@ -476,7 +617,29 @@ module.exports = {
         userId,
         propertyId,
       });
-      return res.json({ selected });
+      const scope = await applyPropertyScopeSelection({
+        tenantId,
+        userId,
+        propertyId,
+        propertyDisplayName: selected?.displayName || null,
+        brandId: brandId || null,
+        applyMode,
+        syncAfterSelect,
+        includeCampaigns,
+        syncDays,
+      });
+
+      return res.json({
+        selected,
+        selectedProperty: selected,
+        scopeApplied: scope.scopeApplied,
+        affectedBrandsTotal: scope.affectedBrandsTotal,
+        affectedBrandsSucceeded: scope.affectedBrandsSucceeded,
+        affectedBrandsFailed: scope.affectedBrandsFailed,
+        failures: scope.failures || [],
+        syncQueuedTotal: scope.syncQueuedTotal,
+        syncSkippedTotal: scope.syncSkippedTotal,
+      });
     } catch (error) {
       console.error('GA4 propertiesSelect error:', error);
       if (respondReauth(res, error)) return;

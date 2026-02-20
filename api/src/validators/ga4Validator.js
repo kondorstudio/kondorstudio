@@ -98,7 +98,14 @@ const batchRunReportsSchema = z.object({
 });
 
 const propertySelectSchema = z.object({
-  propertyId: numericString,
+  propertyId: ga4PropertyIdSchema,
+  brandId: z.string().uuid().optional(),
+  applyMode: z
+    .enum(['LEGACY_INTEGRATION_ONLY', 'SINGLE_BRAND', 'ALL_BRANDS'])
+    .optional(),
+  syncAfterSelect: z.boolean().optional(),
+  includeCampaigns: z.boolean().optional(),
+  syncDays: z.coerce.number().int().min(1).max(365).optional(),
 });
 
 const ga4FactsSyncSchema = z.object({

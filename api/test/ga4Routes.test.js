@@ -19,8 +19,10 @@ test.afterEach(() => {
   [
     '../src/middleware/auth',
     '../src/middleware/tenantGuard',
+    '../src/prisma',
     '../src/services/ga4AdminService',
     '../src/services/ga4OAuthService',
+    '../src/services/ga4PropertyScopeService',
     '../src/lib/googleClient',
     '../src/services/ga4DataService',
     '../src/services/connectionStateService',
@@ -39,8 +41,10 @@ function buildApp({
   syncPropertiesError = null,
   statusIntegration = null,
   connectionState = null,
+  oauthStatePayload = null,
+  propertiesSelectScopeResult = null,
 } = {}) {
-  const tracker = { buildAuthUrlArgs: null };
+  const tracker = { buildAuthUrlArgs: null, buildStateArgs: null };
   const auth = (req, _res, next) => {
     req.user = { id: 'user-1', role: 'OWNER' };
     req.tenantId = 'tenant-1';
@@ -64,6 +68,33 @@ function buildApp({
     next();
   });
 
+  mockModule('../src/prisma', {
+    prisma: {
+      client: {
+        count: async ({ where }) => {
+          const ids = Array.isArray(where?.id?.in) ? where.id.in : [];
+          return ids.length;
+        },
+      },
+      brandGa4Settings: {
+        count: async () => 0,
+      },
+      integrationGoogleGa4: {
+        findMany: async () => [],
+        updateMany: async () => ({ count: 0 }),
+      },
+    },
+    useTenant: () => ({
+      integrationGoogleGa4: {
+        findMany: async () => [],
+        updateMany: async () => ({ count: 0 }),
+      },
+      integrationGoogleGa4Property: {
+        updateMany: async () => ({ count: 0 }),
+      },
+    }),
+  });
+
   mockModule('../src/services/ga4AdminService', {
     syncProperties: async () => {
       if (syncPropertiesError) throw syncPropertiesError;
@@ -77,18 +108,48 @@ function buildApp({
       ];
     },
     listProperties: async () => [],
-    selectProperty: async () => ({ propertyId: '123456789' }),
+    selectProperty: async ({ propertyId }) => ({
+      id: 'prop-1',
+      propertyId: String(propertyId || '123456789'),
+      displayName: 'Demo Property',
+      isSelected: true,
+    }),
     getSelectedProperty: async () => ({ propertyId: '123456789' }),
   });
 
   mockModule('../src/services/ga4OAuthService', {
     isMockMode: () => false,
-    buildState: () => 'state',
-    verifyState: () => ({ tenantId: 'tenant-1', userId: 'user-1' }),
+    buildState: (args) => {
+      tracker.buildStateArgs = args;
+      return 'state';
+    },
+    verifyState: () =>
+      oauthStatePayload || {
+        tenantId: 'tenant-1',
+        userId: 'user-1',
+      },
     getIntegration: async () => null,
     ensureMockIntegration: async () => ({}),
     exchangeCode: async () => ({}),
     disconnect: async () => ({}),
+  });
+
+  mockModule('../src/services/ga4PropertyScopeService', {
+    APPLY_MODE: {
+      LEGACY_INTEGRATION_ONLY: 'LEGACY_INTEGRATION_ONLY',
+      SINGLE_BRAND: 'SINGLE_BRAND',
+      ALL_BRANDS: 'ALL_BRANDS',
+    },
+    applyPropertyScopeSelection: async () =>
+      propertiesSelectScopeResult || {
+        scopeApplied: 'LEGACY_INTEGRATION_ONLY',
+        affectedBrandsTotal: 0,
+        affectedBrandsSucceeded: 0,
+        affectedBrandsFailed: 0,
+        failures: [],
+        syncQueuedTotal: 0,
+        syncSkippedTotal: 0,
+      },
   });
 
   mockModule('../src/lib/googleClient', {
@@ -144,6 +205,16 @@ test('GET /integrations/ga4/oauth/start returns url', async () => {
   assert.equal(Boolean(tracker.buildAuthUrlArgs?.forceConsent), true);
 });
 
+test('GET /integrations/ga4/oauth/start forwards brand/client context into oauth state', async () => {
+  const { app, tracker } = buildApp();
+  const brandId = 'a5a5a5a5-a5a5-45a5-95a5-a5a5a5a5a5a5';
+  const res = await request(app)
+    .get(`/api/integrations/ga4/oauth/start?clientId=${brandId}&brandId=${brandId}`);
+  assert.equal(res.statusCode, 200);
+  assert.equal(String(tracker.buildStateArgs?.clientId || ''), brandId);
+  assert.equal(String(tracker.buildStateArgs?.brandId || ''), brandId);
+});
+
 test('GET /integrations/ga4/properties/sync returns properties', async () => {
   const { app } = buildApp();
   const res = await request(app).get('/api/integrations/ga4/properties/sync');
@@ -170,6 +241,49 @@ test('GET /integrations/ga4/oauth/callback redirects with connected=0 on reauth 
   assert.equal(res.statusCode, 302);
   assert.match(String(res.headers.location || ''), /connected=0/);
   assert.match(String(res.headers.location || ''), /error=REAUTH_REQUIRED/);
+});
+
+test('GET /integrations/ga4/oauth/callback preserves clientId on success redirect', async () => {
+  const clientId = '8f8f8f8f-8f8f-48f8-98f8-8f8f8f8f8f8f';
+  const { app } = buildApp({
+    oauthStatePayload: {
+      tenantId: 'tenant-1',
+      userId: 'user-1',
+      clientId,
+    },
+  });
+  const res = await request(app).get('/api/integrations/ga4/oauth/callback?code=abc&state=state');
+  assert.equal(res.statusCode, 302);
+  assert.match(String(res.headers.location || ''), /connected=1/);
+  assert.match(String(res.headers.location || ''), /clientId=8f8f8f8f-8f8f-48f8-98f8-8f8f8f8f8f8f/);
+});
+
+test('POST /integrations/ga4/properties/select returns scoped counters', async () => {
+  const { app } = buildApp({
+    propertiesSelectScopeResult: {
+      scopeApplied: 'ALL_BRANDS',
+      affectedBrandsTotal: 3,
+      affectedBrandsSucceeded: 2,
+      affectedBrandsFailed: 1,
+      failures: [{ brandId: 'brand-3', message: 'failed', code: 'X' }],
+      syncQueuedTotal: 2,
+      syncSkippedTotal: 1,
+    },
+  });
+
+  const res = await request(app)
+    .post('/api/integrations/ga4/properties/select')
+    .send({
+      propertyId: '123456789',
+      applyMode: 'ALL_BRANDS',
+      syncAfterSelect: true,
+    });
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body?.selectedProperty?.propertyId, '123456789');
+  assert.equal(res.body?.scopeApplied, 'ALL_BRANDS');
+  assert.equal(res.body?.affectedBrandsTotal, 3);
+  assert.equal(res.body?.syncQueuedTotal, 2);
 });
 
 test('GET /integrations/ga4/status reports statusSource=connectionState when state exists', async () => {
