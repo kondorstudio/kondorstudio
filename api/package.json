@@ -8,9 +8,11 @@
   },
   "scripts": {
     "start": "node src/server.js",
+    "start:validated": "npm run validate:crypto && npm run start",
     "start:migrate": "npm run prisma:migrate:deploy:safe && node src/server.js",
     "dev": "nodemon src/server.js",
     "worker": "node src/worker.js",
+    "worker:validated": "npm run validate:crypto && npm run worker",
     "build": "npm run prisma:generate",
     "test": "node --test",
     "postinstall": "npm run prisma:generate",
