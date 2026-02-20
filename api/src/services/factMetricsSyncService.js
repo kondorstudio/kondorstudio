@@ -42,9 +42,17 @@ const SUPPORTED_METRICS = new Set([
 ]);
 
 const DEFAULT_CURRENCY = process.env.DEFAULT_REPORT_CURRENCY || 'BRL';
+
+// TTL para evitar “thundering herd” quando muitos widgets chamam /metrics/query ao mesmo tempo
 const SYNC_TTL_MS = Math.max(
   60_000,
   Number(process.env.FACT_METRICS_SYNC_TTL_MS || 5 * 60 * 1000),
+);
+
+// Janela incremental para reprocessar dias recentes (atrasos/ajustes das APIs)
+const RECENT_REFRESH_DAYS = Math.max(
+  0,
+  Number(process.env.FACT_METRICS_RECENT_REFRESH_DAYS || 3),
 );
 
 const syncCache = new Map();
@@ -99,13 +107,15 @@ function extractFilterValues(filters = [], field) {
 function buildSyncKey(tenantId, brandId, platform, accountId, dateRange) {
   if (!tenantId || !brandId || !platform || !accountId) return null;
   if (!dateRange?.start || !dateRange?.end) return null;
+
+  // O key não inclui métricas por design: o fetch retorna sempre “por dia” e o upsert é idempotente.
   return [
     tenantId,
     brandId,
     platform,
     accountId,
-    dateRange.start,
-    dateRange.end,
+    String(dateRange.start),
+    String(dateRange.end),
   ].join(':');
 }
 
@@ -145,6 +155,27 @@ async function withSyncInFlight(key, task) {
   return promise;
 }
 
+function dateSubtractDays(dateKey, days) {
+  const d = new Date(`${dateKey}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return null;
+  const out = new Date(d.getTime() - days * 24 * 60 * 60 * 1000);
+  return out.toISOString().slice(0, 10);
+}
+
+function shouldRefreshBecauseRecent(dateRange) {
+  const end = normalizeDateKey(dateRange?.end);
+  if (!end) return false;
+
+  if (RECENT_REFRESH_DAYS <= 0) return false;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const cutoff = dateSubtractDays(today, RECENT_REFRESH_DAYS);
+  if (!cutoff) return false;
+
+  // Se o range termina dentro da janela “recente”, reprocessa para pegar atrasos/ajustes
+  return end >= cutoff;
+}
+
 function rangeTouchesToday(dateRange) {
   const start = normalizeDateKey(dateRange?.start);
   const end = normalizeDateKey(dateRange?.end);
@@ -170,7 +201,9 @@ function resolveCurrency(connection, integration) {
 function applyAccountToIntegration(integration, platform, externalAccountId) {
   if (!integration || !externalAccountId) return integration;
   const settings = {
-    ...(integration.settings && typeof integration.settings === 'object' ? integration.settings : {}),
+    ...(integration.settings && typeof integration.settings === 'object'
+      ? integration.settings
+      : {}),
   };
 
   switch (platform) {
@@ -214,12 +247,15 @@ function buildFactRows({
   metricsRows,
 }) {
   const map = new Map();
+
   metricsRows.forEach((row) => {
     if (!row) return;
     const metric = row.name || row.metric || row.key;
     if (!metric || !SUPPORTED_METRICS.has(metric)) return;
+
     const dateKey = normalizeDateKey(row.collectedAt);
     if (!dateKey) return;
+
     const key = `${dateKey}`;
     const current =
       map.get(key) ||
@@ -232,6 +268,7 @@ function buildFactRows({
         campaignId: null,
         adsetId: null,
         adId: null,
+        // dimensionKey existe no schema; mas repository pode setar default
         currency: currency || DEFAULT_CURRENCY,
         impressions: BigInt(0),
         clicks: BigInt(0),
@@ -243,6 +280,7 @@ function buildFactRows({
       };
 
     const value = toNumber(row.value);
+
     if (metric === 'impressions') current.impressions += toBigInt(value);
     if (metric === 'clicks') current.clicks += toBigInt(value);
     if (metric === 'spend') current.spend += value;
@@ -264,15 +302,20 @@ async function resolveBrandConnections(tenantId, brandId, platform, accountFilte
     platform,
     status: 'ACTIVE',
   };
+
   const connections = await prisma.brandSourceConnection.findMany({ where });
   if (!accountFilter?.length) return connections;
+
   const allowed = new Set(accountFilter.map((value) => String(value)));
-  return connections.filter((conn) => allowed.has(String(conn.externalAccountId)));
+  return connections.filter((conn) =>
+    allowed.has(String(conn.externalAccountId)),
+  );
 }
 
 async function resolveDataConnection(tenantId, brandId, platform, externalAccountId) {
   const source = PLATFORM_SOURCE_MAP[platform] || null;
   if (!source) return null;
+
   return prisma.dataSourceConnection.findFirst({
     where: {
       tenantId,
@@ -287,21 +330,21 @@ async function resolveDataConnection(tenantId, brandId, platform, externalAccoun
 
 async function hasFactsForRange({ tenantId, brandId, platform, accountId, dateRange }) {
   if (!tenantId || !brandId || !platform || !accountId) return false;
+
   const start = new Date(dateRange.start);
   const end = new Date(dateRange.end);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return false;
+
   const count = await prisma.factKondorMetricsDaily.count({
     where: {
       tenantId,
       brandId,
       platform,
       accountId,
-      date: {
-        gte: start,
-        lte: end,
-      },
+      date: { gte: start, lte: end },
     },
   });
+
   return count > 0;
 }
 
@@ -314,7 +357,10 @@ async function syncConnectionFacts({
   metrics,
 }) {
   const service = PLATFORM_SERVICE_MAP[platform];
+
+  // Se não tem service, não tenta sync (ex.: FB_IG, GMB, GA4 etc. não entram aqui)
   if (!service || typeof service.fetchAccountMetrics !== 'function') return;
+
   const filteredMetrics = filterMetricsForPlatform(metrics, platform);
   if (!filteredMetrics.length) return;
 
@@ -324,6 +370,7 @@ async function syncConnectionFacts({
     platform,
     externalAccountId,
   );
+
   if (!dataConnection?.integration) return;
 
   const cacheKey = buildSyncKey(
@@ -333,21 +380,27 @@ async function syncConnectionFacts({
     externalAccountId,
     dateRange,
   );
+
   if (shouldSkipSync(cacheKey)) return;
 
   return withSyncInFlight(cacheKey, async () => {
     if (shouldSkipSync(cacheKey)) return;
 
+    const accountId = String(externalAccountId);
+
     const hasFacts = await hasFactsForRange({
       tenantId,
       brandId,
       platform,
-      accountId: String(externalAccountId),
+      accountId,
       dateRange,
     });
 
     const shouldRefreshOpenRange = rangeTouchesToday(dateRange);
-    if (hasFacts && !shouldRefreshOpenRange) {
+    const shouldRefreshRecent = shouldRefreshBecauseRecent(dateRange);
+
+    // Se já tem facts e não é range “aberto” nem recente, evita refetch
+    if (hasFacts && !shouldRefreshOpenRange && !shouldRefreshRecent) {
       markSynced(cacheKey);
       return;
     }
@@ -370,11 +423,12 @@ async function syncConnectionFacts({
     }
 
     const currency = resolveCurrency(dataConnection, integration);
+
     const factRows = buildFactRows({
       tenantId,
       brandId,
       platform,
-      accountId: String(externalAccountId),
+      accountId,
       currency,
       metricsRows,
     });
@@ -386,6 +440,7 @@ async function syncConnectionFacts({
 
     await upsertFactMetricsDailyRows(factRows, { db: prisma });
 
+    // Projeção legado (warehouse antigo) — falhas aqui não podem derrubar o dashboard
     try {
       await analyticsWarehouseService.upsertLegacyFactRows({
         tenantId,
@@ -416,13 +471,16 @@ async function ensureFactMetrics({
   requiredPlatforms,
 }) {
   if (!tenantId || !brandId || !dateRange?.start || !dateRange?.end) return;
+
   const metricList = Array.from(new Set((metrics || []).filter(Boolean)));
   if (!metricList.length) return;
 
   const platformFilters = extractFilterValues(filters, 'platform').map(normalizePlatform);
   const accountFilters = extractFilterValues(filters, 'account_id');
 
+  // Preferência: requiredPlatforms explícito → filtro → conexões ativas do brand
   let platforms = (requiredPlatforms || []).map(normalizePlatform).filter(Boolean);
+
   if (!platforms.length && platformFilters.length) {
     platforms = platformFilters;
   }
@@ -435,9 +493,11 @@ async function ensureFactMetrics({
     platforms = connections.map((item) => normalizePlatform(item.platform)).filter(Boolean);
   }
 
-  const uniquePlatforms = Array.from(new Set(platforms)).filter(
-    (platform) => platform && platform !== 'GA4',
-  );
+  // Só tenta sync das plataformas que realmente têm service de Ads (evita loops inúteis e confusão)
+  const uniquePlatforms = Array.from(new Set(platforms))
+    .filter(Boolean)
+    .filter((platform) => platform !== 'GA4')
+    .filter((platform) => PLATFORM_SERVICE_MAP[platform]);
 
   for (const platform of uniquePlatforms) {
     const connections = await resolveBrandConnections(
@@ -446,6 +506,7 @@ async function ensureFactMetrics({
       platform,
       accountFilters,
     );
+
     if (!connections.length) continue;
 
     for (const connection of connections) {
@@ -468,15 +529,18 @@ async function syncAfterConnection({
   externalAccountId,
 }) {
   if (!tenantId || !brandId || !platform || !externalAccountId) return;
+
   const days = Math.max(7, Number(process.env.REPORTING_DEFAULT_RANGE_DAYS || 30));
   const end = new Date();
   const start = new Date(end.getTime() - (days - 1) * 24 * 60 * 60 * 1000);
+
   const dateRange = {
     start: start.toISOString().slice(0, 10),
     end: end.toISOString().slice(0, 10),
   };
 
   const baseMetrics = filterMetricsForPlatform(Array.from(SUPPORTED_METRICS), platform);
+
   try {
     await ensureFactMetrics({
       tenantId,

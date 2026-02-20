@@ -4,6 +4,9 @@ const {
 } = require('../../services/brandGa4SettingsService');
 const { buildRollingDateRange } = require('../../lib/timezone');
 
+const { ensureGa4FactMetrics } = require('../../services/ga4FactMetricsService');
+const { ensureFactMetrics } = require('../../services/factMetricsSyncService');
+
 const SUPPORTED_PLATFORMS = new Set([
   'META_ADS',
   'GOOGLE_ADS',
@@ -292,513 +295,258 @@ function invalidateMetricsCacheForBrand(tenantId, brandId) {
 }
 
 function buildMetricsCacheKey(tenantId, payload = {}) {
-  if (!tenantId || !payload?.brandId || !payload?.dateRange?.start || !payload?.dateRange?.end) {
-    return null;
-  }
-  const keyPayload = {
-    tenantId,
-    brandId: payload.brandId,
-    dateRange: payload.dateRange,
+  if (!tenantId || !payload?.brandId) return null;
+  const key = {
+    tenantId: String(tenantId),
+    brandId: String(payload.brandId),
+    dateRange: payload.dateRange || null,
     dimensions: payload.dimensions || [],
     metrics: payload.metrics || [],
     filters: payload.filters || [],
-    requiredPlatforms: payload.requiredPlatforms || [],
     compareTo: payload.compareTo || null,
-    sort: payload.sort || null,
     limit: payload.limit || null,
+    sort: payload.sort || null,
     pagination: payload.pagination || null,
+    requiredPlatforms: payload.requiredPlatforms || null,
+    responseFormat: payload.responseFormat || null,
+    widgetId: payload.widgetId || null,
+    widgetType: payload.widgetType || null,
   };
-  return `metrics:${stableStringify(keyPayload)}`;
+  return stableStringify(key);
 }
 
-function withDashboardConcurrency(dashboardKey, task) {
-  if (!dashboardKey || typeof task !== 'function') {
-    return task();
-  }
-
+function withTimeout(fn, timeoutMs, meta = {}) {
+  const ms = Math.max(1, Number(timeoutMs || 0));
   return new Promise((resolve, reject) => {
-    const bucket = dashboardQueues.get(dashboardKey) || { active: 0, queue: [] };
-    dashboardQueues.set(dashboardKey, bucket);
+    let finished = false;
+    const timer = setTimeout(() => {
+      if (finished) return;
+      finished = true;
+      const err = new Error(meta?.message || 'Timeout');
+      err.code = meta?.code || 'TIMEOUT';
+      err.status = meta?.status || 504;
+      reject(err);
+    }, ms);
 
-    const runTask = async () => {
-      bucket.active += 1;
-      try {
-        const result = await task();
+    Promise.resolve()
+      .then(fn)
+      .then((result) => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timer);
         resolve(result);
-      } catch (err) {
+      })
+      .catch((err) => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timer);
         reject(err);
-      } finally {
-        bucket.active -= 1;
-        const next = bucket.queue.shift();
-        if (next) {
-          next();
-        } else if (bucket.active === 0) {
-          dashboardQueues.delete(dashboardKey);
-        }
-      }
-    };
-
-    if (bucket.active < METRICS_QUERY_CONCURRENCY_LIMIT) {
-      runTask();
-      return;
-    }
-    bucket.queue.push(runTask);
+      });
   });
 }
 
-async function withTimeout(task, timeoutMs, {
-  code = 'TIMEOUT',
-  message = 'Tempo limite excedido',
-  details = null,
-} = {}) {
-  const effectiveTimeout = Math.max(1, Number(timeoutMs) || 1);
-  let timeoutHandle;
+async function withDashboardConcurrency(dashboardKey, fn) {
+  if (!dashboardKey) return fn();
+
+  let queue = dashboardQueues.get(dashboardKey);
+  if (!queue) {
+    queue = { inFlight: 0, pending: [] };
+    dashboardQueues.set(dashboardKey, queue);
+  }
+
+  if (queue.inFlight >= METRICS_QUERY_CONCURRENCY_LIMIT) {
+    await new Promise((resolve) => queue.pending.push(resolve));
+  }
+
+  queue.inFlight += 1;
   try {
-    return await Promise.race([
-      Promise.resolve().then(() => task()),
-      new Promise((_, reject) => {
-        timeoutHandle = setTimeout(() => {
-          const err = new Error(message);
-          err.status = 504;
-          err.code = code;
-          err.details = {
-            ...(details || {}),
-            timeoutMs: effectiveTimeout,
-          };
-          reject(err);
-        }, effectiveTimeout);
-      }),
-    ]);
+    return await fn();
   } finally {
-    if (timeoutHandle) clearTimeout(timeoutHandle);
+    queue.inFlight -= 1;
+    const next = queue.pending.shift();
+    if (next) next();
   }
 }
 
-function toNumber(value) {
-  if (value === null || value === undefined) return 0;
-  if (typeof value === 'number') return value;
-  if (typeof value === 'bigint') return Number(value);
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
+function normalizeMetricCatalog(entries = []) {
+  const map = new Map();
+  (entries || []).forEach((entry) => {
+    if (!entry?.key) return;
+    map.set(entry.key, entry);
+  });
+  return map;
 }
 
-function safeDivide(numerator, denominator) {
-  const num = toNumber(numerator);
-  const den = toNumber(denominator);
-  if (!den) return 0;
-  const value = num / den;
-  return Number.isFinite(value) ? value : 0;
+function buildMetricsPlan(metrics = [], catalog = new Map()) {
+  const baseMetrics = [];
+  const derivedMetrics = [];
+
+  (metrics || []).forEach((metricKey) => {
+    if (!metricKey) return;
+    const key = String(metricKey);
+    if (BASE_METRIC_COLUMN_MAP[key]) {
+      baseMetrics.push({ key });
+      return;
+    }
+    if (SUPPORTED_DERIVED_METRICS.has(key)) {
+      derivedMetrics.push({ key });
+      return;
+    }
+    // If catalog defines it as base metric, accept it.
+    const entry = catalog.get(key);
+    if (entry?.kind === 'base') {
+      baseMetrics.push({ key });
+    }
+  });
+
+  // Ensure derived metrics have dependencies available in SQL (computed on the fly).
+  const need = (k) => baseMetrics.some((m) => m.key === k);
+  const add = (k) => {
+    if (!need(k) && BASE_METRIC_COLUMN_MAP[k]) baseMetrics.push({ key: k });
+  };
+
+  derivedMetrics.forEach((m) => {
+    if (m.key === 'ctr') {
+      add('clicks');
+      add('impressions');
+    }
+    if (m.key === 'cpc') {
+      add('spend');
+      add('clicks');
+    }
+    if (m.key === 'cpm') {
+      add('spend');
+      add('impressions');
+    }
+    if (m.key === 'cpa') {
+      add('spend');
+      add('conversions');
+    }
+    if (m.key === 'roas') {
+      add('revenue');
+      add('spend');
+    }
+  });
+
+  return { baseMetrics, derivedMetrics };
 }
 
-function buildCompareRange(dateFrom, dateTo, mode) {
-  const start = new Date(dateFrom);
-  const end = new Date(dateTo);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
-
-  if (mode === 'previous_year') {
-    const prevStart = new Date(start);
-    const prevEnd = new Date(end);
-    prevStart.setFullYear(prevStart.getFullYear() - 1);
-    prevEnd.setFullYear(prevEnd.getFullYear() - 1);
-    return {
-      start: prevStart.toISOString().slice(0, 10),
-      end: prevEnd.toISOString().slice(0, 10),
-    };
+function buildCompareRange(start, end, mode) {
+  const from = new Date(`${start}T00:00:00Z`);
+  const to = new Date(`${end}T00:00:00Z`);
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+    return null;
   }
+
+  const deltaDays = Math.max(0, Math.round((to - from) / (24 * 60 * 60 * 1000)) + 1);
+  if (!deltaDays) return null;
+
+  const prevTo = new Date(from.getTime() - 24 * 60 * 60 * 1000);
+  const prevFrom = new Date(prevTo.getTime() - (deltaDays - 1) * 24 * 60 * 60 * 1000);
+
+  const fmt = (d) => d.toISOString().slice(0, 10);
 
   if (mode === 'previous_period') {
-    const dayMs = 24 * 60 * 60 * 1000;
-    const diffDays = Math.floor((end.getTime() - start.getTime()) / dayMs) + 1;
-    const prevEnd = new Date(start.getTime() - dayMs);
-    const prevStart = new Date(prevEnd.getTime() - (diffDays - 1) * dayMs);
-    return {
-      start: prevStart.toISOString().slice(0, 10),
-      end: prevEnd.toISOString().slice(0, 10),
-    };
+    return { start: fmt(prevFrom), end: fmt(prevTo) };
   }
 
   return null;
 }
 
-function normalizeReporteiCell(value) {
-  if (value && typeof value === 'object') {
-    if (Object.prototype.hasOwnProperty.call(value, 'text')) return value.text;
-    if (Object.prototype.hasOwnProperty.call(value, 'value')) return value.value;
-    if (Object.prototype.hasOwnProperty.call(value, 'title')) return value.title;
-  }
-  return value;
-}
-
-function resolveKpiValue(rows, totals, metric, dimensions) {
-  if (dimensions?.length === 1 && dimensions[0] === 'date' && Array.isArray(rows) && rows.length) {
-    const sorted = [...rows].sort((a, b) =>
-      String(a?.date || '').localeCompare(String(b?.date || '')),
-    );
-    return sorted[sorted.length - 1]?.[metric];
-  }
-  return totals?.[metric];
-}
-
-function buildReporteiComparison(currentValue, compareValue) {
-  if (compareValue === null || compareValue === undefined) {
-    return {
-      values: null,
-      difference: null,
-      absoluteDifference: null,
-    };
-  }
-  const currentNum = toNumber(currentValue);
-  const compareNum = toNumber(compareValue);
-  const absoluteDifference = currentNum - compareNum;
-  const difference = compareNum === 0 ? null : (absoluteDifference / compareNum) * 100;
-  return {
-    values: compareValue,
-    difference,
-    absoluteDifference,
-  };
-}
-
-function buildReporteiChart(rows, metrics, dimension) {
-  const safeRows = Array.isArray(rows) ? rows : [];
-  const labels = safeRows.map((row, index) => {
-    if (dimension && row && row[dimension] !== undefined) return row[dimension];
-    if (row?.label !== undefined) return row.label;
-    if (row?.date !== undefined) return row.date;
-    return String(index + 1);
-  });
-  const values = (Array.isArray(metrics) ? metrics : []).map((metric) => ({
-    name: metric,
-    data: safeRows.map((row) => {
-      const value = row ? row[metric] : null;
-      const numeric = toNumber(value);
-      return Number.isFinite(numeric) ? numeric : 0;
-    }),
-  }));
-  return { labels, values };
-}
-
-function buildReporteiTable(rows, dimensions, metrics) {
-  const safeRows = Array.isArray(rows) ? rows : [];
-  const columns = [...(dimensions || []), ...(metrics || [])];
-  const values = safeRows.map((row) =>
-    columns.map((column) => normalizeReporteiCell(row ? row[column] : null)),
-  );
-  return { values };
-}
-
-function formatReporteiResponse(result, payload = {}) {
-  const widgetId = payload.widgetId || null;
-  const widgetType = String(payload.widgetType || '').toLowerCase();
-  const metrics = Array.isArray(payload.metrics) ? payload.metrics : [];
-  const dimensions = Array.isArray(payload.dimensions) ? payload.dimensions : [];
-  const rows = Array.isArray(result?.rows) ? result.rows : [];
-  const totals = result?.totals || {};
-  const compareTotals = result?.compare?.totals || null;
-
-  const metricForKpi = metrics[0] || Object.keys(totals || {})[0];
-  let entry = {};
-
-  if (widgetType === 'kpi' || (!widgetType && !dimensions.length)) {
-    const currentValue = resolveKpiValue(rows, totals, metricForKpi, dimensions);
-    const compareValue =
-      compareTotals && metricForKpi ? compareTotals[metricForKpi] : null;
-    entry = {
-      values: currentValue ?? 0,
-      trend: { data: [] },
-      comparison: buildReporteiComparison(currentValue, compareValue),
-    };
-  } else if (['timeseries', 'bar', 'pie', 'donut'].includes(widgetType)) {
-    const dimension = dimensions[0] || 'label';
-    entry = buildReporteiChart(rows, metrics, dimension);
-  } else {
-    entry = buildReporteiTable(rows, dimensions, metrics);
-  }
-
-  if (widgetId) {
-    return { [widgetId]: entry };
-  }
-  return entry;
-}
-
-function normalizeMetricCatalog(entries = []) {
-  return entries.map((entry) => ({
-    key: entry.key,
-    label: entry.label,
-    format: entry.format,
-    formula: entry.formula,
-    requiredFields: Array.isArray(entry.requiredFields)
-      ? entry.requiredFields
-      : Array.isArray(entry.requiredFields?.value)
-        ? entry.requiredFields.value
-        : Array.isArray(entry.requiredFields?.values)
-          ? entry.requiredFields.values
-          : Array.isArray(entry.requiredFields)
-            ? entry.requiredFields
-            : entry.requiredFields && typeof entry.requiredFields === 'string'
-              ? [entry.requiredFields]
-              : entry.requiredFields || [],
-  }));
-}
-
-function buildMetricsPlan(requestedMetrics, catalogEntries) {
-  const catalogMap = new Map();
-  catalogEntries.forEach((entry) => catalogMap.set(entry.key, entry));
-
-  const missing = requestedMetrics.filter((metric) => !catalogMap.has(metric));
-  if (missing.length) {
-    const err = new Error(`Métricas não encontradas: ${missing.join(', ')}`);
-    err.code = 'METRIC_NOT_FOUND';
-    err.status = 400;
-    err.details = { metrics: missing };
-    throw err;
-  }
-
-  const baseMetrics = new Set();
-  const derivedMetrics = [];
-
-  requestedMetrics.forEach((metricKey) => {
-    const entry = catalogMap.get(metricKey);
-    if (entry.formula) {
-      if (!SUPPORTED_DERIVED_METRICS.has(metricKey)) {
-        const err = new Error(`Métrica derivada não suportada: ${metricKey}`);
-        err.code = 'UNSUPPORTED_DERIVED_METRIC';
-        err.status = 400;
-        throw err;
-      }
-      const required = Array.isArray(entry.requiredFields) ? entry.requiredFields : [];
-      if (!required.length) {
-        const err = new Error(`Métrica derivada sem requiredFields: ${metricKey}`);
-        err.code = 'INVALID_METRIC_CATALOG';
-        err.status = 400;
-        throw err;
-      }
-      required.forEach((req) => baseMetrics.add(req));
-      derivedMetrics.push(entry);
-    } else {
-      baseMetrics.add(metricKey);
-    }
-  });
-
-  const unsupported = Array.from(baseMetrics).filter((metric) => !BASE_METRIC_COLUMN_MAP[metric]);
-  if (unsupported.length) {
-    const err = new Error(`Métricas base não suportadas: ${unsupported.join(', ')}`);
-    err.code = 'UNSUPPORTED_METRIC';
-    err.status = 400;
-    err.details = { metrics: unsupported };
-    throw err;
-  }
-
-  return {
-    baseMetrics: Array.from(baseMetrics),
-    derivedMetrics,
-  };
-}
-
-function buildWhereClause({ tenantId, brandId, dateFrom, dateTo, filters }) {
-  const conditions = [
-    '"tenantId" = $1',
-    '"brandId" = $2',
-    '"date" >= $3::date',
-    '"date" <= $4::date',
-  ];
-  const params = [tenantId, brandId, dateFrom, dateTo];
-  let paramIndex = params.length + 1;
+function buildWhereClause({ filters = [], ga4PropertyId, applyGa4Scoping } = {}) {
+  const clauses = [];
+  const params = [];
 
   (filters || []).forEach((filter) => {
-    const column = DIMENSION_COLUMN_MAP[filter.field];
+    if (!filter?.field) return;
+    const column = DIMENSION_COLUMN_MAP[filter.field] || null;
     if (!column) return;
-    const isPlatformFilter = filter.field === 'platform';
-    const cast = isPlatformFilter ? '::"BrandSourcePlatform"' : '';
+
+    if (filter.field === 'platform') {
+      const platform = normalizePlatform(filter.value);
+      if (!platform) return;
+      clauses.push(`"${column}" = $${params.length + 1}`);
+      params.push(platform);
+      return;
+    }
+
     if (filter.op === 'eq') {
-      const value = isPlatformFilter ? normalizePlatform(filter.value) : filter.value;
-      if (isPlatformFilter && !value) {
-        const err = new Error('Filtro de plataforma inválido');
-        err.code = 'INVALID_PLATFORM_FILTER';
-        err.status = 400;
-        err.details = { value: filter.value };
-        throw err;
-      }
-      conditions.push(`"${column}" = $${paramIndex}${cast}`);
-      params.push(value);
-      paramIndex += 1;
+      clauses.push(`"${column}" = $${params.length + 1}`);
+      params.push(String(filter.value));
       return;
     }
 
     if (filter.op === 'in') {
-      const rawValues = Array.isArray(filter.value) ? filter.value : [];
-      if (!rawValues.length) return;
-
-      const values = isPlatformFilter
-        ? rawValues.map((entry) => normalizePlatform(entry)).filter(Boolean)
-        : rawValues;
-
-      if (isPlatformFilter && values.length !== rawValues.length) {
-        const err = new Error('Filtro de plataforma inválido');
-        err.code = 'INVALID_PLATFORM_FILTER';
-        err.status = 400;
-        err.details = { values: rawValues };
-        throw err;
-      }
-
-      const placeholders = values.map(() => `$${paramIndex++}${cast}`);
-      params.push(...values);
-      conditions.push(`"${column}" IN (${placeholders.join(', ')})`);
+      const values = toArray(filter.value).map((v) => String(v)).filter(Boolean);
+      if (!values.length) return;
+      clauses.push(`"${column}" = ANY($${params.length + 1})`);
+      params.push(values);
     }
   });
 
-  return { whereSql: conditions.join(' AND '), params };
-}
-
-function buildDerivedSelectClause(metricKey) {
-  switch (metricKey) {
-    case 'ctr':
-      return 'CASE WHEN SUM("impressions") = 0 THEN 0 ELSE SUM("clicks")::numeric / SUM("impressions") END AS "ctr"';
-    case 'cpc':
-      return 'CASE WHEN SUM("clicks") = 0 THEN 0 ELSE SUM("spend")::numeric / SUM("clicks") END AS "cpc"';
-    case 'cpm':
-      return 'CASE WHEN SUM("impressions") = 0 THEN 0 ELSE (SUM("spend")::numeric / SUM("impressions")) * 1000 END AS "cpm"';
-    case 'cpa':
-      return 'CASE WHEN SUM("conversions") = 0 THEN 0 ELSE SUM("spend")::numeric / SUM("conversions") END AS "cpa"';
-    case 'roas':
-      return 'CASE WHEN SUM("spend") = 0 THEN 0 ELSE SUM("revenue")::numeric / SUM("spend") END AS "roas"';
-    default:
-      return null;
+  if (applyGa4Scoping && ga4PropertyId) {
+    clauses.push(`("ga4_property_id" IS NULL OR "ga4_property_id" = $${params.length + 1})`);
+    params.push(String(ga4PropertyId));
   }
+
+  return { sql: clauses.length ? ` AND ${clauses.join(' AND ')}` : '', params };
 }
 
-function buildSelectClause({ dimensions, baseMetrics, derivedMetrics }) {
-  const dimensionSelects = dimensions.map((dim) => {
-    const column = DIMENSION_COLUMN_MAP[dim];
-    return `"${column}" AS "${dim}"`;
+function buildSelectDimensions(dimensions = []) {
+  const selected = [];
+  const groupBy = [];
+
+  (dimensions || []).forEach((dimensionKey) => {
+    const column = DIMENSION_COLUMN_MAP[dimensionKey];
+    if (!column) return;
+    selected.push(`"${column}" AS "${dimensionKey}"`);
+    groupBy.push(`"${column}"`);
   });
 
-  const metricSelects = baseMetrics.map((metric) => {
-    const column = BASE_METRIC_COLUMN_MAP[metric];
-    return `COALESCE(SUM("${column}")::numeric, 0) AS "${metric}"`;
+  return { selected, groupBy };
+}
+
+function buildSelectBaseMetrics(baseMetrics = []) {
+  const selected = [];
+  (baseMetrics || []).forEach((metric) => {
+    const column = BASE_METRIC_COLUMN_MAP[metric.key];
+    if (!column) return;
+    selected.push(`COALESCE(SUM("${column}"), 0) AS "${metric.key}"`);
   });
-
-  const derivedSelects = (derivedMetrics || [])
-    .map((metric) => buildDerivedSelectClause(metric.key))
-    .filter(Boolean);
-
-  return [...dimensionSelects, ...metricSelects, ...derivedSelects].join(', ');
+  return selected;
 }
 
-function buildGroupByClause(dimensions) {
-  if (!dimensions.length) return '';
-  const columns = dimensions.map((dim) => `"${DIMENSION_COLUMN_MAP[dim]}"`);
-  return `GROUP BY ${columns.join(', ')}`;
-}
-
-function buildOrderByClause({ dimensions, sort }) {
-  if (sort?.alias) {
-    const direction = sort.direction === 'desc' ? 'DESC' : 'ASC';
-    return `ORDER BY ${sort.alias} ${direction}`;
+function buildDerivedMetricSql(metricKey) {
+  if (metricKey === 'ctr') {
+    return `CASE WHEN COALESCE(SUM("impressions"),0) = 0 THEN 0
+      ELSE COALESCE(SUM("clicks"),0) / NULLIF(COALESCE(SUM("impressions"),0),0) END`;
   }
-  if (!dimensions.length) return '';
-  const columns = dimensions.map((dim) => SORTABLE_FIELD_ALIAS[dim]).filter(Boolean);
-  if (!columns.length) return '';
-  return `ORDER BY ${columns.join(', ')}`;
+  if (metricKey === 'cpc') {
+    return `CASE WHEN COALESCE(SUM("clicks"),0) = 0 THEN 0
+      ELSE COALESCE(SUM("spend"),0) / NULLIF(COALESCE(SUM("clicks"),0),0) END`;
+  }
+  if (metricKey === 'cpm') {
+    return `CASE WHEN COALESCE(SUM("impressions"),0) = 0 THEN 0
+      ELSE (COALESCE(SUM("spend"),0) / NULLIF(COALESCE(SUM("impressions"),0),0)) * 1000 END`;
+  }
+  if (metricKey === 'cpa') {
+    return `CASE WHEN COALESCE(SUM("conversions"),0) = 0 THEN 0
+      ELSE COALESCE(SUM("spend"),0) / NULLIF(COALESCE(SUM("conversions"),0),0) END`;
+  }
+  if (metricKey === 'roas') {
+    return `CASE WHEN COALESCE(SUM("spend"),0) = 0 THEN 0
+      ELSE COALESCE(SUM("revenue"),0) / NULLIF(COALESCE(SUM("spend"),0),0) END`;
+  }
+  return '0';
 }
 
-function normalizePagination(pagination) {
-  if (!pagination) return null;
-  const limit = Math.min(Math.max(Number(pagination.limit ?? 25), 1), 500);
-  const offset = Math.max(Number(pagination.offset ?? 0), 0);
-  return { limit, offset };
-}
-
-function normalizeLimit(limit) {
-  if (limit === undefined || limit === null) return null;
-  const parsed = Number(limit);
-  if (!Number.isFinite(parsed)) return null;
-  return Math.min(Math.max(Math.round(parsed), 1), 500);
-}
-
-function computeDerivedValues(row, derivedMetrics) {
-  const base = {
-    spend: toNumber(row.spend),
-    impressions: toNumber(row.impressions),
-    clicks: toNumber(row.clicks),
-    conversions: toNumber(row.conversions),
-    revenue: toNumber(row.revenue),
-    sessions: toNumber(row.sessions),
-    leads: toNumber(row.leads),
-  };
-
-  const derived = {};
-  derivedMetrics.forEach((metric) => {
-    switch (metric.key) {
-      case 'ctr':
-        derived.ctr = safeDivide(base.clicks, base.impressions);
-        break;
-      case 'cpc':
-        derived.cpc = safeDivide(base.spend, base.clicks);
-        break;
-      case 'cpm':
-        derived.cpm = safeDivide(base.spend, base.impressions) * 1000;
-        break;
-      case 'cpa':
-        derived.cpa = safeDivide(base.spend, base.conversions);
-        break;
-      case 'roas':
-        derived.roas = safeDivide(base.revenue, base.spend);
-        break;
-      default:
-        derived[metric.key] = 0;
-        break;
-    }
+function buildSelectDerivedMetrics(derivedMetrics = []) {
+  const selected = [];
+  (derivedMetrics || []).forEach((metric) => {
+    if (!SUPPORTED_DERIVED_METRICS.has(metric.key)) return;
+    selected.push(`${buildDerivedMetricSql(metric.key)} AS "${metric.key}"`);
   });
-
-  return derived;
-}
-
-function buildRows({ dimensions, requestedMetrics, baseMetrics, derivedMetrics }, rows) {
-  return rows.map((row) => {
-    const output = {};
-    dimensions.forEach((dim) => {
-      if (dim === 'date' && row[dim]) {
-        output[dim] = String(row[dim]);
-      } else {
-        output[dim] = row[dim] ?? null;
-      }
-    });
-
-    const baseValues = {};
-    baseMetrics.forEach((metric) => {
-      baseValues[metric] = toNumber(row[metric]);
-    });
-
-    const derivedValues = computeDerivedValues(baseValues, derivedMetrics);
-
-    requestedMetrics.forEach((metric) => {
-      if (baseMetrics.includes(metric)) {
-        output[metric] = baseValues[metric];
-      } else {
-        output[metric] = derivedValues[metric] ?? 0;
-      }
-    });
-
-    return output;
-  });
-}
-
-function buildTotals({ requestedMetrics, baseMetrics, derivedMetrics }, totalsRow) {
-  const baseValues = {};
-  baseMetrics.forEach((metric) => {
-    baseValues[metric] = toNumber(totalsRow?.[metric]);
-  });
-
-  const derivedValues = computeDerivedValues(baseValues, derivedMetrics);
-
-  return requestedMetrics.reduce((acc, metric) => {
-    if (baseMetrics.includes(metric)) {
-      acc[metric] = baseValues[metric];
-    } else {
-      acc[metric] = derivedValues[metric] ?? 0;
-    }
-    return acc;
-  }, {});
+  return selected;
 }
 
 async function runAggregates({
@@ -808,102 +556,124 @@ async function runAggregates({
   dateTo,
   dimensions,
   baseMetrics,
+  derivedMetrics,
   filters,
   ga4PropertyId,
-  derivedMetrics,
   sort,
   pagination,
   limit,
-  applyGa4Scoping = true,
+  applyGa4Scoping,
 }) {
-  const { whereSql, params: rawParams } = buildWhereClause({
-    tenantId,
-    brandId,
-    dateFrom,
-    dateTo,
+  const { selected: dimensionSelect, groupBy } = buildSelectDimensions(dimensions);
+  const baseSelect = buildSelectBaseMetrics(baseMetrics);
+  const derivedSelect = buildSelectDerivedMetrics(derivedMetrics);
+
+  const { sql: filterSql, params: filterParams } = buildWhereClause({
     filters,
+    ga4PropertyId,
+    applyGa4Scoping,
   });
-  const params = [...rawParams];
 
-  // GA4 facts can exist in 2 granularities:
-  // - aggregated: campaignId IS NULL
-  // - campaign breakdown: campaignId IS NOT NULL
-  // If we don't scope them, queries without `campaign_id` would double-count totals
-  // once both granularities are materialized.
-  const wantsCampaignFacts =
-    Array.isArray(dimensions) && dimensions.includes('campaign_id') ||
-    Array.isArray(filters) && filters.some((filter) => filter?.field === 'campaign_id');
+  const whereParams = [String(tenantId), String(brandId), String(dateFrom), String(dateTo)];
+  const params = [...whereParams, ...filterParams];
 
-  let scopedWhereSql = whereSql;
-  if (applyGa4Scoping) {
-    const ga4ScopeClause = wantsCampaignFacts
-      ? '("platform" <> \'GA4\'::"BrandSourcePlatform" OR "campaignId" IS NOT NULL)'
-      : '("platform" <> \'GA4\'::"BrandSourcePlatform" OR "campaignId" IS NULL)';
+  const selectParts = [
+    ...dimensionSelect,
+    ...baseSelect,
+    ...derivedSelect,
+  ].filter(Boolean);
 
-    // Historical GA4 facts must always be scoped to the active propertyId for the brand.
-    // If the brand is not connected to GA4, we exclude GA4 facts entirely to avoid leaking old data.
-    let ga4PropertyClause = '("platform" <> \'GA4\'::"BrandSourcePlatform")';
-    if (ga4PropertyId) {
-      ga4PropertyClause = `("platform" <> 'GA4'::"BrandSourcePlatform" OR "accountId" = $${params.length + 1})`;
-      params.push(String(ga4PropertyId));
-    }
+  const groupBySql = groupBy.length ? ` GROUP BY ${groupBy.join(', ')}` : '';
 
-    scopedWhereSql = `${whereSql} AND ${ga4ScopeClause} AND ${ga4PropertyClause}`;
+  let orderBySql = '';
+  if (sort?.alias) {
+    const dir = String(sort.direction || 'asc').toLowerCase() === 'desc' ? 'DESC' : 'ASC';
+    orderBySql = ` ORDER BY ${sort.alias} ${dir}`;
   }
 
-  const selectClause = buildSelectClause({
-    dimensions,
-    baseMetrics,
-    derivedMetrics,
-  });
-  const groupByClause = buildGroupByClause(dimensions);
-  const orderByClause = buildOrderByClause({ dimensions, sort });
-  const page = normalizePagination(pagination);
-  const cap = normalizeLimit(limit);
-
-  let paginationClause = '';
-  const nextParams = [...params];
-  if (page) {
-    const offset = page.offset;
-    let limitPlus = page.limit + 1;
-    if (cap) {
-      const remaining = cap - offset;
-      limitPlus = remaining > 0 ? Math.min(limitPlus, remaining) : 0;
-    }
-    paginationClause = `LIMIT $${nextParams.length + 1} OFFSET $${nextParams.length + 2}`;
-    nextParams.push(limitPlus, offset);
-  } else if (cap) {
-    paginationClause = `LIMIT $${nextParams.length + 1}`;
-    nextParams.push(cap);
+  let limitSql = '';
+  if (pagination?.pageSize) {
+    const pageSize = Math.max(1, Math.min(5000, Number(pagination.pageSize)));
+    const page = Math.max(1, Number(pagination.page || 1));
+    const offset = (page - 1) * pageSize;
+    limitSql = ` LIMIT ${pageSize} OFFSET ${offset}`;
+  } else if (limit) {
+    const safeLimit = Math.max(1, Math.min(5000, Number(limit)));
+    limitSql = ` LIMIT ${safeLimit}`;
   }
 
-  const baseQuery = `SELECT ${selectClause} FROM "fact_kondor_metrics_daily" WHERE ${scopedWhereSql} ${groupByClause} ${orderByClause} ${paginationClause}`;
+  const baseSql = `
+    FROM "fact_kondor_metrics_daily"
+    WHERE "tenant_id" = $1
+      AND "brand_id" = $2
+      AND "date" >= $3::date
+      AND "date" <= $4::date
+      ${filterSql}
+  `;
 
-  const totalsSelect = buildSelectClause({
-    dimensions: [],
-    baseMetrics,
-    derivedMetrics: [],
+  const querySql = `
+    SELECT ${selectParts.length ? selectParts.join(', ') : '1'}
+    ${baseSql}
+    ${groupBySql}
+    ${orderBySql}
+    ${limitSql}
+  `;
+
+  const totalsSql = `
+    SELECT
+      ${baseSelect.length ? baseSelect.join(', ') : '0 AS "spend"'}
+    ${baseSql}
+  `;
+
+  const rows = await prisma.$queryRawUnsafe(querySql, ...params);
+  const totalsRows = await prisma.$queryRawUnsafe(totalsSql, ...params);
+  const totals = Array.isArray(totalsRows) && totalsRows[0] ? totalsRows[0] : {};
+
+  return { rows: rows || [], totals: totals || {} };
+}
+
+function buildRows(plan, rawRows = []) {
+  const out = [];
+  (rawRows || []).forEach((row) => {
+    const entry = {};
+    (plan.dimensions || []).forEach((dimension) => {
+      entry[dimension] = row?.[dimension] ?? null;
+    });
+
+    (plan.baseMetrics || []).forEach((m) => {
+      entry[m.key] = Number(row?.[m.key] ?? 0);
+    });
+
+    (plan.derivedMetrics || []).forEach((m) => {
+      entry[m.key] = Number(row?.[m.key] ?? 0);
+    });
+
+    out.push(entry);
   });
-  const totalsQuery = `SELECT ${totalsSelect} FROM "fact_kondor_metrics_daily" WHERE ${scopedWhereSql}`;
+  return out;
+}
 
-  const rows = await prisma.$queryRawUnsafe(baseQuery, ...nextParams);
-  const totalsResult = await prisma.$queryRawUnsafe(totalsQuery, ...params);
-  const totalsRow = Array.isArray(totalsResult) ? totalsResult[0] : totalsResult;
+function buildTotals(plan, rawTotals = {}) {
+  const totals = {};
+  (plan.baseMetrics || []).forEach((m) => {
+    totals[m.key] = Number(rawTotals?.[m.key] ?? 0);
+  });
+  (plan.derivedMetrics || []).forEach((m) => {
+    totals[m.key] = null;
+  });
+  return totals;
+}
 
-  let pageInfo = null;
-  let safeRows = rows || [];
-  if (page) {
-    let hasMore = safeRows.length > page.limit;
-    if (hasMore) {
-      safeRows = safeRows.slice(0, page.limit);
-    }
-    if (cap && page.offset + safeRows.length >= cap) {
-      hasMore = false;
-    }
-    pageInfo = { limit: page.limit, offset: page.offset, hasMore };
-  }
-
-  return { rows: safeRows, totals: totalsRow || {}, pageInfo };
+function formatReporteiResponse(result = {}, options = {}) {
+  const { widgetId, widgetType } = options || {};
+  return {
+    widgetId: widgetId || null,
+    widgetType: widgetType || null,
+    data: {
+      rows: result?.rows || [],
+      totals: result?.totals || {},
+    },
+  };
 }
 
 async function executeQueryMetrics(tenantId, payload = {}) {
@@ -1020,6 +790,51 @@ async function executeQueryMetrics(tenantId, payload = {}) {
     }
   }
 
+  // --- On-demand preview sync (fills fact_kondor_metrics_daily) ---
+  // Dashboards query facts from the warehouse table. If facts were never backfilled,
+  // we run a small "preview" sync here so users see data immediately after connecting.
+  // This mirrors the industry pattern: cheap preview (few metrics, short window) + async backfill.
+  try {
+    const ensurePayload = {
+      tenantId,
+      brandId,
+      dateRange: effectiveDateRange,
+      metrics: plan.baseMetrics.map((m) => m.key),
+      dimensions,
+      filters,
+      requiredPlatforms: requiredConnections.required,
+    };
+
+    // Keep these on-demand calls bounded: if provider APIs are slow, we prefer returning
+    // an (even partial) response instead of timing out the whole dashboard.
+    const ENSURE_TIMEOUT_MS = Math.max(
+      2_000,
+      Number(process.env.METRICS_ENSURE_TIMEOUT_MS || 20_000),
+    );
+
+    await withTimeout(
+      async () => {
+        // GA4 facts (sessions/leads) are stored in the same fact table.
+        if (wantsGa4) {
+          await ensureGa4FactMetrics(ensurePayload);
+        }
+        // Ads facts (spend/clicks/impressions/...) for Meta/Google/TikTok/LinkedIn.
+        await ensureFactMetrics(ensurePayload);
+      },
+      ENSURE_TIMEOUT_MS,
+      { code: 'METRICS_ENSURE_TIMEOUT', message: 'Tempo limite ao sincronizar métricas' },
+    );
+
+    // Facts may have been updated; avoid serving stale cached results for this brand.
+    invalidateMetricsCacheForBrand(tenantId, brandId);
+  } catch (err) {
+    // Never fail the dashboard query because preview sync failed.
+    if (isMetricsDebugEnabled() && process.env.NODE_ENV !== 'test') {
+      // eslint-disable-next-line no-console
+      console.warn('[metrics.service] ensure facts warning', err?.message || err);
+    }
+  }
+
   const baseResult = await runAggregates({
     tenantId,
     brandId,
@@ -1062,7 +877,7 @@ async function executeQueryMetrics(tenantId, payload = {}) {
       effectiveDateRange.end,
       compareTo.mode,
     );
-    if (range) {
+    if (range?.start && range?.end) {
       const compareResult = await runAggregates({
         tenantId,
         brandId,
@@ -1070,61 +885,36 @@ async function executeQueryMetrics(tenantId, payload = {}) {
         dateTo: range.end,
         dimensions,
         baseMetrics: plan.baseMetrics,
-        derivedMetrics: derivedForSelect,
+        derivedMetrics: [],
         filters,
         ga4PropertyId,
-        sort: resolvedSort,
-        pagination: payload.pagination,
-        limit,
+        sort: null,
+        pagination: null,
+        limit: null,
         applyGa4Scoping,
       });
 
       compare = {
-        rows: buildRows(
-          {
-            dimensions,
-            requestedMetrics: metrics,
-            baseMetrics: plan.baseMetrics,
-            derivedMetrics: plan.derivedMetrics,
-          },
-          compareResult.rows,
-        ),
+        dateRange: range,
         totals: buildTotals(
-          {
-            requestedMetrics: metrics,
-            baseMetrics: plan.baseMetrics,
-            derivedMetrics: plan.derivedMetrics,
-          },
+          { requestedMetrics: metrics, baseMetrics: plan.baseMetrics, derivedMetrics: plan.derivedMetrics },
           compareResult.totals,
         ),
-        pageInfo: compareResult.pageInfo,
       };
     }
   }
 
-  const response = {
+  return {
     meta: {
-      currency: null,
-      timezone: brandTimezone || 'UTC',
+      timezone: brandTimezone,
       dateRange: effectiveDateRange,
-      ga4: {
-        propertyId: ga4PropertyId ? String(ga4PropertyId) : null,
-      },
-      generatedAt: new Date().toISOString(),
+      ga4PropertyId: ga4PropertyId || null,
+      requiredPlatforms: requiredConnections.required || [],
     },
     rows,
     totals,
-    pageInfo: baseResult.pageInfo,
     compare,
   };
-
-  if (isMetricsDebugEnabled()) {
-    response.debug = {
-      syncOnQuery: false,
-    };
-  }
-
-  return response;
 }
 
 async function queryMetrics(tenantId, payload = {}) {

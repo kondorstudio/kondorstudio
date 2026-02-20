@@ -11,15 +11,19 @@ function toText(value) {
 
 function toDateOnly(value) {
   if (!value) return null;
+
   if (value instanceof Date) {
     if (Number.isNaN(value.getTime())) return null;
     return new Date(`${value.toISOString().slice(0, 10)}T00:00:00.000Z`);
   }
+
   const raw = String(value).trim();
   if (!raw) return null;
+
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
     return new Date(`${raw}T00:00:00.000Z`);
   }
+
   const parsed = new Date(raw);
   if (Number.isNaN(parsed.getTime())) return null;
   return new Date(`${parsed.toISOString().slice(0, 10)}T00:00:00.000Z`);
@@ -76,6 +80,7 @@ function normalizeFactRow(row = {}) {
   const campaignId = toText(row.campaignId);
   const adsetId = toText(row.adsetId);
   const adId = toText(row.adId);
+
   const dimensionKey =
     toText(row.dimensionKey) ||
     buildFactDimensionKey({ campaignId, adsetId, adId });
@@ -107,6 +112,7 @@ function dedupeRows(rows = []) {
   (rows || []).forEach((row) => {
     const normalized = normalizeFactRow(row);
     if (!normalized) return;
+
     const key = [
       normalized.tenantId,
       normalized.brandId,
@@ -115,8 +121,10 @@ function dedupeRows(rows = []) {
       normalized.date.toISOString().slice(0, 10),
       normalized.dimensionKey,
     ].join('|');
+
     deduped.set(key, normalized);
   });
+
   return Array.from(deduped.values());
 }
 
@@ -157,6 +165,7 @@ function buildInsertPayload(chunk = []) {
       values.push(entry);
       return `$${values.length}`;
     });
+
     return `(${current.join(', ')})`;
   });
 
@@ -244,6 +253,7 @@ function canUseRawUpsert(db) {
 
 async function upsertFactMetricsDailyRows(rows = [], options = {}) {
   const db = options.db || prisma;
+
   const chunkSize = Math.max(
     50,
     Number(
