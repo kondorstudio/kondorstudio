@@ -1,6 +1,6 @@
 process.env.NODE_ENV = 'test';
 process.env.ENCRYPTION_KEY = Buffer.alloc(32, 1).toString('base64');
-process.env.CRYPTO_KEY = 'kondor-crypto-key-for-tests';
+process.env.CRYPTO_KEY = process.env.ENCRYPTION_KEY;
 
 const test = require('node:test');
 const assert = require('node:assert/strict');

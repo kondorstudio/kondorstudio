@@ -94,6 +94,16 @@ function respondReauth(res, error) {
   return true;
 }
 
+function shouldFailOauthConnectedRedirect(error) {
+  if (!error) return false;
+  const code = String(error?.code || '').trim().toUpperCase();
+  if (code === 'REAUTH_REQUIRED' || code === 'GA4_REAUTH_REQUIRED') {
+    return true;
+  }
+  const message = String(error?.message || '').toLowerCase();
+  return message.includes('decrypt failed');
+}
+
 function formatGa4Date(value) {
   const raw = String(value || '');
   if (!/^\d{8}$/.test(raw)) return raw;
@@ -244,6 +254,15 @@ module.exports = {
         });
       } catch (syncError) {
         console.warn('GA4 oauthCallback syncProperties warning:', syncError);
+        if (shouldFailOauthConnectedRedirect(syncError)) {
+          const message = normalizeGa4Error(syncError);
+          const redirectUrl = buildRedirectUrl({
+            connected: 0,
+            error: syncError?.code || 'sync_failed',
+            message: message || 'Failed to sync GA4 properties',
+          });
+          return res.redirect(redirectUrl);
+        }
       }
       const redirectUrl = buildRedirectUrl({ connected: 1 });
       return res.redirect(redirectUrl);
@@ -348,8 +367,10 @@ module.exports = {
       });
 
       if (!integration) {
+        const statusFromState = state?.status || 'DISCONNECTED';
         return res.json({
-          status: state?.status || 'DISCONNECTED',
+          status: statusFromState,
+          statusSource: state?.status ? 'connectionState' : 'integration',
           legacyStatus: 'DISCONNECTED',
           connectionState: state || null,
           googleAccountEmail: null,
@@ -379,9 +400,11 @@ module.exports = {
         integration.status === 'NEEDS_RECONNECT'
           ? 'REAUTH_REQUIRED'
           : integration.status;
+      const statusFromState = state?.status || normalizedStatus;
 
       return res.json({
-        status: state?.status || normalizedStatus,
+        status: statusFromState,
+        statusSource: state?.status ? 'connectionState' : 'integration',
         legacyStatus: integration.status,
         connectionState: state || null,
         lastError: integration.lastError || null,

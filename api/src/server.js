@@ -7,6 +7,7 @@ const morgan = require("morgan");
 const path = require("path");
 const fs = require("fs");
 const { prisma } = require("./prisma");
+const { assertCryptoKeyConfiguration } = require("./lib/cryptoCore");
 const pkg = require("../package.json");
 
 const authMiddleware = require("./middleware/auth");
@@ -16,6 +17,9 @@ const auditLog = require("./middleware/auditLog");
 const errorLogger = require("./middleware/errorLogger");
 
 const app = express();
+
+// Fail fast when encryption keys are misconfigured to avoid token decrypt drift between processes.
+assertCryptoKeyConfiguration();
 
 // Honra X-Forwarded-* headers quando estamos atrás de proxies (Cloudflare / Nginx / LB).
 // Sem isso, req.protocol fica como "http" e os links de upload retornam URLs inseguras.

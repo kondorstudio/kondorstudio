@@ -101,6 +101,12 @@ Notas:
 - Status `NEEDS_RECONNECT`:
   - Indica que o refresh token foi revogado/expirou e o usuário precisa reconectar.
   - O frontend deve mostrar CTA de reconexão e reiniciar o OAuth.
+- Erro `Access token decrypt failed`:
+  - Verifique se API e worker estão usando a mesma chave de criptografia (`ENCRYPTION_KEY`/`CRYPTO_KEY`).
+  - Reinicie API + worker e reconecte o GA4 para regravar os tokens com a chave correta.
+- Bootstrap fail `CRYPTO_KEY and ENCRYPTION_KEY resolve to different keys`:
+  - Ajuste as variáveis para o mesmo material criptográfico em todos os processos.
+  - Em rollout com múltiplas réplicas, aplique a mesma env em todas antes de subir.
 - 403 / insufficient permissions:
   - Check that the connected Google account has access to the GA4 property.
 - Quota exceeded:

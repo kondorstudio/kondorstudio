@@ -3,6 +3,9 @@ const metricsController = require('./metrics.controller');
 
 const router = express.Router();
 
-router.post('/query', metricsController.query);
+router.post(
+  '/query',
+  metricsController.queryMetrics || metricsController.query
+);
 
 module.exports = router;

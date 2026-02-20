@@ -1,6 +1,7 @@
 require('dotenv').config();
 const { Worker } = require('bullmq');
 const Redis = require('ioredis');
+const { assertCryptoKeyConfiguration } = require('./lib/cryptoCore');
 
 const {
   metricsSyncQueue,
@@ -31,6 +32,9 @@ const ga4FactSyncJob = require('./jobs/ga4FactSyncJob');
 const ga4RealtimeSyncJob = require('./jobs/ga4RealtimeSyncJob');
 const ga4BrandFactsSyncJob = require('./jobs/ga4BrandFactsSyncJob');
 const ga4PruneJob = require('./jobs/ga4PruneJob');
+
+// Fail fast when encryption keys are misconfigured to avoid token decrypt drift between processes.
+assertCryptoKeyConfiguration();
 
 // ------------------------------------------------------
 // Conexão do BullMQ (usa REDIS_URL da env; em dev cai pro localhost)

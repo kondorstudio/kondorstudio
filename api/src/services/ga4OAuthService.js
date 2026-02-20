@@ -14,6 +14,35 @@ const refreshLocks = new Map();
 const GA4_CONNECTION_PROVIDER = 'GA4';
 const GA4_CONNECTION_KEY = 'ga4_oauth';
 
+function resolveProcessType() {
+  const explicit = String(process.env.PROCESS_TYPE || '').trim();
+  if (explicit) return explicit;
+  const entry = String(process.argv?.[1] || '').toLowerCase();
+  if (entry.includes('worker')) return 'worker';
+  if (entry.includes('server')) return 'api';
+  return 'unknown';
+}
+
+function logStructuredWarning(event, payload = {}) {
+  if (process.env.NODE_ENV === 'test') return;
+  // eslint-disable-next-line no-console
+  console.warn(`[ga4OAuthService] ${event}`, {
+    event,
+    processType: resolveProcessType(),
+    ...payload,
+  });
+}
+
+function logTokenDecryptFailure({ tenantId, integrationId, tokenKind, error }) {
+  logStructuredWarning('GA4_TOKEN_DECRYPT_FAILED', {
+    tenantId: tenantId ? String(tenantId) : null,
+    integrationId: integrationId ? String(integrationId) : null,
+    tokenKind: tokenKind || null,
+    message: error?.message || null,
+    code: error?.code || null,
+  });
+}
+
 async function syncGa4ConnectionState(payload = {}) {
   try {
     await connectionStateService.upsertConnectionState({
@@ -425,6 +454,12 @@ async function getValidAccessToken({ tenantId, userId }) {
       try {
         return decrypt(integration.accessToken);
       } catch (error) {
+        logTokenDecryptFailure({
+          tenantId,
+          integrationId: integration.id,
+          tokenKind: 'access_token',
+          error,
+        });
         await markIntegrationNeedsReconnect(
           tenantId,
           userId,
@@ -450,6 +485,12 @@ async function getValidAccessToken({ tenantId, userId }) {
   try {
     refreshToken = decrypt(integration.refreshTokenEnc);
   } catch (error) {
+    logTokenDecryptFailure({
+      tenantId,
+      integrationId: integration.id,
+      tokenKind: 'refresh_token',
+      error,
+    });
     await markIntegrationNeedsReconnect(
       tenantId,
       userId,

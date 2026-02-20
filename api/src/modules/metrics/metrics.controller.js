@@ -61,7 +61,7 @@ const querySchema = z.object({
 
 async function queryMetrics(req, res) {
   try {
-    const tenantId = req.user?.tenantId;
+    const tenantId = req.tenantId || req.user?.tenantId;
 
     if (!tenantId) {
       return res.status(401).json({
@@ -132,7 +132,7 @@ async function queryMetrics(req, res) {
 
 async function queryMetricsReportei(req, res) {
   try {
-    const tenantId = req.user?.tenantId;
+    const tenantId = req.tenantId || req.user?.tenantId;
 
     if (!tenantId) {
       return res.status(401).json({
@@ -187,6 +187,9 @@ async function queryMetricsReportei(req, res) {
 }
 
 module.exports = {
+  // Backwards-compatible aliases consumed by legacy routes.
+  query: queryMetrics,
+  queryReportei: queryMetricsReportei,
   queryMetrics,
   queryMetricsReportei,
 };
