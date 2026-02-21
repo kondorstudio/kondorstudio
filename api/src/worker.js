@@ -46,6 +46,7 @@ const connection = new Redis(REDIS_URL, {
 const workerOptions = {
   connection,
   prefix: BULLMQ_PREFIX,
+  autorun: false,
 };
 
 // Períodos de agendamento (ms)
@@ -64,6 +65,10 @@ const GA4_REALTIME_SYNC_PERIOD_MS =
   Number(process.env.GA4_REALTIME_SYNC_PERIOD_MS) || 60000; // 1min
 const GA4_PRUNE_PERIOD_MS =
   Number(process.env.GA4_PRUNE_PERIOD_MS) || 24 * 60 * 60 * 1000; // 24h
+const WORKER_QUEUE_HEALTH_LOG_INTERVAL_MS = Math.max(
+  0,
+  Number(process.env.WORKER_QUEUE_HEALTH_LOG_INTERVAL_MS || 60_000),
+);
 
 // ------------------------------------------------------
 // Helper genérico para rodar pollOnce() dos módulos de job
@@ -226,6 +231,31 @@ const ga4SyncWorker = ga4SyncQueue
       workerOptions,
     )
   : null;
+
+function getActiveWorkers() {
+  return [
+    metricsWorker,
+    reportsWorker,
+    reportGenerateWorker,
+    dashboardRefreshWorker,
+    reportScheduleWorker,
+    whatsappWorker,
+    publishingWorker,
+    ga4SyncWorker,
+  ].filter(Boolean);
+}
+
+function startWorkers() {
+  getActiveWorkers().forEach((worker) => {
+    worker.run().catch((err) => {
+      console.error('[worker] worker run failed', {
+        queue: worker?.name || null,
+        message: err?.message || err,
+      });
+      process.exit(1);
+    });
+  });
+}
 
 // ------------------------------------------------------
 // Logs de sucesso
@@ -398,6 +428,65 @@ if (ga4SyncWorker) {
   });
 }
 
+async function assertDatabaseReady() {
+  if (!prisma || typeof prisma.$queryRaw !== 'function') return;
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    console.log('[worker] database connectivity check ok');
+  } catch (err) {
+    const payload = {
+      code: err?.code || null,
+      message: err?.message || 'database_check_failed',
+    };
+    console.error('[worker] database connectivity check failed', payload);
+    const authFailure =
+      String(err?.code || '').toUpperCase() === 'P1000' ||
+      String(err?.message || '').toLowerCase().includes('authentication');
+    if (authFailure) {
+      console.error('[worker] DATABASE_AUTH_FAILED');
+    }
+    throw err;
+  }
+}
+
+function getQueueHealthTargets() {
+  return [
+    ['metrics-sync', metricsSyncQueue],
+    ['reports-generation', reportsQueue],
+    ['ga4-sync', ga4SyncQueue],
+  ].filter((entry) => Boolean(entry[1]));
+}
+
+async function logQueueHealthSnapshot(trigger = 'startup') {
+  const targets = getQueueHealthTargets();
+  if (!targets.length) return;
+
+  await Promise.all(
+    targets.map(async ([name, queue]) => {
+      try {
+        const counts = await queue.getJobCounts(
+          'waiting',
+          'active',
+          'delayed',
+          'completed',
+          'failed',
+        );
+        console.log('[worker] queue_health', {
+          trigger,
+          queue: name,
+          counts,
+        });
+      } catch (err) {
+        console.error('[worker] queue_health_failed', {
+          trigger,
+          queue: name,
+          message: err?.message || err,
+        });
+      }
+    }),
+  );
+}
+
 // ------------------------------------------------------
 // Agendamento de jobs recorrentes (repeatable jobs)
 // ------------------------------------------------------
@@ -446,24 +535,6 @@ async function ensureRepeatableJobs() {
   console.log('[worker] repeatable jobs registrados com sucesso');
 }
 
-ensureRepeatableJobs().catch((err) => {
-  console.error(
-    '[worker] erro ao configurar repeatable jobs:',
-    err && err.stack ? err.stack : err,
-  );
-});
-
-if (POSTS_PUBLISH_PERIOD_MS > 0) {
-  setInterval(() => {
-    runPublishPoll().catch((err) => {
-      console.error(
-        '[worker] erro ao executar publishScheduledPostsJob via interval:',
-        err && err.stack ? err.stack : err,
-      );
-    });
-  }, POSTS_PUBLISH_PERIOD_MS);
-}
-
 async function ensureScheduleJobs() {
   try {
     const result = await reportSchedulesService.syncActiveSchedules();
@@ -476,4 +547,40 @@ async function ensureScheduleJobs() {
   }
 }
 
-ensureScheduleJobs();
+async function bootstrapWorker() {
+  await assertDatabaseReady();
+  startWorkers();
+  await ensureRepeatableJobs();
+  await ensureScheduleJobs();
+  await logQueueHealthSnapshot('startup');
+
+  if (WORKER_QUEUE_HEALTH_LOG_INTERVAL_MS > 0) {
+    setInterval(() => {
+      logQueueHealthSnapshot('interval').catch((err) => {
+        console.error(
+          '[worker] erro ao registrar queue health:',
+          err && err.stack ? err.stack : err,
+        );
+      });
+    }, WORKER_QUEUE_HEALTH_LOG_INTERVAL_MS);
+  }
+
+  if (POSTS_PUBLISH_PERIOD_MS > 0) {
+    setInterval(() => {
+      runPublishPoll().catch((err) => {
+        console.error(
+          '[worker] erro ao executar publishScheduledPostsJob via interval:',
+          err && err.stack ? err.stack : err,
+        );
+      });
+    }, POSTS_PUBLISH_PERIOD_MS);
+  }
+}
+
+bootstrapWorker().catch((err) => {
+  console.error(
+    '[worker] bootstrap failed:',
+    err && err.stack ? err.stack : err,
+  );
+  process.exit(1);
+});

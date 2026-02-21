@@ -293,6 +293,40 @@ function resolveFriendlyError(error) {
   };
 }
 
+function formatFreshDate(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString().slice(0, 10);
+}
+
+function resolveStaleReasonText(reason) {
+  const normalized = String(reason || "").trim().toUpperCase();
+  if (!normalized) return "Conexão GA4 degradada.";
+  if (normalized === "REAUTH_REQUIRED") {
+    return "Reconecte o GA4 para retomar a sincronização.";
+  }
+  if (normalized === "MISSING_CONNECTIONS") {
+    return "Conexão GA4 indisponível no momento.";
+  }
+  return `Conexão GA4 degradada (${normalized}).`;
+}
+
+function ConnectionDegradedNotice({ meta }) {
+  if (!meta?.connectionDegraded) return null;
+  const stalePlatforms = formatPlatformList(meta?.stalePlatforms || ["GA4"]);
+  const freshUntil = formatFreshDate(meta?.dataFreshUntil);
+  return (
+    <div className="mb-2 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+      <p className="font-semibold">Dados desatualizados ({stalePlatforms})</p>
+      <p>{resolveStaleReasonText(meta?.staleReason)}</p>
+      {freshUntil ? <p>Última data disponível: {freshUntil}.</p> : null}
+    </div>
+  );
+}
+
 function ChartTooltip({ active, payload, label, meta, formatOverride }) {
   if (!active || !payload?.length) return null;
   return (
@@ -508,6 +542,10 @@ export default function WidgetRenderer({
     offset: pagination?.offset || 0,
     hasMore: false,
   };
+  const widgetDataStatus = meta?.connectionDegraded ? "warn" : "ready";
+  const widgetDataReason = meta?.connectionDegraded
+    ? "DEGRADED_CONNECTION"
+    : null;
 
   React.useEffect(() => {
     if (!onMetaChange) return;
@@ -693,10 +731,11 @@ export default function WidgetRenderer({
       <>
         <WidgetStatusReporter
           widgetId={widget?.id}
-          status="ready"
-          reason="EMPTY_DATA"
+          status={meta?.connectionDegraded ? "warn" : "ready"}
+          reason={meta?.connectionDegraded ? "DEGRADED_CONNECTION" : "EMPTY_DATA"}
           onStatusChange={onStatusChange}
         />
+      <ConnectionDegradedNotice meta={meta} />
       <WidgetEmptyState
         title="Sem dados para este período"
         description="Ajuste os filtros globais para ver resultados."
@@ -741,10 +780,11 @@ export default function WidgetRenderer({
       <>
         <WidgetStatusReporter
           widgetId={widget?.id}
-          status="ready"
-          reason={null}
+          status={widgetDataStatus}
+          reason={widgetDataReason}
           onStatusChange={onStatusChange}
         />
+        <ConnectionDegradedNotice meta={meta} />
         <div className="flex h-full flex-col gap-2">
           <div className="text-[15px] font-semibold text-[var(--text)]">
             {formatMetricLabel(metric)}
@@ -778,10 +818,11 @@ export default function WidgetRenderer({
       <>
         <WidgetStatusReporter
           widgetId={widget?.id}
-          status="ready"
-          reason={null}
+          status={widgetDataStatus}
+          reason={widgetDataReason}
           onStatusChange={onStatusChange}
         />
+        <ConnectionDegradedNotice meta={meta} />
         <div className="flex h-full flex-col">
           <div className="flex-1">
             <ResponsiveContainer width="100%" height="100%">
@@ -823,10 +864,11 @@ export default function WidgetRenderer({
       <>
         <WidgetStatusReporter
           widgetId={widget?.id}
-          status="ready"
-          reason={null}
+          status={widgetDataStatus}
+          reason={widgetDataReason}
           onStatusChange={onStatusChange}
         />
+        <ConnectionDegradedNotice meta={meta} />
         <div className="flex h-full flex-col">
           <div className="flex-1">
             <ResponsiveContainer width="100%" height="100%">
@@ -877,10 +919,11 @@ export default function WidgetRenderer({
       <>
         <WidgetStatusReporter
           widgetId={widget?.id}
-          status="ready"
-          reason={null}
+          status={widgetDataStatus}
+          reason={widgetDataReason}
           onStatusChange={onStatusChange}
         />
+        <ConnectionDegradedNotice meta={meta} />
         <div className="flex h-full flex-col">
           <div className="flex-1 overflow-auto">
             <table className="min-w-full text-left text-sm">
@@ -1008,10 +1051,11 @@ export default function WidgetRenderer({
       <>
         <WidgetStatusReporter
           widgetId={widget?.id}
-          status="ready"
-          reason={null}
+          status={widgetDataStatus}
+          reason={widgetDataReason}
           onStatusChange={onStatusChange}
         />
+        <ConnectionDegradedNotice meta={meta} />
         <WidgetPie
           rows={rows}
           dimension={dimension}

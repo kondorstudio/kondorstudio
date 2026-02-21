@@ -571,19 +571,18 @@ async function callWithReliability(
   }
 }
 
-async function assertSelectedProperty({ tenantId, propertyId }) {
+async function assertPropertyAvailableForTenant({ tenantId, propertyId }) {
   if (!tenantId || !propertyId) return null;
   const selected = await prisma.integrationGoogleGa4Property.findFirst({
     where: {
       tenantId: String(tenantId),
       propertyId: String(propertyId),
-      isSelected: true,
     },
   });
   if (!selected) {
-    const err = new Error('GA4 property not selected');
+    const err = new Error('GA4 property not available for tenant');
     err.status = 400;
-    err.code = 'GA4_PROPERTY_NOT_SELECTED';
+    err.code = 'GA4_PROPERTY_NOT_AVAILABLE';
     throw err;
   }
   return selected;
@@ -686,7 +685,7 @@ async function runReport({
   }
 
   if (!skipSelectionCheck) {
-    await assertSelectedProperty({ tenantId, propertyId });
+    await assertPropertyAvailableForTenant({ tenantId, propertyId });
   }
 
   await validateAgainstMetadata({
@@ -935,7 +934,7 @@ async function checkCompatibility({
     };
   }
 
-  await assertSelectedProperty({ tenantId, propertyId });
+  await assertPropertyAvailableForTenant({ tenantId, propertyId });
 
   try {
     await validateAgainstMetadata({
@@ -1130,7 +1129,7 @@ async function runRealtimeReport({
   }
 
   if (!skipSelectionCheck) {
-    await assertSelectedProperty({ tenantId, propertyId });
+  await assertPropertyAvailableForTenant({ tenantId, propertyId });
   }
 
   await validateAgainstMetadata({
@@ -1288,7 +1287,7 @@ async function batchRunReports({
   }
 
   if (!skipSelectionCheck) {
-    await assertSelectedProperty({ tenantId, propertyId });
+  await assertPropertyAvailableForTenant({ tenantId, propertyId });
   }
 
   for (const req of normalized.requests) {
@@ -1437,4 +1436,7 @@ module.exports = {
   normalizeBatchRunReportsPayload,
   normalizeResponse,
   buildMockReport,
+  __internal: {
+    assertPropertyAvailableForTenant,
+  },
 };

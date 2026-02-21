@@ -38,6 +38,69 @@ function normalizeGa4PropertyId(value) {
   return raw;
 }
 
+async function syncLegacyIntegrationSelectionBestEffort(
+  tx,
+  { tenantId, propertyId },
+) {
+  if (!tx?.integrationGoogleGa4Property || !tenantId || !propertyId) {
+    return null;
+  }
+
+  try {
+    const target = await tx.integrationGoogleGa4Property.findFirst({
+      where: {
+        tenantId: String(tenantId),
+        propertyId: String(propertyId),
+      },
+      select: {
+        id: true,
+        integrationId: true,
+        isSelected: true,
+      },
+    });
+
+    if (!target?.id || !target?.integrationId) return null;
+
+    await tx.integrationGoogleGa4Property.updateMany({
+      where: {
+        tenantId: String(tenantId),
+        integrationId: String(target.integrationId),
+        isSelected: true,
+        id: { not: target.id },
+      },
+      data: { isSelected: false },
+    });
+
+    if (!target.isSelected) {
+      await tx.integrationGoogleGa4Property.update({
+        where: { id: target.id },
+        data: { isSelected: true },
+      });
+    }
+
+    return {
+      ok: true,
+      integrationId: String(target.integrationId),
+      propertyId: String(propertyId),
+    };
+  } catch (error) {
+    if (process.env.NODE_ENV !== 'test') {
+      // eslint-disable-next-line no-console
+      console.warn('[brandGa4Settings] GA4 legacy selection sync warning', {
+        tenantId: String(tenantId),
+        propertyId: String(propertyId),
+        code: error?.code || null,
+        message: error?.message || null,
+      });
+    }
+    return {
+      ok: false,
+      errorCode: error?.code || null,
+      errorMessage: error?.message || 'legacy_selection_sync_failed',
+    };
+  }
+}
+
 const DEFAULT_LEAD_EVENTS = (() => {
   const list = parseEnvList(process.env.GA4_LEAD_EVENT_NAMES);
   if (list.length) return uniqueStrings(list);
@@ -274,6 +337,11 @@ async function enforceSingleActiveGa4Connection(
       );
     }
 
+    await syncLegacyIntegrationSelectionBestEffort(tx, {
+      tenantId,
+      propertyId: targetPropertyId,
+    });
+
     return String(targetPropertyId);
   });
 }
@@ -485,6 +553,11 @@ async function setBrandGa4ActiveProperty(
         { db: tx },
       );
     }
+
+    await syncLegacyIntegrationSelectionBestEffort(tx, {
+      tenantId,
+      propertyId: normalizedPropertyId,
+    });
 
     return String(normalizedPropertyId);
   });

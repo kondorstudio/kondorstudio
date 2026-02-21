@@ -23,6 +23,7 @@ test.afterEach(() => {
     '../src/services/ga4AdminService',
     '../src/services/ga4OAuthService',
     '../src/services/ga4PropertyScopeService',
+    '../src/services/brandGa4SettingsService',
     '../src/lib/googleClient',
     '../src/services/ga4DataService',
     '../src/services/connectionStateService',
@@ -81,6 +82,10 @@ function buildApp({
         count: async ({ where }) => {
           const ids = Array.isArray(where?.id?.in) ? where.id.in : [];
           return ids.length;
+        },
+        findFirst: async ({ where }) => {
+          if (!where?.id || !where?.tenantId) return null;
+          return { id: String(where.id), tenantId: String(where.tenantId) };
         },
       },
       brandGa4Settings: {
@@ -157,6 +162,25 @@ function buildApp({
         syncQueuedTotal: 0,
         syncSkippedTotal: 0,
       },
+  });
+
+  mockModule('../src/services/brandGa4SettingsService', {
+    resolveBrandGa4ActivePropertyId: async ({ brandId }) =>
+      brandId ? '383714125' : null,
+    upsertBrandGa4Settings: async (_payload) => ({
+      propertyId: '383714125',
+      timezone: 'UTC',
+      leadEvents: [],
+      conversionEvents: [],
+      revenueEvent: null,
+      lastHistoricalSyncAt: null,
+      lastSuccessAt: null,
+      lastError: null,
+      backfillCursor: null,
+      updatedAt: new Date().toISOString(),
+    }),
+    setBrandGa4ActiveProperty: async ({ propertyId }) =>
+      String(propertyId || '383714125'),
   });
 
   mockModule('../src/lib/googleClient', {
@@ -317,4 +341,20 @@ test('GET /integrations/ga4/status reports statusSource=connectionState when sta
   assert.equal(res.statusCode, 200);
   assert.equal(res.body.status, 'REAUTH_REQUIRED');
   assert.equal(res.body.statusSource, 'connectionState');
+});
+
+test('GET /integrations/ga4/status exposes propertyScope mismatch when brand scope differs', async () => {
+  const { app } = buildApp({
+    statusIntegration: {
+      id: 'ga4-integration-1',
+      status: 'CONNECTED',
+      googleAccountEmail: 'ga4@example.com',
+      lastError: null,
+    },
+  });
+  const res = await request(app).get('/api/integrations/ga4/status?brandId=brand-1');
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body?.propertyScope?.brandActivePropertyId, '383714125');
+  assert.equal(res.body?.propertyScope?.integrationSelectedPropertyId, '123456789');
+  assert.equal(res.body?.propertyScope?.mismatch, true);
 });

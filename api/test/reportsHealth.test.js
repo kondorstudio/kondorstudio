@@ -21,6 +21,9 @@ function createFakePrisma() {
     dashboards: [],
     versions: [],
     connections: [],
+    integrations: [],
+    connectionStates: [],
+    facts: [],
   };
 
   const prisma = {
@@ -50,6 +53,33 @@ function createFakePrisma() {
             return true;
           })
           .map((item) => ({ platform: item.platform }));
+      },
+    },
+    integrationGoogleGa4: {
+      findFirst: async ({ where }) => {
+        return (
+          state.integrations.find((item) => {
+            if (where?.tenantId && item.tenantId !== where.tenantId) return false;
+            if (where?.status && item.status !== where.status) return false;
+            return true;
+          }) || null
+        );
+      },
+    },
+    connectionState: {
+      findUnique: async ({ where }) =>
+        state.connectionStates.find((item) => item.stateKey === where?.stateKey) || null,
+    },
+    factKondorMetricsDaily: {
+      findFirst: async ({ where }) => {
+        return (
+          state.facts.find((item) => {
+            if (where?.tenantId && item.tenantId !== where.tenantId) return false;
+            if (where?.brandId && item.brandId !== where.brandId) return false;
+            if (where?.platform && item.platform !== where.platform) return false;
+            return true;
+          }) || null
+        );
       },
     },
   };
@@ -215,5 +245,66 @@ test('health returns BLOCKED with INVALID_QUERY widget issues', async () => {
   assert.equal(
     res.body?.widgets?.find((item) => item.reasonCode === 'INVALID_QUERY')?.reasonCode,
     'INVALID_QUERY',
+  );
+});
+
+test('health returns WARN with DEGRADED_CONNECTION when GA4 is reauth-required but facts exist', async () => {
+  const { app, state } = buildApp();
+  const dashboardId = createPublishedDashboard(state, {
+    theme: {},
+    globalFilters: {
+      dateRange: { preset: 'last_7_days' },
+      platforms: [],
+      accounts: [],
+      compareTo: null,
+      autoRefreshSec: 0,
+    },
+    widgets: [
+      {
+        id: randomUUID(),
+        type: 'kpi',
+        title: 'Sessões',
+        layout: { x: 0, y: 0, w: 6, h: 4, minW: 2, minH: 2 },
+        query: {
+          dimensions: [],
+          metrics: ['sessions'],
+          filters: [],
+          requiredPlatforms: ['GA4'],
+        },
+        viz: {},
+      },
+    ],
+  });
+
+  state.connections.push({
+    tenantId: 'tenant-1',
+    brandId: 'brand-1',
+    platform: 'GA4',
+    status: 'ACTIVE',
+  });
+  state.integrations.push({
+    id: 'ga4-int-1',
+    tenantId: 'tenant-1',
+    status: 'NEEDS_RECONNECT',
+  });
+  state.connectionStates.push({
+    stateKey: 'tenant-1:GA4:tenant:ga4_oauth',
+    status: 'REAUTH_REQUIRED',
+  });
+  state.facts.push({
+    id: 'fact-ga4-1',
+    tenantId: 'tenant-1',
+    brandId: 'brand-1',
+    platform: 'GA4',
+  });
+
+  const res = await request(app).get(`/api/reports/dashboards/${dashboardId}/health`);
+  assert.equal(res.status, 200);
+  assert.equal(res.body?.status, 'WARN');
+  assert.deepEqual(res.body?.summary?.missingPlatforms || [], []);
+  assert.equal(
+    res.body?.widgets?.find((item) => item.reasonCode === 'DEGRADED_CONNECTION')
+      ?.reasonCode,
+    'DEGRADED_CONNECTION',
   );
 });

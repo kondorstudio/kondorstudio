@@ -15,6 +15,19 @@ services:
       - db
       - redis
 
+  worker:
+    build: ./api
+    container_name: kondor-worker
+    restart: unless-stopped
+    command: ["npm", "run", "worker:validated"]
+    env_file:
+      - ./api/.env
+    environment:
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - db
+      - redis
+
   front:
     build: ./front
     container_name: kondor-front

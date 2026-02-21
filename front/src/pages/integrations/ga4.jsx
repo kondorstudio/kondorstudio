@@ -63,14 +63,25 @@ export default function Ga4IntegrationPage() {
   const lastServerSelectedPropertyRef = useRef("");
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["ga4-status"],
-    queryFn: () => base44.ga4.status(),
+    queryKey: ["ga4-status", scopedBrandId || "tenant"],
+    queryFn: () =>
+      base44.ga4.status({
+        ...(scopedBrandId ? { brandId: scopedBrandId } : {}),
+      }),
   });
 
   const status = data?.status || "DISCONNECTED";
   const legacyStatus = data?.legacyStatus || status;
   const properties = data?.properties || [];
   const selectedProperty = data?.selectedProperty || null;
+  const propertyScope = data?.propertyScope || null;
+  const integrationSelectedPropertyId = propertyScope?.integrationSelectedPropertyId
+    ? String(propertyScope.integrationSelectedPropertyId)
+    : "";
+  const scopedBrandActivePropertyIdFromStatus = propertyScope?.brandActivePropertyId
+    ? String(propertyScope.brandActivePropertyId)
+    : "";
+  const propertyScopeMismatch = propertyScope?.mismatch === true;
   const serverSelectedPropertyId = selectedProperty?.propertyId
     ? String(selectedProperty.propertyId)
     : "";
@@ -92,6 +103,16 @@ export default function Ga4IntegrationPage() {
   const brandActivePropertyId = brandSettingsData?.settings?.propertyId
     ? String(brandSettingsData.settings.propertyId)
     : "";
+  const effectiveBrandActivePropertyId =
+    scopedBrandActivePropertyIdFromStatus || brandActivePropertyId;
+  const hasPropertyMismatch =
+    propertyScopeMismatch ||
+    Boolean(
+      effectiveBrandActivePropertyId &&
+        (integrationSelectedPropertyId || serverSelectedPropertyId) &&
+        effectiveBrandActivePropertyId !==
+          String(integrationSelectedPropertyId || serverSelectedPropertyId),
+    );
 
   useEffect(() => {
     if (serverSelectedPropertyId === lastServerSelectedPropertyRef.current) {
@@ -241,7 +262,7 @@ export default function Ga4IntegrationPage() {
     if (typeof window === "undefined") return undefined;
     const handleReauth = () => {
       setReauthNotice(
-        "Sua conexão com o GA4 expirou ou foi revogada. Reconecte para continuar.",
+        "Sua conexão com o GA4 exige reconexão. A sincronização online foi bloqueada até reconectar.",
       );
       queryClient.invalidateQueries({ queryKey: ["ga4-status"] });
     };
@@ -295,7 +316,7 @@ export default function Ga4IntegrationPage() {
       legacyStatus === "NEEDS_RECONNECT"
     ) {
       setReauthNotice(
-        "Sua conexão com o GA4 expirou ou foi revogada. Reconecte para continuar.",
+        "Sua conexão com o GA4 exige reconexão. A sincronização online foi bloqueada até reconectar.",
       );
     }
   }, [status, legacyStatus]);
@@ -358,12 +379,17 @@ export default function Ga4IntegrationPage() {
                         Propriedade da integração: {selectedProperty.displayName} ({selectedProperty.propertyId})
                       </p>
                     ) : null}
+                    {!selectedProperty && integrationSelectedPropertyId ? (
+                      <p className="text-xs text-[var(--text-muted)]">
+                        Propriedade da integração: {integrationSelectedPropertyId}
+                      </p>
+                    ) : null}
                     {scopedBrandId ? (
                       <p className="text-xs text-[var(--text-muted)]">Marca no contexto: {scopedBrandId}</p>
                     ) : null}
-                    {brandActivePropertyId ? (
+                    {effectiveBrandActivePropertyId ? (
                       <p className="text-xs text-[var(--text-muted)]">
-                        Propriedade ativa da marca: {brandActivePropertyId}
+                        Propriedade ativa da marca: {effectiveBrandActivePropertyId}
                       </p>
                     ) : null}
                     {brandSettingsError ? (
@@ -373,6 +399,11 @@ export default function Ga4IntegrationPage() {
                     ) : null}
                     {data?.lastError ? (
                       <p className="text-xs text-rose-600">{data.lastError}</p>
+                    ) : null}
+                    {needsReconnect ? (
+                      <p className="text-xs text-amber-700">
+                        Sync bloqueado por REAUTH_REQUIRED. Use &quot;Reconectar GA4&quot; para retomar a extração.
+                      </p>
                     ) : null}
                   </div>
                   <div className="flex items-center gap-2">
@@ -442,9 +473,7 @@ export default function Ga4IntegrationPage() {
                   <p className="text-xs text-[var(--text-muted)]">Marca alvo: {scopedBrandId}</p>
                 ) : null}
 
-                {brandActivePropertyId &&
-                serverSelectedPropertyId &&
-                brandActivePropertyId !== serverSelectedPropertyId ? (
+                {hasPropertyMismatch ? (
                   <p className="text-xs text-amber-700">
                     A propriedade ativa da marca difere da selecionada na integração. Salve a seleção para reconciliar.
                   </p>

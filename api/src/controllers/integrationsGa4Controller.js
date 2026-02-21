@@ -481,8 +481,33 @@ module.exports = {
     try {
       const tenantId = req.tenantId;
       const userId = req.user?.id;
+      const scopedBrandIdRaw = req.query?.brandId || req.query?.clientId || null;
+      const scopedBrandId = scopedBrandIdRaw ? String(scopedBrandIdRaw).trim() : '';
       if (!tenantId || !userId) {
         return res.status(400).json({ error: 'tenantId or userId missing' });
+      }
+
+      let brandActivePropertyId = null;
+      let hasScopedBrandContext = false;
+      if (scopedBrandId) {
+        const brand = await prisma.client.findFirst({
+          where: {
+            id: String(scopedBrandId),
+            tenantId: String(tenantId),
+          },
+          select: { id: true },
+        });
+        if (brand?.id) {
+          hasScopedBrandContext = true;
+          try {
+            brandActivePropertyId = await resolveBrandGa4ActivePropertyId({
+              tenantId,
+              brandId: String(scopedBrandId),
+            });
+          } catch (_err) {
+            brandActivePropertyId = null;
+          }
+        }
       }
 
       const integration = await req.db.integrationGoogleGa4.findFirst({
@@ -496,6 +521,11 @@ module.exports = {
 
       if (!integration) {
         const statusFromState = state?.status || 'DISCONNECTED';
+        const propertyScope = {
+          integrationSelectedPropertyId: null,
+          brandActivePropertyId: brandActivePropertyId || null,
+          mismatch: hasScopedBrandContext ? Boolean(brandActivePropertyId) : false,
+        };
         return res.json({
           status: statusFromState,
           statusSource: state?.status ? 'connectionState' : 'integration',
@@ -504,6 +534,7 @@ module.exports = {
           googleAccountEmail: null,
           properties: [],
           selectedProperty: null,
+          propertyScope,
         });
       }
 
@@ -535,6 +566,17 @@ module.exports = {
           ? 'REAUTH_REQUIRED'
           : integration.status;
       const statusFromState = state?.status || normalizedStatus;
+      const integrationSelectedPropertyId = selectedProperty?.propertyId
+        ? String(selectedProperty.propertyId)
+        : null;
+      const propertyScope = {
+        integrationSelectedPropertyId,
+        brandActivePropertyId: brandActivePropertyId || null,
+        mismatch: hasScopedBrandContext
+          ? String(brandActivePropertyId || '') !==
+            String(integrationSelectedPropertyId || '')
+          : false,
+      };
 
       return res.json({
         status: statusFromState,
@@ -545,6 +587,7 @@ module.exports = {
         googleAccountEmail: integration.googleAccountEmail || null,
         properties,
         selectedProperty,
+        propertyScope,
       });
     } catch (error) {
       console.error('GA4 status error:', error);

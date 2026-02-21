@@ -233,20 +233,63 @@ async function computeDashboardHealthForDashboard(dashboard) {
       .map((item) => normalizePlatform(item.platform))
       .filter(Boolean),
   );
+  const needsGa4Diagnostics =
+    requiredPlatforms.has('GA4') || connectedPlatforms.has('GA4');
+  let ga4MaterializedFallbackAvailable = false;
+  let ga4ConnectionDegraded = false;
+  if (needsGa4Diagnostics) {
+    const [ga4ConnectedIntegration, ga4AnyIntegration, ga4ConnectionState, ga4Fact] =
+      await Promise.all([
+        prisma.integrationGoogleGa4?.findFirst
+          ? prisma.integrationGoogleGa4.findFirst({
+              where: { tenantId: dashboard.tenantId, status: 'CONNECTED' },
+              select: { id: true },
+            })
+          : null,
+        prisma.integrationGoogleGa4?.findFirst
+          ? prisma.integrationGoogleGa4.findFirst({
+              where: { tenantId: dashboard.tenantId },
+              select: { status: true },
+            })
+          : null,
+        prisma.connectionState?.findUnique
+          ? prisma.connectionState.findUnique({
+              where: {
+                stateKey: `${dashboard.tenantId}:GA4:tenant:ga4_oauth`,
+              },
+              select: { status: true },
+            })
+          : null,
+        prisma.factKondorMetricsDaily?.findFirst
+          ? prisma.factKondorMetricsDaily.findFirst({
+              where: {
+                tenantId: dashboard.tenantId,
+                brandId: dashboard.brandId,
+                platform: 'GA4',
+              },
+              select: { id: true },
+            })
+          : null,
+      ]);
 
-  if (connectedPlatforms.has('GA4')) {
-    const ga4Integration = await prisma.integrationGoogleGa4.findFirst({
-      where: { tenantId: dashboard.tenantId, status: 'CONNECTED' },
-      select: { id: true },
-    });
-    if (!ga4Integration) {
+    const integrationStatus = String(ga4AnyIntegration?.status || '').toUpperCase();
+    const connectionStateStatus = String(ga4ConnectionState?.status || '').toUpperCase();
+    ga4ConnectionDegraded =
+      integrationStatus === 'NEEDS_RECONNECT' ||
+      connectionStateStatus === 'REAUTH_REQUIRED' ||
+      !ga4ConnectedIntegration;
+    if (ga4ConnectionDegraded) {
       connectedPlatforms.delete('GA4');
+      ga4MaterializedFallbackAvailable = Boolean(ga4Fact?.id);
     }
   }
   const expandedConnectedPlatforms = expandPlatformSet(connectedPlatforms);
 
   const missingPlatforms = Array.from(requiredPlatforms).filter(
-    (platform) => !expandedConnectedPlatforms.has(platform),
+    (platform) => {
+      if (platform === 'GA4' && ga4MaterializedFallbackAvailable) return false;
+      return !expandedConnectedPlatforms.has(platform);
+    },
   );
 
   const widgetHealth = [];
@@ -276,6 +319,21 @@ async function computeDashboardHealthForDashboard(dashboard) {
     let pushedMissingConnection = false;
     const widgetRequired = buildWidgetRequiredPlatforms(widget, requiredPlatforms);
     widgetRequired.forEach((platform) => {
+      if (
+        platform === 'GA4' &&
+        !expandedConnectedPlatforms.has('GA4') &&
+        ga4ConnectionDegraded &&
+        ga4MaterializedFallbackAvailable
+      ) {
+        pushedMissingConnection = true;
+        widgetHealth.push({
+          widgetId,
+          status: 'WARN',
+          platform: 'GA4',
+          reasonCode: 'DEGRADED_CONNECTION',
+        });
+        return;
+      }
       if (!expandedConnectedPlatforms.has(platform)) {
         pushedMissingConnection = true;
         widgetHealth.push({
@@ -299,7 +357,9 @@ async function computeDashboardHealthForDashboard(dashboard) {
   const uniqueWidgetHealth = uniqIssues(widgetHealth);
   const invalidWidgets = uniqueWidgetHealth.filter(
     (item) =>
-      item.reasonCode === 'MISSING_CONNECTION' || item.reasonCode === 'INVALID_QUERY',
+      item.reasonCode === 'MISSING_CONNECTION' ||
+      item.reasonCode === 'INVALID_QUERY' ||
+      item.reasonCode === 'DEGRADED_CONNECTION',
   );
 
   const hasMissingConnectionIssues = invalidWidgets.some(
@@ -308,11 +368,19 @@ async function computeDashboardHealthForDashboard(dashboard) {
   const hasInvalidQueryIssues = invalidWidgets.some(
     (item) => item.reasonCode === 'INVALID_QUERY',
   );
+  const hasDegradedConnectionIssues = invalidWidgets.some(
+    (item) => item.reasonCode === 'DEGRADED_CONNECTION',
+  );
 
   let status = 'OK';
   if (hasInvalidQueryIssues) {
     status = 'BLOCKED';
-  } else if (missingPlatforms.length || hasMissingConnectionIssues || unknownPlatformRequirement) {
+  } else if (
+    missingPlatforms.length ||
+    hasMissingConnectionIssues ||
+    hasDegradedConnectionIssues ||
+    unknownPlatformRequirement
+  ) {
     status = 'WARN';
   }
 

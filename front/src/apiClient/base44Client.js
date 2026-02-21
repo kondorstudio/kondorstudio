@@ -1008,8 +1008,9 @@ const GA4 = {
     return jsonFetch(`/integrations/ga4/oauth/start${qs}`, { method: "GET" });
   },
 
-  async status() {
-    return jsonFetch("/integrations/ga4/status", { method: "GET" });
+  async status(params = {}) {
+    const qs = buildQuery(params);
+    return jsonFetch(`/integrations/ga4/status${qs}`, { method: "GET" });
   },
 
   async getBrandSettings(params = {}) {

@@ -2,6 +2,7 @@ const { prisma } = require('../../prisma');
 const {
   resolveBrandGa4ActivePropertyId,
 } = require('../../services/brandGa4SettingsService');
+const connectionStateService = require('../../services/connectionStateService');
 const { buildRollingDateRange } = require('../../lib/timezone');
 
 const { ensureGa4FactMetrics } = require('../../services/ga4FactMetricsService');
@@ -223,6 +224,145 @@ async function assertRequiredPlatformsConnected({
   }
 
   return { required: Array.from(required), missing: [] };
+}
+
+function collectRequestedPlatforms({ requiredPlatforms, filters }) {
+  const required = new Set();
+  toArray(requiredPlatforms).forEach((platform) => {
+    const normalized = normalizePlatform(platform);
+    if (normalized) required.add(normalized);
+  });
+  const fromFilters = extractPlatformsFromFilters(filters);
+  fromFilters.forEach((platform) => required.add(platform));
+  return required;
+}
+
+function buildMissingConnectionsError({ required = [], missing = [] } = {}) {
+  const err = new Error('Conexões pendentes para as plataformas solicitadas');
+  err.code = 'MISSING_CONNECTIONS';
+  err.status = 409;
+  err.details = {
+    missing: Array.from(new Set((missing || []).map((value) => String(value)))),
+    required: Array.from(new Set((required || []).map((value) => String(value)))),
+  };
+  return err;
+}
+
+function normalizeDateOnly(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString().slice(0, 10);
+}
+
+function toStartOfDayUtc(value) {
+  const normalized = normalizeDateOnly(value);
+  if (!normalized) return null;
+  return new Date(`${normalized}T00:00:00.000Z`);
+}
+
+function toEndOfDayUtc(value) {
+  const normalized = normalizeDateOnly(value);
+  if (!normalized) return null;
+  return new Date(`${normalized}T23:59:59.999Z`);
+}
+
+async function resolveGa4ConnectionDiagnostics(tenantId) {
+  const [integration, connectionState] = await Promise.all([
+    prisma.integrationGoogleGa4?.findFirst
+      ? prisma.integrationGoogleGa4.findFirst({
+          where: { tenantId: String(tenantId) },
+          select: {
+            status: true,
+            lastError: true,
+          },
+        })
+      : null,
+    connectionStateService?.getConnectionState
+      ? connectionStateService
+          .getConnectionState({
+            tenantId,
+            provider: 'GA4',
+            connectionKey: 'ga4_oauth',
+          })
+          .catch(() => null)
+      : null,
+  ]);
+
+  const integrationStatus = integration?.status ? String(integration.status).toUpperCase() : null;
+  const stateStatus = connectionState?.status
+    ? String(connectionState.status).toUpperCase()
+    : null;
+  const effectiveStatus =
+    stateStatus || (integrationStatus === 'NEEDS_RECONNECT' ? 'REAUTH_REQUIRED' : integrationStatus) || null;
+  const isReauthRequired =
+    effectiveStatus === 'REAUTH_REQUIRED' || integrationStatus === 'NEEDS_RECONNECT';
+
+  return {
+    effectiveStatus,
+    integrationStatus,
+    stateStatus,
+    isReauthRequired,
+    lastError:
+      integration?.lastError || connectionState?.reasonMessage || connectionState?.reasonCode || null,
+  };
+}
+
+function buildGa4StaleReason({
+  missingConnectionsError,
+  ga4Diagnostics,
+}) {
+  if (ga4Diagnostics?.isReauthRequired) return 'REAUTH_REQUIRED';
+  if (ga4Diagnostics?.effectiveStatus && ga4Diagnostics.effectiveStatus !== 'CONNECTED') {
+    return String(ga4Diagnostics.effectiveStatus);
+  }
+  if (missingConnectionsError) return 'MISSING_CONNECTIONS';
+  return 'GA4_CONNECTION_DEGRADED';
+}
+
+async function getGa4FactsFreshness({
+  tenantId,
+  brandId,
+  ga4PropertyId,
+  dateRange,
+}) {
+  if (!prisma.factKondorMetricsDaily?.findFirst) {
+    return {
+      hasFacts: false,
+      latestDate: null,
+    };
+  }
+
+  const where = {
+    tenantId: String(tenantId),
+    brandId: String(brandId),
+    platform: 'GA4',
+  };
+  if (ga4PropertyId) {
+    where.accountId = String(ga4PropertyId);
+  }
+
+  const start = toStartOfDayUtc(dateRange?.start);
+  const end = toEndOfDayUtc(dateRange?.end);
+  if (start && end) {
+    where.date = {
+      gte: start,
+      lte: end,
+    };
+  }
+
+  const latest = await prisma.factKondorMetricsDaily.findFirst({
+    where,
+    select: { date: true },
+    orderBy: { date: 'desc' },
+  });
+
+  return {
+    hasFacts: Boolean(latest?.date),
+    latestDate: latest?.date ? normalizeDateOnly(latest.date) : null,
+  };
 }
 
 function stableStringify(value) {
@@ -719,17 +859,6 @@ async function executeQueryMetrics(tenantId, payload = {}) {
     throw err;
   }
 
-  const requiredConnections = await assertRequiredPlatformsConnected({
-    tenantId,
-    brandId,
-    requiredPlatforms: payload.requiredPlatforms,
-    filters,
-  });
-
-  const wantsGa4 = Array.isArray(requiredConnections.required)
-    ? requiredConnections.required.includes('GA4')
-    : false;
-
   let ga4PropertyId = null;
   try {
     ga4PropertyId = await resolveBrandGa4ActivePropertyId({ tenantId, brandId });
@@ -738,13 +867,6 @@ async function executeQueryMetrics(tenantId, payload = {}) {
       // eslint-disable-next-line no-console
       console.warn('[metrics.service] resolveBrandGa4ActivePropertyId warning', err?.message || err);
     }
-  }
-
-  if (wantsGa4 && !ga4PropertyId) {
-    const err = new Error('GA4 property não configurada para esta marca');
-    err.code = 'GA4_PROPERTY_REQUIRED';
-    err.status = 409;
-    throw err;
   }
 
   let brandTimezone = 'UTC';
@@ -769,6 +891,99 @@ async function executeQueryMetrics(tenantId, payload = {}) {
   }
 
   const effectiveDateRange = resolveEffectiveDateRange(dateRange, brandTimezone);
+  const requestedPlatforms = collectRequestedPlatforms({
+    requiredPlatforms: payload.requiredPlatforms,
+    filters,
+  });
+
+  let requiredConnections = null;
+  let missingConnectionsError = null;
+  try {
+    requiredConnections = await assertRequiredPlatformsConnected({
+      tenantId,
+      brandId,
+      requiredPlatforms: payload.requiredPlatforms,
+      filters,
+    });
+  } catch (err) {
+    if (err?.code !== 'MISSING_CONNECTIONS') throw err;
+    missingConnectionsError = err;
+  }
+
+  const requiredPlatformsResolved = requiredConnections?.required || missingConnectionsError?.details?.required || Array.from(requestedPlatforms);
+  const wantsGa4 = Array.isArray(requiredPlatformsResolved)
+    ? requiredPlatformsResolved.includes('GA4')
+    : false;
+
+  if (wantsGa4 && !ga4PropertyId) {
+    const err = new Error('GA4 property não configurada para esta marca');
+    err.code = 'GA4_PROPERTY_REQUIRED';
+    err.status = 409;
+    throw err;
+  }
+
+  const ga4Diagnostics = wantsGa4
+    ? await resolveGa4ConnectionDiagnostics(tenantId)
+    : null;
+  const ga4MissingOnly = missingConnectionsError
+    ? (() => {
+        const missing = toArray(missingConnectionsError?.details?.missing).map((item) =>
+          String(item || '').toUpperCase()
+        );
+        if (!missing.includes('GA4')) return false;
+        return missing.every((platform) => platform === 'GA4');
+      })()
+    : false;
+
+  if (missingConnectionsError && !ga4MissingOnly) {
+    throw missingConnectionsError;
+  }
+
+  const shouldHandleGa4AsDegraded =
+    wantsGa4 && (ga4MissingOnly || ga4Diagnostics?.isReauthRequired === true);
+
+  let degradedMeta = {
+    connectionDegraded: false,
+    stalePlatforms: [],
+    staleReason: null,
+    dataFreshUntil: null,
+  };
+
+  if (shouldHandleGa4AsDegraded) {
+    const freshness = await getGa4FactsFreshness({
+      tenantId,
+      brandId,
+      ga4PropertyId,
+      dateRange: effectiveDateRange,
+    });
+
+    if (!freshness.hasFacts) {
+      throw (
+        missingConnectionsError ||
+        buildMissingConnectionsError({
+          required: requiredPlatformsResolved,
+          missing: ['GA4'],
+        })
+      );
+    }
+
+    degradedMeta = {
+      connectionDegraded: true,
+      stalePlatforms: ['GA4'],
+      staleReason: buildGa4StaleReason({
+        missingConnectionsError,
+        ga4Diagnostics,
+      }),
+      dataFreshUntil: freshness.latestDate || null,
+    };
+  }
+
+  if (!requiredConnections) {
+    requiredConnections = {
+      required: requiredPlatformsResolved,
+      missing: [],
+    };
+  }
 
   const catalogEntries = await prisma.metricsCatalog.findMany({
     where: { key: { in: metrics } },
@@ -824,6 +1039,9 @@ async function executeQueryMetrics(tenantId, payload = {}) {
       filters,
       requiredPlatforms: requiredConnections.required,
     };
+    const skipOnlineGa4Ensure =
+      wantsGa4 &&
+      (degradedMeta.connectionDegraded || ga4Diagnostics?.isReauthRequired === true);
 
     // Keep these on-demand calls bounded: if provider APIs are slow, we prefer returning
     // an (even partial) response instead of timing out the whole dashboard.
@@ -835,7 +1053,7 @@ async function executeQueryMetrics(tenantId, payload = {}) {
     await withTimeout(
       async () => {
         // GA4 facts (sessions/leads) are stored in the same fact table.
-        if (wantsGa4) {
+        if (wantsGa4 && !skipOnlineGa4Ensure) {
           await ensureGa4FactMetrics(ensurePayload);
         }
         // Ads facts (spend/clicks/impressions/...) for Meta/Google/TikTok/LinkedIn.
@@ -930,6 +1148,10 @@ async function executeQueryMetrics(tenantId, payload = {}) {
       dateRange: effectiveDateRange,
       ga4PropertyId: ga4PropertyId || null,
       requiredPlatforms: requiredConnections.required || [],
+      connectionDegraded: degradedMeta.connectionDegraded === true,
+      stalePlatforms: degradedMeta.stalePlatforms || [],
+      staleReason: degradedMeta.staleReason || null,
+      dataFreshUntil: degradedMeta.dataFreshUntil || null,
     },
     rows,
     totals,
