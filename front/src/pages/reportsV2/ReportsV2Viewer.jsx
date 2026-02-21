@@ -16,7 +16,6 @@ import {
 import Toast from "@/components/ui/toast.jsx";
 import DashboardRenderer from "@/components/reportsV2/DashboardRenderer.jsx";
 import ThemeProvider from "@/components/reportsV2/ThemeProvider.jsx";
-import ReporteiTopbar from "@/components/reportsV2/ReporteiTopbar.jsx";
 import ReporteiLeftRail from "@/components/reportsV2/ReporteiLeftRail.jsx";
 import ReporteiFiltersCards from "@/components/reportsV2/ReporteiFiltersCards.jsx";
 import ReporteiCoverCard from "@/components/reportsV2/ReporteiCoverCard.jsx";
@@ -388,7 +387,8 @@ export default function ReportsV2Viewer() {
       if (payload?.publicUrl) {
         showToast("Link público gerado com sucesso.", "success");
       } else {
-        showToast("Link já está ativo. Rotacione para gerar um novo token.", "success");
+        showToast("Link ativo encontrado. Gerando um novo link...", "info");
+        rotateShareMutation.mutate();
       }
     },
     onError: (err) => {
@@ -492,10 +492,14 @@ export default function ReportsV2Viewer() {
     return false;
   };
 
-  const handleGenerateShare = () => {
+  const handlePrimaryShareAction = () => {
     if (!ensurePublished()) return;
     if (isHealthBlocked) {
       setBlockedAction("share");
+      return;
+    }
+    if (shareEnabled) {
+      rotateShareMutation.mutate();
       return;
     }
     createShareMutation.mutate();
@@ -557,7 +561,7 @@ export default function ReportsV2Viewer() {
     return (
       <ThemeProvider
         theme={normalizedLayout?.theme}
-        className="reportei-theme min-h-screen bg-[var(--surface-muted)]"
+        className="kondor-reports-theme min-h-screen bg-[var(--surface-muted)]"
       >
         <div className="mx-auto max-w-[1500px] px-5 py-8">
           <div className="h-6 w-40 rounded-full kondor-shimmer" />
@@ -572,7 +576,7 @@ export default function ReportsV2Viewer() {
     return (
       <ThemeProvider
         theme={normalizedLayout?.theme}
-        className="reportei-theme min-h-screen bg-[var(--surface-muted)]"
+        className="kondor-reports-theme min-h-screen bg-[var(--surface-muted)]"
       >
         <div className="mx-auto max-w-[1500px] px-5 py-8">
           <div className="rounded-[16px] border border-rose-200 bg-rose-50 px-6 py-5 text-sm text-rose-700">
@@ -586,10 +590,8 @@ export default function ReportsV2Viewer() {
   return (
     <ThemeProvider
       theme={normalizedLayout?.theme}
-      className="reportei-theme min-h-screen bg-[var(--surface-muted)]"
+      className="kondor-reports-theme min-h-screen bg-[var(--surface-muted)]"
     >
-      <ReporteiTopbar />
-
       <div className="border-b border-[#dbe3ed] bg-white">
         <div className="mx-auto flex h-[48px] max-w-[1760px] items-center justify-between gap-3 px-4 lg:px-6">
           <div className="min-w-0">
@@ -738,6 +740,21 @@ export default function ReportsV2Viewer() {
           onChange={setFilters}
           shareUrl={shareUrl}
           officialDateRange={officialDateRange}
+          showAdvancedPanel
+          defaultExpanded
+          onShareAction={() => setShareOpen(true)}
+          shareActionLabel={
+            shareUrl
+              ? "Copiar link"
+              : shareEnabled
+              ? "Gerar novo link"
+              : "Gerar link"
+          }
+          shareActionDisabled={
+            createShareMutation.isPending ||
+            rotateShareMutation.isPending ||
+            revokeShareMutation.isPending
+          }
         />
 
         <div className="mt-6">
@@ -902,14 +919,21 @@ export default function ReportsV2Viewer() {
                   Copiar link
                 </Button>
                 <Button
-                  onClick={handleGenerateShare}
+                  onClick={handlePrimaryShareAction}
                   disabled={
                     createShareMutation.isPending ||
+                    rotateShareMutation.isPending ||
                     dashboard?.status !== "PUBLISHED" ||
                     isHealthBlocked
                   }
                 >
-                  {createShareMutation.isPending ? "Gerando..." : "Gerar link"}
+                  {shareEnabled
+                    ? rotateShareMutation.isPending
+                      ? "Gerando novo link..."
+                      : "Gerar novo link"
+                    : createShareMutation.isPending
+                    ? "Gerando..."
+                    : "Gerar link"}
                 </Button>
                 <Button
                   variant="secondary"
@@ -922,7 +946,7 @@ export default function ReportsV2Viewer() {
               </div>
               {shareEnabled && !shareUrl ? (
                 <p className="mt-2 text-xs text-[var(--muted)]">
-                  Link ativo. Para copiar um novo link, clique em "Rotacionar link".
+                  Link ativo sem URL exposta. Clique em "Gerar novo link" para obter um endereço copiável.
                 </p>
               ) : null}
               {isHealthBlocked ? (

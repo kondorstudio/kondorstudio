@@ -10,7 +10,7 @@ const { applyDefaultGa4AccountIfMissing } = require('./layoutDefaults.service');
 const DEFAULT_LAYOUT = {
   theme: {
     mode: 'light',
-    brandColor: '#B050F0',
+    brandColor: '#0B5ED7',
     accentColor: '#22C55E',
     bg: '#FFFFFF',
     text: '#0F172A',

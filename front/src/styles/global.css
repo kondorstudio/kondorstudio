@@ -67,6 +67,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+.kondor-reports-theme,
 .reportei-theme {
   background: #edf1f4;
   font-family: "Nunito Sans", "Manrope", "Helvetica Neue", Arial, sans-serif;
@@ -95,16 +96,21 @@ body {
   --chart-6: #9333ea;
 }
 
+.kondor-reports-theme .reportei-topbar,
 .reportei-theme .reportei-topbar {
   background: #0b5ed7;
   color: #ffffff;
 }
 
+.kondor-reports-theme .reportei-topbar .reportei-logo,
 .reportei-theme .reportei-topbar .reportei-logo {
   font-weight: 800;
   letter-spacing: 0.02em;
 }
 
+.kondor-reports-theme .kondor-reports-toolbar-button,
+.kondor-reports-theme .reportei-toolbar-button,
+.reportei-theme .kondor-reports-toolbar-button,
 .reportei-theme .reportei-toolbar-button {
   height: 32px;
   border-radius: 999px;
@@ -115,24 +121,31 @@ body {
   font-weight: 700;
 }
 
+.kondor-reports-theme .react-grid-layout,
 .reportei-theme .react-grid-layout {
   min-height: 280px;
 }
 
+.kondor-reports-theme .react-grid-item.react-grid-placeholder,
 .reportei-theme .react-grid-item.react-grid-placeholder {
   border-radius: 14px;
   border: 1px dashed rgba(11, 94, 215, 0.45);
   background: rgba(11, 94, 215, 0.12);
 }
 
+.kondor-reports-theme .react-resizable-handle,
 .reportei-theme .react-resizable-handle {
   opacity: 0.72;
 }
 
+.kondor-reports-theme .react-grid-item.react-grid-placeholder + .react-resizable-handle,
 .reportei-theme .react-grid-item.react-grid-placeholder + .react-resizable-handle {
   opacity: 1;
 }
 
+.kondor-reports-theme .kondor-reports-card,
+.kondor-reports-theme .reportei-card,
+.reportei-theme .kondor-reports-card,
 .reportei-theme .reportei-card {
   border: 1px solid var(--border);
   background: #ffffff;
@@ -140,11 +153,16 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
+.kondor-reports-theme button,
 .reportei-theme button {
   transform: none !important;
 }
 
+.kondor-reports-theme .k-button,
+.kondor-reports-theme .kondor-reports-pill,
+.kondor-reports-theme .reportei-pill,
 .reportei-theme .k-button,
+.reportei-theme .kondor-reports-pill,
 .reportei-theme .reportei-pill {
   border-radius: 999px;
 }

@@ -15,6 +15,7 @@ const router = express.Router();
 router.use(authMiddleware, tenantGuard);
 
 const requireGa4Admin = authMiddleware.requireRole('OWNER', 'ADMIN', 'SUPER_ADMIN');
+const requireGa4BrandSettingsEditor = authMiddleware.requireRole('OWNER', 'ADMIN', 'SUPER_ADMIN', 'MEMBER');
 
 router.get('/oauth/start', requireGa4Admin, controller.oauthStart);
 router.get('/status', controller.status);
@@ -25,7 +26,7 @@ router.post('/properties/select', requireGa4Admin, validate(propertySelectSchema
 router.post('/demo-report', controller.demoReport);
 router.get('/metadata', controller.metadata);
 router.get('/brands/settings', controller.brandSettingsGet);
-router.post('/brands/settings', requireGa4Admin, validate(ga4BrandSettingsSchema), controller.brandSettingsUpsert);
+router.post('/brands/settings', requireGa4BrandSettingsEditor, validate(ga4BrandSettingsSchema), controller.brandSettingsUpsert);
 router.post('/facts/sync', requireGa4Admin, validate(ga4FactsSyncSchema), controller.syncFacts);
 
 module.exports = router;

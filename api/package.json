@@ -25,7 +25,8 @@
     "seed": "node prisma/seed.js",
     "validate:filters": "node scripts/validate-report-filters.js",
     "validate:crypto": "node scripts/validate-crypto-keys.js",
-    "reconcile:ga4:scope": "node scripts/reconcile-ga4-property-scope.js"
+    "reconcile:ga4:scope": "node scripts/reconcile-ga4-property-scope.js",
+    "reports:v2:migrate-kondor": "node scripts/migrate-reports-v2-kondor.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.676.0",

@@ -102,7 +102,7 @@ router.get('/meta/connect-url', async (req, res) => {
 router.get('/ga4/brands/settings', ga4Controller.brandSettingsGet);
 router.post(
   '/ga4/brands/settings',
-  authMiddleware.requireRole('OWNER', 'ADMIN'),
+  authMiddleware.requireRole('OWNER', 'ADMIN', 'SUPER_ADMIN', 'MEMBER'),
   validate(ga4BrandSettingsSchema),
   ga4Controller.brandSettingsUpsert,
 );

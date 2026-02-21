@@ -15,7 +15,6 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog.jsx";
 import DashboardRenderer from "@/components/reportsV2/DashboardRenderer.jsx";
-import ReporteiTopbar from "@/components/reportsV2/ReporteiTopbar.jsx";
 import Toast from "@/components/ui/toast.jsx";
 import useToast from "@/hooks/useToast.js";
 import { cn } from "@/utils/classnames.js";
@@ -318,9 +317,7 @@ export default function ReportsV2Templates() {
   }, [brandId, instantiate, selectedTemplate?.id, showToast]);
 
   return (
-    <div className="reportei-theme min-h-screen bg-[var(--surface-muted)]">
-      <ReporteiTopbar />
-
+    <div className="kondor-reports-theme min-h-screen bg-[var(--surface-muted)]">
       <div className="border-b border-[#dbe3ed] bg-white">
         <div className="mx-auto flex h-[48px] max-w-[1760px] items-center justify-between gap-3 px-4 lg:px-6">
           <div className="flex min-w-0 items-center gap-2">
@@ -342,7 +339,7 @@ export default function ReportsV2Templates() {
       </div>
 
       <div className="mx-auto w-full max-w-[1760px] px-4 py-5 lg:px-6">
-        <div className="reportei-card p-4 md:p-5">
+        <div className="kondor-reports-card p-4 md:p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-2xl font-semibold text-[var(--primary)]">Templates</p>

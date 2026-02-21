@@ -23,7 +23,6 @@ import AddMenu from "@/components/reportsV2/editor/AddMenu.jsx";
 import WidgetContextMenu from "@/components/reportsV2/editor/WidgetContextMenu.jsx";
 import GuidesOverlay from "@/components/reportsV2/editor/GuidesOverlay.jsx";
 import MetricsLibraryPanel from "@/components/reportsV2/editor/MetricsLibraryPanel.jsx";
-import ReporteiTopbar from "@/components/reportsV2/ReporteiTopbar.jsx";
 import ReporteiReportToolbar from "@/components/reportsV2/ReporteiReportToolbar.jsx";
 import ReporteiFiltersCards from "@/components/reportsV2/ReporteiFiltersCards.jsx";
 import ReporteiShareDialog from "@/components/reportsV2/ReporteiShareDialog.jsx";
@@ -951,12 +950,16 @@ export default function ReportsV2Editor() {
     },
     onSuccess: async () => {
       await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["ga4-status"] }),
         queryClient.invalidateQueries({ queryKey: ["ga4-brand-settings", brandId] }),
         queryClient.invalidateQueries({
           queryKey: ["reportsV2-editor-connections", brandId],
         }),
+        queryClient.invalidateQueries({ queryKey: ["reportsV2-dashboard", id] }),
+        queryClient.invalidateQueries({ queryKey: ["reportsV2-dashboard-health", id] }),
         queryClient.invalidateQueries({ queryKey: ["reportsV2-widget", id] }),
       ]);
+      setOfficialDateRange(null);
       showToast("Propriedade GA4 atualizada para esta marca.", "success");
     },
     onError: (err) => {
@@ -2420,6 +2423,18 @@ export default function ReportsV2Editor() {
     navigate(`/relatorios/v2/${id}`);
   };
 
+  const handleToggleAutoSave = React.useCallback(
+    (nextValue) => {
+      const enabled =
+        typeof nextValue === "boolean" ? nextValue : !autoSaveEnabled;
+      setAutoSaveEnabled(enabled);
+      if (!enabled) {
+        setAutoSaveStatus("idle");
+      }
+    },
+    [autoSaveEnabled]
+  );
+
   const handleRestoreVersion = (version) => {
     if (!version?.layoutJson) return;
     const merged = mergeLayoutDefaults(version.layoutJson);
@@ -2512,17 +2527,25 @@ export default function ReportsV2Editor() {
   return (
     <ThemeProvider
       theme={layoutJson?.theme}
-      className="min-h-screen reportei-theme bg-[var(--surface-muted)]"
+      className="min-h-screen kondor-reports-theme bg-[var(--surface-muted)]"
     >
-      <ReporteiTopbar />
-
       <ReporteiReportToolbar
         title={dashboard.name}
         statusLabel={autoSaveLabel}
+        statusInteractive
+        statusDisabled={
+          autoSaveMutation.isPending ||
+          saveMutation.isPending ||
+          publishMutation.isPending
+        }
+        onStatusToggle={handleToggleAutoSave}
         onBack={() => navigate("/relatorios/v2")}
         onSaveTemplate={handleOpenSaveTemplate}
         onViewClient={handleViewClient}
         onShare={() => setShowShareDialog(true)}
+        saveTemplateDisabled={createTemplateMutation.isPending}
+        viewClientDisabled={cloneMutation.isPending}
+        shareDisabled={cloneMutation.isPending}
         leftContent={
           brandId ? (
             <div className="ml-2 hidden items-center gap-2 lg:flex">
@@ -2582,33 +2605,51 @@ export default function ReportsV2Editor() {
           ) : null
         }
         extraActions={
-          <div className="hidden items-center gap-1.5 2xl:flex">
+          <div className="hidden items-center gap-1.5 lg:flex">
             <Button
               variant="secondary"
               onClick={() => setMetricsPanelOpen((prev) => !prev)}
-              className="reportei-toolbar-button gap-1.5 px-3"
+              className="kondor-reports-toolbar-button gap-1.5 px-3"
             >
               <Sidebar className="h-4 w-4" />
               {metricsPanelOpen ? "Fechar métricas" : "Adicionar métricas"}
             </Button>
-            <Button variant="secondary" onClick={() => setInspectorOpen((prev) => !prev)} className="reportei-toolbar-button px-3">
+            <Button
+              variant="secondary"
+              onClick={() => setInspectorOpen((prev) => !prev)}
+              className="kondor-reports-toolbar-button px-3"
+            >
               <SlidersHorizontal className="h-4 w-4" />
               {inspectorOpen ? "Fechar painel" : "Painel"}
             </Button>
-            <Button variant="secondary" onClick={undo} disabled={!canUndo} className="reportei-toolbar-button w-8 p-0">
+            <Button
+              variant="secondary"
+              onClick={undo}
+              disabled={!canUndo}
+              className="kondor-reports-toolbar-button w-8 p-0"
+            >
               <Undo2 className="h-4 w-4" />
             </Button>
-            <Button variant="secondary" onClick={redo} disabled={!canRedo} className="reportei-toolbar-button w-8 p-0">
+            <Button
+              variant="secondary"
+              onClick={redo}
+              disabled={!canRedo}
+              className="kondor-reports-toolbar-button w-8 p-0"
+            >
               <Redo2 className="h-4 w-4" />
             </Button>
-            <Button variant="secondary" onClick={() => setShowHistory(true)} className="reportei-toolbar-button w-8 p-0">
+            <Button
+              variant="secondary"
+              onClick={() => setShowHistory(true)}
+              className="kondor-reports-toolbar-button w-8 p-0"
+            >
               <History className="h-4 w-4" />
             </Button>
             <Button
               variant="secondary"
               onClick={handleCloneDashboard}
               disabled={cloneMutation.isPending}
-              className="reportei-toolbar-button w-8 p-0"
+              className="kondor-reports-toolbar-button w-8 p-0"
             >
               <Copy className="h-4 w-4" />
             </Button>
@@ -2616,7 +2657,7 @@ export default function ReportsV2Editor() {
               variant="secondary"
               onClick={handleSave}
               disabled={saveMutation.isPending || publishMutation.isPending}
-              className="reportei-toolbar-button gap-1.5 px-3"
+              className="kondor-reports-toolbar-button gap-1.5 px-3"
             >
               <Save className="h-4 w-4" />
               {saveMutation.isPending ? "Salvando..." : "Salvar"}
@@ -2659,6 +2700,11 @@ export default function ReportsV2Editor() {
             onChange={handleGlobalFiltersChange}
             shareUrl={shareUrl}
             officialDateRange={officialDateRange}
+            showAdvancedPanel
+            defaultExpanded
+            onShareAction={() => setShowShareDialog(true)}
+            shareActionLabel={shareUrl ? "Copiar link" : "Gerar link"}
+            shareActionDisabled={shareStatusQuery.isFetching}
           />
         </div>
 
@@ -2763,11 +2809,9 @@ export default function ReportsV2Editor() {
                 <div className="ml-1 flex items-center gap-2 rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-xs">
                   <Checkbox
                     checked={autoSaveEnabled}
-                    onCheckedChange={(checked) => {
-                      const enabled = Boolean(checked);
-                      setAutoSaveEnabled(enabled);
-                      if (!enabled) setAutoSaveStatus("idle");
-                    }}
+                    onCheckedChange={(checked) =>
+                      handleToggleAutoSave(Boolean(checked))
+                    }
                   />
                   <span className="font-semibold text-[var(--text)]">Auto-salvar</span>
                 </div>
@@ -3175,6 +3219,7 @@ export default function ReportsV2Editor() {
         onOpenChange={setShowShareDialog}
         onToast={showToast}
         onShareUrlChange={setShareUrl}
+        isPublished={dashboard?.status === "PUBLISHED"}
       />
 
       <Dialog open={showHistory} onOpenChange={setShowHistory}>

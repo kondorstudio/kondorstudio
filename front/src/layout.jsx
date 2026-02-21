@@ -211,6 +211,13 @@ function LayoutContent() {
     return location.pathname === item.to || location.pathname.startsWith(`${item.to}/`);
   });
   const isReportsV2Route = location.pathname.startsWith("/relatorios/v2");
+  const isReportsV2HomeRoute = location.pathname === "/relatorios/v2";
+  const backFallback = isReportsV2Route
+    ? isReportsV2HomeRoute
+      ? "/dashboard"
+      : "/relatorios/v2"
+    : "/dashboard";
+  const forceBackFallback = isReportsV2HomeRoute;
   const connections = connectionsStatus?.items || [];
   const activePlatforms = useMemo(() => {
     const platforms = new Set();
@@ -230,16 +237,6 @@ function LayoutContent() {
   const needsConnections =
     Boolean(activeClientId) && !connectionsLoading && activePlatforms.size === 0;
   const isCheckingConnections = Boolean(activeClientId) && connectionsLoading;
-
-  if (isReportsV2Route) {
-    return (
-      <div className="min-h-screen reportei-theme bg-[var(--background)] text-[var(--text)]">
-        <main className="min-h-screen">
-          <Outlet />
-        </main>
-      </div>
-    );
-  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--background)] text-[var(--text)]">
@@ -332,8 +329,8 @@ function LayoutContent() {
         <header className="sticky top-0 z-40 flex flex-wrap items-center justify-between gap-4 border-b border-[var(--border)] bg-white/90 px-6 py-4 shadow-[var(--shadow-sm)] backdrop-blur">
           <div className="flex items-center gap-3">
             <BackButton
-              fallback={isReportsV2Route ? "/relatorios/v2" : "/dashboard"}
-              forceFallback={isReportsV2Route}
+              fallback={backFallback}
+              forceFallback={forceBackFallback}
               size="md"
               variant="outline"
               labelClassName="hidden md:inline"

@@ -6,7 +6,7 @@ const DEFAULT_TEMPLATES_V2 = [
     layoutJson: {
       theme: {
         mode: 'light',
-        brandColor: '#B050F0',
+        brandColor: '#0B5ED7',
         accentColor: '#22C55E',
         bg: '#FFFFFF',
         text: '#0F172A',
@@ -125,7 +125,7 @@ const DEFAULT_TEMPLATES_V2 = [
     layoutJson: {
       theme: {
         mode: 'light',
-        brandColor: '#B050F0',
+        brandColor: '#0B5ED7',
         accentColor: '#22C55E',
         bg: '#FFFFFF',
         text: '#0F172A',
@@ -196,7 +196,7 @@ const DEFAULT_TEMPLATES_V2 = [
     layoutJson: {
       theme: {
         mode: 'light',
-        brandColor: '#B050F0',
+        brandColor: '#0B5ED7',
         accentColor: '#22C55E',
         bg: '#FFFFFF',
         text: '#0F172A',
@@ -283,7 +283,7 @@ const DEFAULT_TEMPLATES_V2 = [
     layoutJson: {
       theme: {
         mode: 'light',
-        brandColor: '#B050F0',
+        brandColor: '#0B5ED7',
         accentColor: '#22C55E',
         bg: '#FFFFFF',
         text: '#0F172A',
@@ -401,7 +401,7 @@ const DEFAULT_TEMPLATES_V2 = [
     layoutJson: {
       theme: {
         mode: 'light',
-        brandColor: '#B050F0',
+        brandColor: '#0B5ED7',
         accentColor: '#22C55E',
         bg: '#FFFFFF',
         text: '#0F172A',
@@ -519,7 +519,7 @@ const DEFAULT_TEMPLATES_V2 = [
     layoutJson: {
       theme: {
         mode: 'light',
-        brandColor: '#B050F0',
+        brandColor: '#0B5ED7',
         accentColor: '#22C55E',
         bg: '#FFFFFF',
         text: '#0F172A',
@@ -624,7 +624,7 @@ const DEFAULT_TEMPLATES_V2 = [
     layoutJson: {
       theme: {
         mode: 'light',
-        brandColor: '#B050F0',
+        brandColor: '#0B5ED7',
         accentColor: '#22C55E',
         bg: '#FFFFFF',
         text: '#0F172A',

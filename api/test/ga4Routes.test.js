@@ -44,13 +44,20 @@ function buildApp({
   oauthStatePayload = null,
   propertiesSelectScopeResult = null,
 } = {}) {
-  const tracker = { buildAuthUrlArgs: null, buildStateArgs: null };
+  const tracker = {
+    buildAuthUrlArgs: null,
+    buildStateArgs: null,
+    requiredRoleSets: [],
+  };
   const auth = (req, _res, next) => {
     req.user = { id: 'user-1', role: 'OWNER' };
     req.tenantId = 'tenant-1';
     next();
   };
-  auth.requireRole = () => (_req, _res, next) => next();
+  auth.requireRole = (...roles) => {
+    tracker.requiredRoleSets.push(roles);
+    return (_req, _res, next) => next();
+  };
   mockModule('../src/middleware/auth', auth);
 
   mockModule('../src/middleware/tenantGuard', (req, _res, next) => {
@@ -203,6 +210,14 @@ test('GET /integrations/ga4/oauth/start returns url', async () => {
   assert.equal(res.statusCode, 200);
   assert.equal(res.body.url, 'http://example.com/oauth');
   assert.equal(Boolean(tracker.buildAuthUrlArgs?.forceConsent), true);
+});
+
+test('integrations ga4 router allows MEMBER to update brand settings', async () => {
+  const { tracker } = buildApp();
+  const hasMemberRoleSet = tracker.requiredRoleSets.some((roles) =>
+    roles.includes('MEMBER'),
+  );
+  assert.equal(hasMemberRoleSet, true);
 });
 
 test('GET /integrations/ga4/oauth/start forwards brand/client context into oauth state', async () => {

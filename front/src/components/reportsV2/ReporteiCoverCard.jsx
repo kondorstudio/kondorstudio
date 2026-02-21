@@ -51,7 +51,7 @@ export default function ReporteiCoverCard({
   const compare = resolveComparisonRange(filters, range);
 
   return (
-    <section className={`reportei-card overflow-hidden ${className}`.trim()}>
+    <section className={`kondor-reports-card overflow-hidden ${className}`.trim()}>
       <div className="flex min-h-[360px] flex-col items-center justify-center px-6 py-10 text-center">
         <span className="mb-6 inline-flex h-24 w-24 items-center justify-center rounded-full bg-[#22A6E8] text-6xl font-extrabold text-white">
           {initial}

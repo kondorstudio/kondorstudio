@@ -9,7 +9,6 @@ import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog.jsx";
 import Toast from "@/components/ui/toast.jsx";
 import useToast from "@/hooks/useToast.js";
-import ReporteiTopbar from "@/components/reportsV2/ReporteiTopbar.jsx";
 import { base44 } from "@/apiClient/base44Client";
 import { cn } from "@/utils/classnames.js";
 
@@ -134,9 +133,7 @@ export default function ReportsV2Home() {
   };
 
   return (
-    <div className="reportei-theme min-h-screen bg-[var(--surface-muted)]">
-      <ReporteiTopbar />
-
+    <div className="kondor-reports-theme min-h-screen bg-[var(--surface-muted)]">
       <div className="border-b border-[#dbe3ed] bg-white">
         <div className="mx-auto flex min-h-[48px] max-w-[1760px] flex-wrap items-center justify-between gap-3 px-4 py-2 lg:px-6">
           <div>
@@ -209,7 +206,7 @@ export default function ReportsV2Home() {
           })}
         </div>
 
-        <div id="reports-dashboards-list" className="reportei-card p-4">
+        <div id="reports-dashboards-list" className="kondor-reports-card p-4">
           <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div className="flex flex-1 flex-wrap gap-3">
               <div className="min-w-[220px] flex-1">

@@ -61,11 +61,16 @@ export default function ReporteiFiltersCards({
   collapsible = true,
   defaultExpanded = false,
   showAdvancedPanel = false,
+  onShareAction,
+  shareActionLabel,
+  shareActionDisabled = false,
 }) {
   const [expanded, setExpanded] = React.useState(
     Boolean(showAdvancedPanel && defaultExpanded)
   );
   const preset = filters?.dateRange?.preset || "last_7_days";
+  const resolvedShareActionLabel =
+    shareActionLabel || (shareUrl ? "Copiar link" : "Gerar link");
 
   const handleCopyShareLink = async () => {
     if (!shareUrl || typeof navigator === "undefined" || !navigator.clipboard) return;
@@ -86,10 +91,25 @@ export default function ReporteiFiltersCards({
     });
   };
 
+  const handleShareAction = async () => {
+    if (shareUrl) {
+      await handleCopyShareLink();
+      return;
+    }
+    onShareAction?.();
+  };
+
   return (
     <div className={cn("space-y-2.5", className)}>
       <div className="grid gap-3 lg:grid-cols-3">
-        <div className="reportei-card flex min-h-[76px] items-center gap-3 px-4 py-3.5">
+        <button
+          type="button"
+          onClick={showAdvancedPanel ? () => setExpanded(true) : undefined}
+          className={cn(
+            "kondor-reports-card flex min-h-[76px] items-center gap-3 px-4 py-3.5 text-left",
+            showAdvancedPanel && "cursor-pointer hover:border-[#bfd0e7]"
+          )}
+        >
           <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-[var(--primary)]">
             <CalendarDays className="h-4 w-4" />
           </span>
@@ -101,8 +121,15 @@ export default function ReporteiFiltersCards({
               {dateRangeLabel(filters, officialDateRange)}
             </p>
           </div>
-        </div>
-        <div className="reportei-card flex min-h-[76px] items-center gap-3 px-4 py-3.5">
+        </button>
+        <button
+          type="button"
+          onClick={showAdvancedPanel ? () => setExpanded(true) : undefined}
+          className={cn(
+            "kondor-reports-card flex min-h-[76px] items-center gap-3 px-4 py-3.5 text-left",
+            showAdvancedPanel && "cursor-pointer hover:border-[#bfd0e7]"
+          )}
+        >
           <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-[var(--primary)]">
             <CalendarDays className="h-4 w-4" />
           </span>
@@ -114,8 +141,8 @@ export default function ReporteiFiltersCards({
               {compareLabel(filters, officialDateRange)}
             </p>
           </div>
-        </div>
-        <div className="reportei-card flex min-h-[76px] items-center gap-3 px-4 py-3.5">
+        </button>
+        <div className="kondor-reports-card flex min-h-[76px] items-center gap-3 px-4 py-3.5">
           <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-[var(--primary)]">
             <Link2 className="h-4 w-4" />
           </span>
@@ -130,12 +157,13 @@ export default function ReporteiFiltersCards({
           <Button
             size="sm"
             variant="secondary"
-            className="h-8 w-8 rounded-full border border-[#d1dae6] bg-white p-0 text-slate-500"
-            onClick={handleCopyShareLink}
-            disabled={!shareUrl}
-            aria-label="Copiar link"
+            className="h-8 gap-1.5 rounded-full border border-[#d1dae6] bg-white px-3 text-xs font-bold text-slate-600"
+            onClick={handleShareAction}
+            disabled={Boolean(shareActionDisabled)}
+            aria-label={resolvedShareActionLabel}
           >
             <Copy className="h-4 w-4" />
+            {resolvedShareActionLabel}
           </Button>
         </div>
       </div>
@@ -163,7 +191,7 @@ export default function ReporteiFiltersCards({
       ) : null}
 
       {showAdvancedPanel && (!collapsible || expanded) && onChange ? (
-        <div className="reportei-card grid gap-3 p-4 lg:grid-cols-4">
+        <div className="kondor-reports-card grid gap-3 p-4 lg:grid-cols-4">
           <div>
             <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
               Preset
@@ -241,9 +269,18 @@ export default function ReporteiFiltersCards({
             <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
               Link de compartilhamento
             </label>
-            <div className="relative">
+            <div className="relative flex items-center gap-2">
               <Input value={shareUrl || ""} readOnly placeholder="Link ainda não gerado" />
-              <PencilLine className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
+              <Button
+                size="sm"
+                variant="secondary"
+                className="h-9 shrink-0 gap-1.5 rounded-full border border-[#d1dae6] bg-white px-3 text-xs font-bold text-slate-600"
+                onClick={handleShareAction}
+                disabled={Boolean(shareActionDisabled)}
+              >
+                <PencilLine className="h-4 w-4" />
+                {resolvedShareActionLabel}
+              </Button>
             </div>
           </div>
         </div>

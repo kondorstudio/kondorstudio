@@ -19,6 +19,7 @@ export default function ReporteiShareDialog({
   onOpenChange,
   onToast,
   onShareUrlChange,
+  isPublished = true,
 }) {
   const queryClient = useQueryClient();
   const [shareUrl, setShareUrl] = React.useState("");
@@ -51,7 +52,11 @@ export default function ReporteiShareDialog({
       setShareUrl(url);
       onShareUrlChange?.(url);
       invalidate();
-      onToast?.("Link público gerado.", "success");
+      if (url) {
+        onToast?.("Link público gerado.", "success");
+        return;
+      }
+      onToast?.("Compartilhamento já estava ativo.", "success");
     },
     onError: (error) => {
       onToast?.(error?.data?.error?.message || "Falha ao gerar link público.", "error");
@@ -65,7 +70,7 @@ export default function ReporteiShareDialog({
       setShareUrl(url);
       onShareUrlChange?.(url);
       invalidate();
-      onToast?.("Link rotacionado.", "success");
+      onToast?.("Novo link público gerado.", "success");
     },
     onError: (error) => {
       onToast?.(error?.data?.error?.message || "Falha ao rotacionar link.", "error");
@@ -85,6 +90,9 @@ export default function ReporteiShareDialog({
     },
   });
 
+  const isBusy =
+    createMutation.isPending || rotateMutation.isPending || revokeMutation.isPending;
+
   const handleCopy = async () => {
     if (!shareUrl) return;
     try {
@@ -95,13 +103,26 @@ export default function ReporteiShareDialog({
     }
   };
 
+  const handlePrimaryShareAction = () => {
+    if (!isPublished) {
+      onToast?.("Publique o dashboard antes de gerar link de compartilhamento.", "info");
+      return;
+    }
+    if (shareEnabled) {
+      rotateMutation.mutate();
+      return;
+    }
+    createMutation.mutate();
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[620px]">
         <DialogHeader>
           <DialogTitle>Compartilhar relatório</DialogTitle>
           <DialogDescription>
-            Gere um link público para abrir este relatório no modo cliente.
+            Gere um link público para abrir este relatório no modo cliente. Se já existir link
+            ativo, a ação principal rotaciona automaticamente para devolver uma nova URL.
           </DialogDescription>
         </DialogHeader>
 
@@ -122,17 +143,23 @@ export default function ReporteiShareDialog({
           </div>
           <div className="flex flex-wrap gap-2">
             <Button
-              onClick={() => createMutation.mutate()}
-              disabled={createMutation.isPending || rotateMutation.isPending || revokeMutation.isPending}
+              onClick={handlePrimaryShareAction}
+              disabled={isBusy || !isPublished}
               className="gap-2"
             >
               <Link2 className="h-4 w-4" />
-              {shareEnabled ? "Regenerar link" : "Gerar link"}
+              {shareEnabled
+                ? rotateMutation.isPending
+                  ? "Gerando novo link..."
+                  : "Gerar novo link"
+                : createMutation.isPending
+                ? "Gerando..."
+                : "Gerar link"}
             </Button>
             <Button
               variant="secondary"
               onClick={() => rotateMutation.mutate()}
-              disabled={!shareEnabled || rotateMutation.isPending || createMutation.isPending || revokeMutation.isPending}
+              disabled={!shareEnabled || isBusy || !isPublished}
               className="gap-2"
             >
               <RefreshCw className="h-4 w-4" />
@@ -141,13 +168,18 @@ export default function ReporteiShareDialog({
             <Button
               variant="secondary"
               onClick={() => revokeMutation.mutate()}
-              disabled={!shareEnabled || revokeMutation.isPending || createMutation.isPending || rotateMutation.isPending}
+              disabled={!shareEnabled || isBusy}
               className="gap-2"
             >
               <ShieldBan className="h-4 w-4" />
               Desativar
             </Button>
           </div>
+          {!isPublished ? (
+            <p className="text-xs text-amber-700">
+              Este dashboard está em rascunho. Publique para habilitar link público.
+            </p>
+          ) : null}
         </div>
 
         <DialogFooter>
