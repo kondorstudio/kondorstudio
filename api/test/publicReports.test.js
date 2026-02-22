@@ -98,6 +98,10 @@ function buildApp() {
       metricsCalls.push({ tenantId, payload });
       return { rows: [], totals: {}, meta: { currency: 'USD' } };
     },
+    queryMetricsReportei: async (tenantId, payload) => {
+      metricsCalls.push({ tenantId, payload, reportei: true });
+      return { rows: [], totals: {}, meta: { currency: 'USD', dataSource: 'ga4_live' } };
+    },
   });
 
   resetModule('../src/modules/reports/publicReports.service');
@@ -194,6 +198,56 @@ test('public metrics query resolves tenant and brand from token', async () => {
   assert.equal(metricsCalls[0].tenantId, 'tenant-2');
   assert.equal(metricsCalls[0].payload.brandId, 'brand-2');
   assert.equal(metricsCalls[0].payload.metrics[0], 'spend');
+});
+
+test('public metrics query forwards GA4 scope for live-eligible widgets', async () => {
+  const { app, state, metricsCalls } = buildApp();
+  const token = 'public-token-ga4';
+  const tokenHash = createHash('sha256').update(token).digest('hex');
+
+  const versionId = randomUUID();
+  state.versions.push({
+    id: versionId,
+    layoutJson: { widgets: [], theme: {}, globalFilters: {} },
+  });
+
+  state.dashboards.push({
+    id: randomUUID(),
+    tenantId: 'tenant-ga4',
+    brandId: 'brand-ga4',
+    name: 'Shared GA4',
+    status: 'PUBLISHED',
+    publishedVersionId: versionId,
+  });
+  state.publicShares.push({
+    id: randomUUID(),
+    tenantId: 'tenant-ga4',
+    dashboardId: state.dashboards[0].id,
+    tokenHash,
+    status: 'ACTIVE',
+    createdByUserId: 'user-ga4',
+    createdAt: new Date(),
+    revokedAt: null,
+  });
+
+  const res = await request(app)
+    .post('/api/public/metrics/query')
+    .send({
+      token,
+      responseFormat: 'reportei',
+      dateRange: { start: '2026-02-01', end: '2026-02-07' },
+      dimensions: ['date'],
+      metrics: ['sessions'],
+      filters: [{ field: 'platform', op: 'eq', value: 'GA4' }],
+      requiredPlatforms: ['GA4'],
+    });
+
+  assert.equal(res.status, 200);
+  assert.equal(metricsCalls.length, 1);
+  assert.equal(metricsCalls[0].tenantId, 'tenant-ga4');
+  assert.equal(metricsCalls[0].payload.brandId, 'brand-ga4');
+  assert.equal(metricsCalls[0].payload.requiredPlatforms[0], 'GA4');
+  assert.equal(metricsCalls[0].reportei, true);
 });
 
 test('public report returns not found when share is revoked', async () => {

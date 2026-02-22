@@ -247,6 +247,7 @@ function resolveRefreshLabel(fetchReason) {
 function resolveFriendlyError(error) {
   const status = Number(error?.status || 0);
   const code = String(error?.data?.error?.code || error?.code || "").toUpperCase();
+  const details = error?.data?.error?.details || error?.details || null;
 
   if (
     status === 0 ||
@@ -277,6 +278,30 @@ function resolveFriendlyError(error) {
     return {
       title: "Configuração inválida",
       description: "Este widget possui uma configuração inválida. Ajuste no editor.",
+    };
+  }
+
+  if (code === "GA4_UNSUPPORTED_METRICS") {
+    const unsupported = Array.isArray(details?.unsupportedMetrics)
+      ? details.unsupportedMetrics.filter(Boolean)
+      : [];
+    return {
+      title: "Métricas GA4 não suportadas",
+      description: unsupported.length
+        ? `Ajuste este widget. Métricas não suportadas: ${unsupported.join(", ")}.`
+        : "Ajuste este widget para usar métricas suportadas do GA4.",
+    };
+  }
+
+  if (code === "GA4_UNSUPPORTED_DIMENSIONS") {
+    const unsupported = Array.isArray(details?.unsupportedDimensions)
+      ? details.unsupportedDimensions.filter(Boolean)
+      : [];
+    return {
+      title: "Dimensões GA4 não suportadas",
+      description: unsupported.length
+        ? `Ajuste este widget. Dimensões não suportadas: ${unsupported.join(", ")}.`
+        : "Ajuste este widget para usar dimensões suportadas do GA4.",
     };
   }
 

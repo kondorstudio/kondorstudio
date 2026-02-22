@@ -4,6 +4,10 @@ const {
 } = require('../../services/brandGa4SettingsService');
 const connectionStateService = require('../../services/connectionStateService');
 const { buildRollingDateRange } = require('../../lib/timezone');
+const {
+  isGa4LiveEligible,
+  queryGa4LiveMetrics,
+} = require('./ga4LiveQuery.service');
 
 const { ensureGa4FactMetrics } = require('../../services/ga4FactMetricsService');
 const { ensureFactMetrics } = require('../../services/factMetricsSyncService');
@@ -83,6 +87,22 @@ const dashboardQueues = new Map();
 
 function isMetricsDebugEnabled() {
   return String(process.env.METRICS_DEBUG || '').trim().toLowerCase() === 'true';
+}
+
+function isGa4LiveEnabled() {
+  const value = String(process.env.METRICS_GA4_LIVE_ENABLED || 'true')
+    .trim()
+    .toLowerCase();
+  return value !== 'false' && value !== '0' && value !== 'off';
+}
+
+function logGa4Live(event, payload = {}) {
+  if (process.env.NODE_ENV === 'test') return;
+  // eslint-disable-next-line no-console
+  console.info('[metrics.ga4_live]', {
+    event,
+    ...(payload || {}),
+  });
 }
 
 const DATE_RANGE_PRESET_DAYS = Object.freeze({
@@ -451,6 +471,7 @@ function buildMetricsCacheKey(tenantId, payload = {}) {
     responseFormat: payload.responseFormat || null,
     widgetId: payload.widgetId || null,
     widgetType: payload.widgetType || null,
+    ga4LiveEnabled: isGa4LiveEnabled(),
   };
   return stableStringify(key);
 }
@@ -752,10 +773,14 @@ async function runAggregates({
   }
 
   let limitSql = '';
-  if (pagination?.pageSize) {
-    const pageSize = Math.max(1, Math.min(5000, Number(pagination.pageSize)));
+  if (pagination?.pageSize || pagination?.page) {
+    const pageSize = Math.max(1, Math.min(5000, Number(pagination.pageSize || 25)));
     const page = Math.max(1, Number(pagination.page || 1));
     const offset = (page - 1) * pageSize;
+    limitSql = ` LIMIT ${pageSize} OFFSET ${offset}`;
+  } else if (pagination?.limit || pagination?.offset) {
+    const pageSize = Math.max(1, Math.min(5000, Number(pagination.limit || 25)));
+    const offset = Math.max(0, Number(pagination.offset || 0));
     limitSql = ` LIMIT ${pageSize} OFFSET ${offset}`;
   } else if (limit) {
     const safeLimit = Math.max(1, Math.min(5000, Number(limit)));
@@ -870,6 +895,8 @@ async function executeQueryMetrics(tenantId, payload = {}) {
   }
 
   let brandTimezone = 'UTC';
+  let brandLeadEvents = [];
+  let brandConversionEvents = [];
   try {
     const ga4Settings = await prisma.brandGa4Settings.findFirst({
       where: {
@@ -878,10 +905,22 @@ async function executeQueryMetrics(tenantId, payload = {}) {
       },
       select: {
         timezone: true,
+        leadEvents: true,
+        conversionEvents: true,
       },
     });
     if (ga4Settings?.timezone) {
       brandTimezone = String(ga4Settings.timezone);
+    }
+    if (Array.isArray(ga4Settings?.leadEvents)) {
+      brandLeadEvents = ga4Settings.leadEvents
+        .map((entry) => String(entry || '').trim())
+        .filter(Boolean);
+    }
+    if (Array.isArray(ga4Settings?.conversionEvents)) {
+      brandConversionEvents = ga4Settings.conversionEvents
+        .map((entry) => String(entry || '').trim())
+        .filter(Boolean);
     }
   } catch (err) {
     if (process.env.NODE_ENV !== 'test') {
@@ -1025,6 +1064,109 @@ async function executeQueryMetrics(tenantId, payload = {}) {
     }
   }
 
+  const liveFallbackMeta = {
+    usedFallback: false,
+    liveErrorCode: null,
+  };
+  const shouldTryGa4Live =
+    isGa4LiveEnabled() &&
+    wantsGa4 &&
+    !degradedMeta.connectionDegraded &&
+    isGa4LiveEligible(payload, requiredConnections.required);
+
+  if (shouldTryGa4Live) {
+    const compareRange = compareTo?.mode
+      ? buildCompareRange(
+          effectiveDateRange.start,
+          effectiveDateRange.end,
+          compareTo.mode,
+        )
+      : null;
+    try {
+      const liveResult = await queryGa4LiveMetrics({
+        tenantId,
+        propertyId: ga4PropertyId,
+        dateRange: effectiveDateRange,
+        compareRange,
+        metrics,
+        dimensions,
+        filters,
+        sort: payload.sort || null,
+        pagination: payload.pagination || null,
+        limit,
+        leadEvents: brandLeadEvents,
+        conversionEvents: brandConversionEvents,
+      });
+
+      logGa4Live('metrics.ga4_live.success', {
+        tenantId: String(tenantId),
+        brandId: String(brandId),
+        propertyId: ga4PropertyId ? String(ga4PropertyId) : null,
+        metrics,
+        dimensions,
+      });
+
+      return {
+        meta: {
+          timezone: brandTimezone,
+          dateRange: effectiveDateRange,
+          ga4PropertyId: ga4PropertyId || null,
+          requiredPlatforms: requiredConnections.required || [],
+          connectionDegraded: false,
+          stalePlatforms: [],
+          staleReason: null,
+          dataFreshUntil: null,
+          dataSource: 'ga4_live',
+          liveErrorCode: null,
+        },
+        rows: liveResult?.rows || [],
+        totals: liveResult?.totals || {},
+        compare: liveResult?.compare || null,
+      };
+    } catch (err) {
+      if (err?.code === 'GA4_UNSUPPORTED_METRICS' || err?.code === 'GA4_UNSUPPORTED_DIMENSIONS') {
+        throw err;
+      }
+
+      const freshness = await getGa4FactsFreshness({
+        tenantId,
+        brandId,
+        ga4PropertyId,
+        dateRange: effectiveDateRange,
+      });
+
+      if (!freshness.hasFacts) {
+        logGa4Live('metrics.ga4_live.error', {
+          tenantId: String(tenantId),
+          brandId: String(brandId),
+          propertyId: ga4PropertyId ? String(ga4PropertyId) : null,
+          code: err?.code || null,
+          message: err?.message || null,
+          fallback: false,
+        });
+        throw err;
+      }
+
+      degradedMeta = {
+        connectionDegraded: true,
+        stalePlatforms: ['GA4'],
+        staleReason: 'GA4_LIVE_FAILED',
+        dataFreshUntil: freshness.latestDate || null,
+      };
+      liveFallbackMeta.usedFallback = true;
+      liveFallbackMeta.liveErrorCode = String(err?.code || err?.status || 'GA4_LIVE_ERROR');
+
+      logGa4Live('metrics.ga4_live.fallback', {
+        tenantId: String(tenantId),
+        brandId: String(brandId),
+        propertyId: ga4PropertyId ? String(ga4PropertyId) : null,
+        code: liveFallbackMeta.liveErrorCode,
+        message: err?.message || null,
+        dataFreshUntil: freshness.latestDate || null,
+      });
+    }
+  }
+
   // --- On-demand preview sync (fills fact_kondor_metrics_daily) ---
   // Dashboards query facts from the warehouse table. If facts were never backfilled,
   // we run a small "preview" sync here so users see data immediately after connecting.
@@ -1152,6 +1294,11 @@ async function executeQueryMetrics(tenantId, payload = {}) {
       stalePlatforms: degradedMeta.stalePlatforms || [],
       staleReason: degradedMeta.staleReason || null,
       dataFreshUntil: degradedMeta.dataFreshUntil || null,
+      dataSource:
+        degradedMeta.connectionDegraded || liveFallbackMeta.usedFallback
+          ? 'materialized_fallback'
+          : 'materialized',
+      liveErrorCode: liveFallbackMeta.liveErrorCode || null,
     },
     rows,
     totals,

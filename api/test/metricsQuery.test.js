@@ -519,6 +519,64 @@ test('metrics query allows when GA4 connection exists', async () => {
   assert.equal(res.status, 200);
 });
 
+test('metrics query keeps materialized path for non-GA4 widgets', async () => {
+  let liveEligibilityChecks = 0;
+  let liveQueryCalls = 0;
+  let rawCalls = 0;
+
+  mockModule('../src/modules/metrics/ga4LiveQuery.service', {
+    isGa4LiveEligible: () => {
+      liveEligibilityChecks += 1;
+      return true;
+    },
+    queryGa4LiveMetrics: async () => {
+      liveQueryCalls += 1;
+      throw new Error('ga4 live should not run for non-ga4 widgets');
+    },
+  });
+
+  const fakePrisma = {
+    client: {
+      findFirst: async () => ({ id: 'brand-1' }),
+    },
+    brandSourceConnection: {
+      findMany: async () => [{ platform: 'META_ADS' }],
+    },
+    metricsCatalog: {
+      findMany: async ({ where }) => buildCatalog(where.key.in),
+    },
+    $queryRawUnsafe: async (sql) => {
+      rawCalls += 1;
+      if (sql.includes('GROUP BY')) {
+        return [{ spend: '12' }];
+      }
+      return [{ spend: '12' }];
+    },
+  };
+
+  mockMetricsSyncServices();
+  mockModule('../src/prisma', { prisma: fakePrisma });
+  resetModule('../src/modules/metrics/metrics.service');
+  const service = require('../src/modules/metrics/metrics.service');
+
+  const result = await service.queryMetrics('tenant-1', {
+    brandId: 'brand-1',
+    dateRange: { start: '2026-01-01', end: '2026-01-01' },
+    dimensions: [],
+    metrics: ['spend'],
+    filters: [],
+    requiredPlatforms: ['META_ADS'],
+  });
+
+  assert.equal(result?.meta?.dataSource, 'materialized');
+  assert.equal(rawCalls >= 1, true);
+  assert.equal(liveEligibilityChecks, 0);
+  assert.equal(liveQueryCalls, 0);
+
+  resetModule('../src/modules/metrics/metrics.service');
+  resetModule('../src/modules/metrics/ga4LiveQuery.service');
+});
+
 test('metrics query exposes debug flag syncOnQuery=false when METRICS_DEBUG=true', async () => {
   const previousDebug = process.env.METRICS_DEBUG;
   process.env.METRICS_DEBUG = 'true';

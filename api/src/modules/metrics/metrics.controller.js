@@ -87,6 +87,8 @@ const querySchema = z.object({
     .object({
       page: z.number().optional(),
       pageSize: z.number().optional(),
+      limit: z.number().optional(),
+      offset: z.number().optional(),
     })
     .optional(),
 
