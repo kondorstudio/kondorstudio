@@ -100,6 +100,7 @@ const batchRunReportsSchema = z.object({
 const propertySelectSchema = z.object({
   propertyId: ga4PropertyIdSchema,
   brandId: z.string().uuid().optional(),
+  clientId: z.string().uuid().optional(),
   applyMode: z
     .enum(['LEGACY_INTEGRATION_ONLY', 'SINGLE_BRAND', 'ALL_BRANDS'])
     .optional(),

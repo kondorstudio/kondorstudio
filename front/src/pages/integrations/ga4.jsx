@@ -198,7 +198,9 @@ export default function Ga4IntegrationPage() {
       base44.ga4.selectProperty({
         propertyId,
         applyMode: selectedApplyMode,
-        ...(scopedBrandId ? { brandId: scopedBrandId } : {}),
+        ...(scopedBrandId
+          ? { brandId: scopedBrandId, clientId: scopedBrandId }
+          : {}),
         syncAfterSelect: true,
         includeCampaigns: false,
         syncDays: 30,

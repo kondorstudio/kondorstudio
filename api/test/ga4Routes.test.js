@@ -44,6 +44,7 @@ function buildApp({
   connectionState = null,
   oauthStatePayload = null,
   propertiesSelectScopeResult = null,
+  resolvedBrandPropertyId = '383714125',
 } = {}) {
   const tracker = {
     buildAuthUrlArgs: null,
@@ -166,9 +167,9 @@ function buildApp({
 
   mockModule('../src/services/brandGa4SettingsService', {
     resolveBrandGa4ActivePropertyId: async ({ brandId }) =>
-      brandId ? '383714125' : null,
+      brandId ? String(resolvedBrandPropertyId || '') : null,
     upsertBrandGa4Settings: async (_payload) => ({
-      propertyId: '383714125',
+      propertyId: String(resolvedBrandPropertyId || '383714125'),
       timezone: 'UTC',
       leadEvents: [],
       conversionEvents: [],
@@ -323,6 +324,36 @@ test('POST /integrations/ga4/properties/select returns scoped counters', async (
   assert.equal(res.body?.scopeApplied, 'ALL_BRANDS');
   assert.equal(res.body?.affectedBrandsTotal, 3);
   assert.equal(res.body?.syncQueuedTotal, 2);
+});
+
+test('POST /integrations/ga4/properties/select accepts clientId alias for scoped brand', async () => {
+  const scopedBrandId = '11111111-1111-4111-8111-111111111111';
+  const { app } = buildApp({
+    resolvedBrandPropertyId: '123456789',
+    propertiesSelectScopeResult: {
+      scopeApplied: 'SINGLE_BRAND',
+      affectedBrandsTotal: 1,
+      affectedBrandsSucceeded: 1,
+      affectedBrandsFailed: 0,
+      failures: [],
+      syncQueuedTotal: 1,
+      syncSkippedTotal: 0,
+    },
+  });
+
+  const res = await request(app)
+    .post('/api/integrations/ga4/properties/select')
+    .send({
+      propertyId: '123456789',
+      clientId: scopedBrandId,
+      applyMode: 'SINGLE_BRAND',
+      syncAfterSelect: true,
+    });
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body?.selectedProperty?.propertyId, '123456789');
+  assert.equal(res.body?.scopeApplied, 'SINGLE_BRAND');
+  assert.equal(res.body?.scopedBrandId, scopedBrandId);
 });
 
 test('GET /integrations/ga4/status reports statusSource=connectionState when state exists', async () => {

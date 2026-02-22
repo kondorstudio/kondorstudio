@@ -646,11 +646,19 @@ module.exports = {
       const {
         propertyId,
         brandId,
+        clientId,
         applyMode,
         syncAfterSelect,
         includeCampaigns,
         syncDays,
       } = req.body || {};
+      const scopedBrandId = String(
+        brandId ||
+          clientId ||
+          req.query?.brandId ||
+          req.query?.clientId ||
+          '',
+      ).trim();
       if (!tenantId || !userId) {
         return res.status(400).json({ error: 'tenantId or userId missing' });
       }
@@ -665,12 +673,59 @@ module.exports = {
         userId,
         propertyId,
         propertyDisplayName: selected?.displayName || null,
-        brandId: brandId || null,
+        brandId: scopedBrandId || null,
         applyMode,
         syncAfterSelect,
         includeCampaigns,
         syncDays,
       });
+
+      let persistedBrandPropertyId = null;
+      if (scopedBrandId && scope.scopeApplied === 'SINGLE_BRAND') {
+        try {
+          persistedBrandPropertyId = await resolveBrandGa4ActivePropertyId({
+            tenantId,
+            brandId: scopedBrandId,
+          });
+        } catch (_err) {
+          persistedBrandPropertyId = null;
+        }
+
+        const selectedPropertyId = String(selected?.propertyId || '').trim();
+        if (
+          selectedPropertyId &&
+          String(persistedBrandPropertyId || '') !== selectedPropertyId
+        ) {
+          await setBrandGa4ActiveProperty({
+            tenantId,
+            brandId: scopedBrandId,
+            propertyId: selectedPropertyId,
+            externalAccountName: selected?.displayName || null,
+          });
+          invalidateMetricsCacheForBrand(tenantId, scopedBrandId);
+          persistedBrandPropertyId = await resolveBrandGa4ActivePropertyId({
+            tenantId,
+            brandId: scopedBrandId,
+          });
+        }
+
+        if (
+          selectedPropertyId &&
+          String(persistedBrandPropertyId || '') !== selectedPropertyId
+        ) {
+          const err = new Error(
+            'Falha ao persistir propriedade GA4 ativa da marca',
+          );
+          err.status = 409;
+          err.code = 'GA4_BRAND_PROPERTY_NOT_PERSISTED';
+          err.details = {
+            brandId: scopedBrandId,
+            selectedPropertyId,
+            persistedBrandPropertyId: persistedBrandPropertyId || null,
+          };
+          throw err;
+        }
+      }
 
       return res.json({
         selected,
@@ -682,13 +737,19 @@ module.exports = {
         failures: scope.failures || [],
         syncQueuedTotal: scope.syncQueuedTotal,
         syncSkippedTotal: scope.syncSkippedTotal,
+        scopedBrandId: scopedBrandId || null,
+        persistedBrandPropertyId: persistedBrandPropertyId || null,
       });
     } catch (error) {
       console.error('GA4 propertiesSelect error:', error);
       if (respondReauth(res, error)) return;
       return res
         .status(error.status || 500)
-        .json({ error: error.message || 'Failed to select GA4 property' });
+        .json({
+          error: error.message || 'Failed to select GA4 property',
+          code: error?.code || null,
+          details: error?.details || null,
+        });
     }
   },
 
