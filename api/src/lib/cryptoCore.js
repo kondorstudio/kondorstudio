@@ -55,6 +55,10 @@ function resolveKeyConfiguration() {
 
 function assertCryptoKeyConfiguration() {
   const cfg = resolveKeyConfiguration();
+  const allowMismatch =
+    String(process.env.ALLOW_CRYPTO_KEY_MISMATCH || '')
+      .trim()
+      .toLowerCase() === 'true';
 
   if (!cfg.hasEncryptionKey && !cfg.hasCryptoKey) {
     const err = new Error(
@@ -80,7 +84,12 @@ function assertCryptoKeyConfiguration() {
         'CRYPTO_KEY and ENCRYPTION_KEY resolve to different keys. Use a single key source or align both values identically across API and worker.'
       );
       err.code = 'CRYPTO_KEY_MISMATCH';
-      throw err;
+      if (!allowMismatch) {
+        throw err;
+      }
+      console.warn(
+        '[crypto] CRYPTO_KEY_MISMATCH tolerated by ALLOW_CRYPTO_KEY_MISMATCH=true. Keep only for legacy transition.'
+      );
     }
   }
 
