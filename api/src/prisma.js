@@ -326,10 +326,15 @@ function useTenant(tenantId) {
     }
   });
 
-  // Expor acesso direto ao prisma se precisar (ex.: prisma.$transaction)
+  // Expor acesso direto ao prisma se precisar (ex.: prisma.$transaction).
+  // NOTE:
+  // - $transaction must keep Prisma Client as `this`, otherwise Prisma internals
+  //   may fail at runtime (e.g. tracing helper resolution).
+  // - Array transactions require raw PrismaPromise values. Avoid passing promises
+  //   returned by async tenant-wrapper helpers.
   exposed.$raw = prisma.$queryRaw;
   exposed.$executeRaw = prisma.$executeRaw;
-  exposed.$transaction = prisma.$transaction;
+  exposed.$transaction = prisma.$transaction.bind(prisma);
 
   // helper para buscar subscription atual do tenant (útil em middleware)
   exposed.getCurrentSubscription = async function getCurrentSubscription(opts = {}) {
