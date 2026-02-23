@@ -208,6 +208,7 @@ enum ReportDeliveryStatus {
 enum ReportScheduleFrequency {
   WEEKLY
   MONTHLY
+  BIWEEKLY
 }
 
 enum ReportDashboardStatus {
@@ -651,6 +652,10 @@ model Approval {
 
   status ApprovalStatus @default(PENDING)
   notes  String?
+  postVersion     Int      @default(1)
+  resolvedAt      DateTime?
+  resolvedSource  String?
+  resolvedByPhone String?
 
   // Token público para acesso externo (link /public/approvals/:token)
   publicToken          String?   @unique
