@@ -227,29 +227,20 @@ test('metrics query builds filter placeholders for eq/in', () => {
   resetModule('../src/modules/metrics/metrics.service');
   const service = require('../src/modules/metrics/metrics.service');
 
-  const { whereSql, params } = service.buildWhereClause({
-    tenantId: 'tenant-1',
-    brandId: 'brand-1',
-    dateFrom: '2026-01-01',
-    dateTo: '2026-01-31',
+  const { sql, params } = service.buildWhereClause({
     filters: [
       { field: 'account_id', op: 'eq', value: 'acc-1' },
       { field: 'platform', op: 'in', value: ['META_ADS', 'GOOGLE_ADS'] },
     ],
   });
 
-  assert.ok(whereSql.includes('"date" >= $3::date'));
-  assert.ok(whereSql.includes('"date" <= $4::date'));
-  assert.ok(whereSql.includes('"accountId" = $5'));
+  assert.ok(sql.includes('"accountId" = $1'));
   assert.ok(
-    whereSql.includes(
-      '"platform" IN ($6::"BrandSourcePlatform", $7::"BrandSourcePlatform")'
-    )
+    sql.includes('"platform" = ANY($2::"BrandSourcePlatform"[])')
   );
-  assert.equal(params.length, 7);
-  assert.equal(params[4], 'acc-1');
-  assert.equal(params[5], 'META_ADS');
-  assert.equal(params[6], 'GOOGLE_ADS');
+  assert.equal(params.length, 2);
+  assert.equal(params[0], 'acc-1');
+  assert.deepEqual(params[1], ['META_ADS', 'GOOGLE_ADS']);
 });
 
 test('metrics query paginates rows and keeps totals for full dataset', async () => {

@@ -635,14 +635,14 @@ function buildWhereClause({
           .map((entry) => normalizePlatform(entry))
           .filter(Boolean);
         if (!platforms.length) return;
-        clauses.push(`"${column}" = ANY($${nextParam()})`);
+        clauses.push(`"${column}" = ANY($${nextParam()}::"BrandSourcePlatform"[])`);
         params.push(platforms);
         return;
       }
 
       const platform = normalizePlatform(filter.value);
       if (!platform) return;
-      clauses.push(`"${column}" = $${nextParam()}`);
+      clauses.push(`"${column}" = $${nextParam()}::"BrandSourcePlatform"`);
       params.push(platform);
       return;
     }
@@ -664,7 +664,7 @@ function buildWhereClause({
   if (applyGa4Scoping && ga4PropertyId) {
     // Canonical GA4 scoping: GA4 rows are partitioned by accountId (= propertyId).
     clauses.push(
-      `("platform" <> 'GA4' OR "accountId" = $${nextParam()})`,
+      `("platform" <> 'GA4'::"BrandSourcePlatform" OR "accountId" = $${nextParam()})`,
     );
     params.push(String(ga4PropertyId));
   }
