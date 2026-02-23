@@ -6,7 +6,10 @@ const { assertCryptoKeyConfiguration } = require('../src/lib/cryptoCore');
 try {
   const result = assertCryptoKeyConfiguration();
   // eslint-disable-next-line no-console
-  console.log('[crypto] configuration ok', result);
+  console.log('[crypto] configuration ok', {
+    ...result,
+    fallbackKeyCount: Number(result?.fallbackKeyCount || 0),
+  });
   process.exit(0);
 } catch (error) {
   // eslint-disable-next-line no-console

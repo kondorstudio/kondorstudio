@@ -48,7 +48,34 @@ export default function Ga4IntegrationPage() {
 
   const clientIdParam = queryParams.get("clientId") || "";
   const brandIdParam = queryParams.get("brandId") || "";
-  const scopedBrandId = brandIdParam || clientIdParam || "";
+  const {
+    data: clients = [],
+    isLoading: clientsLoading,
+  } = useQuery({
+    queryKey: ["clients"],
+    queryFn: () => base44.entities.Client.list(),
+  });
+  const validClientIds = useMemo(
+    () =>
+      new Set(
+        (clients || [])
+          .map((client) => String(client?.id || "").trim())
+          .filter(Boolean),
+      ),
+    [clients],
+  );
+  const normalizedClientIdParam = useMemo(() => {
+    if (!clientIdParam) return "";
+    return validClientIds.has(clientIdParam) ? clientIdParam : "";
+  }, [clientIdParam, validClientIds]);
+  const normalizedBrandIdParam = useMemo(() => {
+    if (!brandIdParam) return "";
+    return validClientIds.has(brandIdParam) ? brandIdParam : "";
+  }, [brandIdParam, validClientIds]);
+  const scopedBrandId = normalizedBrandIdParam || normalizedClientIdParam || "";
+  const hasInvalidScopeParam =
+    (!clientsLoading && Boolean(clientIdParam) && !normalizedClientIdParam) ||
+    (!clientsLoading && Boolean(brandIdParam) && !normalizedBrandIdParam);
   const selectedApplyMode = scopedBrandId ? "SINGLE_BRAND" : "ALL_BRANDS";
 
   const [draftSelectedPropertyId, setDraftSelectedPropertyId] = useState("");
@@ -75,6 +102,7 @@ export default function Ga4IntegrationPage() {
   const properties = data?.properties || [];
   const selectedProperty = data?.selectedProperty || null;
   const propertyScope = data?.propertyScope || null;
+  const statusScopeContext = data?.scopeContext || null;
   const integrationSelectedPropertyId = propertyScope?.integrationSelectedPropertyId
     ? String(propertyScope.integrationSelectedPropertyId)
     : "";
@@ -113,6 +141,7 @@ export default function Ga4IntegrationPage() {
         effectiveBrandActivePropertyId !==
           String(integrationSelectedPropertyId || serverSelectedPropertyId),
     );
+  const hasInvalidStatusScope = statusScopeContext?.valid === false;
 
   useEffect(() => {
     if (serverSelectedPropertyId === lastServerSelectedPropertyRef.current) {
@@ -155,10 +184,10 @@ export default function Ga4IntegrationPage() {
 
   const oauthContext = useMemo(
     () => ({
-      ...(clientIdParam ? { clientId: clientIdParam } : {}),
-      ...(brandIdParam ? { brandId: brandIdParam } : {}),
+      ...(normalizedClientIdParam ? { clientId: normalizedClientIdParam } : {}),
+      ...(normalizedBrandIdParam ? { brandId: normalizedBrandIdParam } : {}),
     }),
-    [brandIdParam, clientIdParam],
+    [normalizedBrandIdParam, normalizedClientIdParam],
   );
 
   const connectMutation = useMutation({
@@ -342,6 +371,11 @@ export default function Ga4IntegrationPage() {
         >
           {connectionBanner.text}
           {errorParam ? ` (${errorParam})` : ""}
+        </div>
+      ) : null}
+      {hasInvalidScopeParam || hasInvalidStatusScope ? (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          O clientId/brandId da URL é inválido para este tenant. A reconexão será feita sem esse escopo.
         </div>
       ) : null}
       {reauthNotice ? (

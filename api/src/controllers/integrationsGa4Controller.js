@@ -23,6 +23,12 @@ const GA4_STATUS_MISMATCH_LOG_TTL_MS = Math.max(
   0,
   Number(process.env.GA4_STATUS_MISMATCH_LOG_TTL_MS || 300_000),
 );
+const GA4_OAUTH_INVALID_SCOPE_POLICY = (() => {
+  const raw = String(process.env.GA4_OAUTH_INVALID_SCOPE_POLICY || 'ignore')
+    .trim()
+    .toLowerCase();
+  return raw === 'error' ? 'error' : 'ignore';
+})();
 const ga4StatusMismatchLogState = new Map();
 
 function getFrontUrl() {
@@ -110,26 +116,69 @@ function buildRedirectContextParams(payload = {}) {
   return params;
 }
 
-async function ensureOauthContextBelongsToTenant({ tenantId, clientId, brandId }) {
-  const ids = [clientId, brandId]
-    .map((value) => String(value || '').trim())
-    .filter(Boolean);
-  if (!ids.length) return;
+async function sanitizeOauthContextForTenant({
+  tenantId,
+  clientId,
+  brandId,
+  policy = GA4_OAUTH_INVALID_SCOPE_POLICY,
+}) {
+  const requestedClientId = clientId ? String(clientId).trim() : '';
+  const requestedBrandId = brandId ? String(brandId).trim() : '';
 
-  const uniqueIds = Array.from(new Set(ids));
-  const found = await prisma.client.count({
+  const candidateIds = [requestedClientId, requestedBrandId].filter(Boolean);
+  if (!candidateIds.length) {
+    return {
+      requestedClientId: null,
+      requestedBrandId: null,
+      appliedClientId: null,
+      appliedBrandId: null,
+      sanitized: false,
+      warningCode: null,
+    };
+  }
+
+  const uniqueIds = Array.from(new Set(candidateIds));
+  const foundRows = await prisma.client.findMany({
     where: {
       tenantId: String(tenantId),
       id: { in: uniqueIds },
     },
+    select: { id: true },
   });
+  const foundSet = new Set(foundRows.map((row) => String(row.id)));
 
-  if (found !== uniqueIds.length) {
+  const appliedClientId = foundSet.has(requestedClientId) ? requestedClientId : null;
+  const appliedBrandId = foundSet.has(requestedBrandId) ? requestedBrandId : null;
+  const invalidIds = uniqueIds.filter((id) => !foundSet.has(id));
+  const sanitized = invalidIds.length > 0;
+  const warningCode = sanitized ? 'BRAND_SCOPE_INVALID_IGNORED' : null;
+
+  if (sanitized && policy === 'error') {
     const err = new Error('Marca não encontrada');
     err.status = 404;
     err.code = 'BRAND_NOT_FOUND';
+    err.details = { invalidIds };
     throw err;
   }
+
+  if (sanitized && process.env.NODE_ENV !== 'test') {
+    // eslint-disable-next-line no-console
+    console.warn('[ga4] BRAND_SCOPE_INVALID_IGNORED', {
+      tenantId: String(tenantId),
+      invalidIds,
+      requestedClientId: requestedClientId || null,
+      requestedBrandId: requestedBrandId || null,
+    });
+  }
+
+  return {
+    requestedClientId: requestedClientId || null,
+    requestedBrandId: requestedBrandId || null,
+    appliedClientId,
+    appliedBrandId,
+    sanitized,
+    warningCode,
+  };
 }
 
 function shouldLogStatusMismatch(cacheKey) {
@@ -297,11 +346,16 @@ module.exports = {
         return res.status(400).json({ error: 'tenantId or userId missing' });
       }
 
-      await ensureOauthContextBelongsToTenant({
+      const scopeContext = await sanitizeOauthContextForTenant({
         tenantId,
         clientId: oauthContext.clientId,
         brandId: oauthContext.brandId,
+        policy: GA4_OAUTH_INVALID_SCOPE_POLICY,
       });
+      const appliedOauthContext = {
+        clientId: scopeContext.appliedClientId,
+        brandId: scopeContext.appliedBrandId,
+      };
 
       if (ga4OAuthService.isMockMode()) {
         await ga4OAuthService.ensureMockIntegration(tenantId, userId);
@@ -309,15 +363,16 @@ module.exports = {
           url: buildRedirectUrl({
             connected: 1,
             mock: 1,
-            ...oauthContext,
+            ...appliedOauthContext,
           }),
+          scopeContext,
         });
       }
 
       const state = ga4OAuthService.buildState({
         tenantId,
         userId,
-        ...oauthContext,
+        ...appliedOauthContext,
       });
       const alwaysConsent = String(process.env.GA4_OAUTH_ALWAYS_CONSENT || 'true').toLowerCase() !== 'false';
       const forceConsent =
@@ -331,7 +386,7 @@ module.exports = {
         state,
         forceConsent: alwaysConsent || forceConsent || needsReconnect,
       });
-      return res.json({ url });
+      return res.json({ url, scopeContext });
     } catch (error) {
       const message = error?.message || 'Failed to start GA4 OAuth';
       console.error('GA4 oauthStart error:', {
@@ -489,6 +544,11 @@ module.exports = {
 
       let brandActivePropertyId = null;
       let hasScopedBrandContext = false;
+      const scopeContext = {
+        requestedBrandId: scopedBrandId || null,
+        resolvedBrandId: null,
+        valid: scopedBrandId ? false : true,
+      };
       if (scopedBrandId) {
         const brand = await prisma.client.findFirst({
           where: {
@@ -499,6 +559,8 @@ module.exports = {
         });
         if (brand?.id) {
           hasScopedBrandContext = true;
+          scopeContext.resolvedBrandId = String(brand.id);
+          scopeContext.valid = true;
           try {
             brandActivePropertyId = await resolveBrandGa4ActivePropertyId({
               tenantId,
@@ -535,6 +597,7 @@ module.exports = {
           properties: [],
           selectedProperty: null,
           propertyScope,
+          scopeContext,
         });
       }
 
@@ -588,6 +651,7 @@ module.exports = {
         properties,
         selectedProperty,
         propertyScope,
+        scopeContext,
       });
     } catch (error) {
       console.error('GA4 status error:', error);

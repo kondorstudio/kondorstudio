@@ -173,3 +173,35 @@ test('getValidAccessToken marks NEEDS_RECONNECT on access token decrypt failure'
   );
   assert.ok(reconnectUpdate, 'expected update that marks integration as NEEDS_RECONNECT');
 });
+
+test('getValidAccessToken keeps refreshTokenEnc on refresh token decrypt failure', async () => {
+  const { service, calls } = loadService({
+    tokenResponse: null,
+    existingIntegration: {
+      id: 'ga4-1',
+      tenantId: 't1',
+      userId: 'u1',
+      status: 'CONNECTED',
+      accessToken: null,
+      refreshTokenEnc: 'invalid-base64',
+      tokenExpiry: null,
+    },
+  });
+
+  await assert.rejects(
+    () => service.getValidAccessToken({ tenantId: 't1', userId: 'u1' }),
+    (err) => {
+      assert.equal(err.code, 'REAUTH_REQUIRED');
+      assert.equal(err.status, 409);
+      return true;
+    },
+  );
+
+  const reconnectUpdate = calls.updates.find(
+    (entry) =>
+      entry?.data?.status === 'NEEDS_RECONNECT' &&
+      String(entry?.data?.lastError || '').includes('Refresh token decrypt failed'),
+  );
+  assert.ok(reconnectUpdate, 'expected update that marks integration as NEEDS_RECONNECT');
+  assert.equal(reconnectUpdate?.data?.refreshTokenEnc, 'invalid-base64');
+});

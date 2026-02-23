@@ -517,7 +517,7 @@ async function getValidAccessToken({ tenantId, userId }) {
       tenantId,
       userId,
       'Refresh token decrypt failed. Reconnect GA4.',
-      { clearTokens: true, clearRefreshToken: true }
+      { clearTokens: true, clearRefreshToken: false }
     );
     throw buildReauthError();
   }

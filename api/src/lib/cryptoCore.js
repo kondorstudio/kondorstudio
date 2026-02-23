@@ -37,19 +37,31 @@ function keyEquals(a, b) {
 function resolveKeyConfiguration() {
   const encryptionRaw = process.env.ENCRYPTION_KEY;
   const cryptoRaw = process.env.CRYPTO_KEY;
+  const encryptionPreviousRaw = process.env.ENCRYPTION_KEY_PREVIOUS;
+  const cryptoPreviousRaw = process.env.CRYPTO_KEY_PREVIOUS;
 
   const hasEncryptionKey = hasKeyValue(encryptionRaw);
   const hasCryptoKey = hasKeyValue(cryptoRaw);
+  const hasEncryptionKeyPrevious = hasKeyValue(encryptionPreviousRaw);
+  const hasCryptoKeyPrevious = hasKeyValue(cryptoPreviousRaw);
   const encryptionKey = parseEncryptionKey(encryptionRaw);
   const cryptoKeyDerived = deriveCryptoKey(cryptoRaw);
   const cryptoKeyRaw = parseEncryptionKey(cryptoRaw);
+  const encryptionKeyPrevious = parseEncryptionKey(encryptionPreviousRaw);
+  const cryptoKeyPreviousDerived = deriveCryptoKey(cryptoPreviousRaw);
+  const cryptoKeyPreviousRaw = parseEncryptionKey(cryptoPreviousRaw);
 
   return {
     hasEncryptionKey,
     hasCryptoKey,
+    hasEncryptionKeyPrevious,
+    hasCryptoKeyPrevious,
     encryptionKey,
     cryptoKeyDerived,
     cryptoKeyRaw,
+    encryptionKeyPrevious,
+    cryptoKeyPreviousDerived,
+    cryptoKeyPreviousRaw,
   };
 }
 
@@ -76,6 +88,14 @@ function assertCryptoKeyConfiguration() {
     throw err;
   }
 
+  if (cfg.hasEncryptionKeyPrevious && !cfg.encryptionKeyPrevious) {
+    const err = new Error(
+      'Invalid ENCRYPTION_KEY_PREVIOUS (expected 32-byte base64 or 64-char hex)'
+    );
+    err.code = 'CRYPTO_ENCRYPTION_KEY_PREVIOUS_INVALID';
+    throw err;
+  }
+
   if (cfg.hasEncryptionKey && cfg.hasCryptoKey) {
     const matchesDerived = keyEquals(cfg.encryptionKey, cfg.cryptoKeyDerived);
     const matchesRaw = keyEquals(cfg.encryptionKey, cfg.cryptoKeyRaw);
@@ -93,30 +113,74 @@ function assertCryptoKeyConfiguration() {
     }
   }
 
+  if (cfg.hasEncryptionKeyPrevious && cfg.hasCryptoKeyPrevious) {
+    const matchesDerived = keyEquals(
+      cfg.encryptionKeyPrevious,
+      cfg.cryptoKeyPreviousDerived,
+    );
+    const matchesRaw = keyEquals(
+      cfg.encryptionKeyPrevious,
+      cfg.cryptoKeyPreviousRaw,
+    );
+    if (!matchesDerived && !matchesRaw) {
+      const err = new Error(
+        'CRYPTO_KEY_PREVIOUS and ENCRYPTION_KEY_PREVIOUS resolve to different keys.'
+      );
+      err.code = 'CRYPTO_KEY_PREVIOUS_MISMATCH';
+      if (!allowMismatch) {
+        throw err;
+      }
+      console.warn(
+        '[crypto] CRYPTO_KEY_PREVIOUS_MISMATCH tolerated by ALLOW_CRYPTO_KEY_MISMATCH=true.'
+      );
+    }
+  }
+
+  const candidates = buildCandidateKeys(['ENCRYPTION_KEY', 'CRYPTO_KEY']);
+  const fallbackSources = candidates
+    .map((entry) => entry.source)
+    .filter(
+      (source) => source !== 'ENCRYPTION_KEY' && source !== 'CRYPTO_KEY',
+    );
+
   return {
     hasEncryptionKey: cfg.hasEncryptionKey,
     hasCryptoKey: cfg.hasCryptoKey,
     effectiveSource: cfg.hasEncryptionKey ? 'ENCRYPTION_KEY' : 'CRYPTO_KEY',
+    fallbackKeyCount: fallbackSources.length,
+    fallbackSources,
   };
 }
 
 function buildCandidateKeys(preferred = []) {
   const encryptionKey = parseEncryptionKey(process.env.ENCRYPTION_KEY);
   const cryptoKey = deriveCryptoKey(process.env.CRYPTO_KEY);
+  const encryptionKeyPrevious = parseEncryptionKey(
+    process.env.ENCRYPTION_KEY_PREVIOUS,
+  );
+  const cryptoKeyPrevious = deriveCryptoKey(process.env.CRYPTO_KEY_PREVIOUS);
 
   const map = {
     ENCRYPTION_KEY: encryptionKey,
     CRYPTO_KEY: cryptoKey,
+    ENCRYPTION_KEY_PREVIOUS: encryptionKeyPrevious,
+    CRYPTO_KEY_PREVIOUS: cryptoKeyPrevious,
   };
 
+  const seen = [];
   const ordered = [];
+  const pushIfUnique = (source, key) => {
+    if (!key) return;
+    if (seen.some((existing) => keyEquals(existing, key))) return;
+    seen.push(key);
+    ordered.push({ source, key });
+  };
   for (const source of preferred) {
-    if (map[source]) ordered.push({ source, key: map[source] });
+    pushIfUnique(source, map[source]);
   }
   for (const [source, key] of Object.entries(map)) {
-    if (!key) continue;
     if (ordered.some((entry) => entry.source === source)) continue;
-    ordered.push({ source, key });
+    pushIfUnique(source, key);
   }
   return ordered;
 }

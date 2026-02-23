@@ -452,14 +452,6 @@ export default function Integrations() {
     return params.get("clientId") || params.get("brandId") || "";
   }, [location.search]);
 
-  const buildGa4Path = useMemo(() => {
-    const candidateClientId = selectedClientId || initialClientId || routeClientId;
-    const query = candidateClientId
-      ? `?clientId=${encodeURIComponent(candidateClientId)}`
-      : "";
-    return `/integrations/ga4${query}`;
-  }, [initialClientId, routeClientId, selectedClientId]);
-
   const {
     data: integrations = [],
     isLoading,
@@ -470,10 +462,37 @@ export default function Integrations() {
     queryFn: () => base44.entities.Integration.list(),
   });
 
-  const { data: clients = [] } = useQuery({
+  const { data: clients = [], isLoading: clientsLoading } = useQuery({
     queryKey: ["clients"],
     queryFn: () => base44.entities.Client.list(),
   });
+
+  const validClientIds = useMemo(
+    () =>
+      new Set(
+        (clients || [])
+          .map((client) => String(client?.id || "").trim())
+          .filter(Boolean),
+      ),
+    [clients],
+  );
+
+  const normalizeClientId = (value) => {
+    const normalized = String(value || "").trim();
+    if (!normalized) return "";
+    return validClientIds.has(normalized) ? normalized : "";
+  };
+
+  const buildGa4Path = useMemo(() => {
+    const candidateClientId =
+      normalizeClientId(selectedClientId) ||
+      normalizeClientId(initialClientId) ||
+      normalizeClientId(routeClientId);
+    const query = candidateClientId
+      ? `?clientId=${encodeURIComponent(candidateClientId)}`
+      : "";
+    return `/integrations/ga4${query}`;
+  }, [initialClientId, routeClientId, selectedClientId, validClientIds]);
 
   const integrationsByKey = useMemo(() => {
     const map = new Map();
@@ -572,16 +591,24 @@ export default function Integrations() {
     }
 
     if (fromReportsClientId) {
-      setInitialClientId(fromReportsClientId);
+      const normalizedFromReportsClientId = normalizeClientId(fromReportsClientId);
+      if (normalizedFromReportsClientId) {
+        setInitialClientId(normalizedFromReportsClientId);
+      } else if (!clientsLoading) {
+        setInitialClientId("");
+      }
     }
 
     if (metaStatus === "connected") {
       const kind = params.get("kind");
       const clientId = params.get("clientId");
       setActiveKey(resolveMetaKey(kind));
-      setInitialClientId(clientId || "");
+      const normalizedMetaClientId = normalizeClientId(clientId);
+      setInitialClientId(
+        normalizedMetaClientId || (!clientsLoading ? "" : clientId || ""),
+      );
     }
-  }, [location.search, queryClient]);
+  }, [clientsLoading, location.search, queryClient, validClientIds]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search || "");
@@ -616,6 +643,26 @@ export default function Integrations() {
   }, [activeClientId, selectedClientId]);
 
   useEffect(() => {
+    if (clientsLoading) return;
+    if (activeClientId && !normalizeClientId(activeClientId)) {
+      setActiveClientId("");
+    }
+    if (selectedClientId && !normalizeClientId(selectedClientId)) {
+      setSelectedClientId("");
+    }
+    if (initialClientId && !normalizeClientId(initialClientId)) {
+      setInitialClientId("");
+    }
+  }, [
+    activeClientId,
+    clientsLoading,
+    initialClientId,
+    selectedClientId,
+    setActiveClientId,
+    validClientIds,
+  ]);
+
+  useEffect(() => {
     if (selectedClientId) return;
     if (clients.length === 1) {
       setSelectedClientId(clients[0].id);
@@ -625,10 +672,19 @@ export default function Integrations() {
 
   useEffect(() => {
     if (initialClientId) {
-      setSelectedClientId(initialClientId);
-      setActiveClientId(initialClientId);
+      const normalizedInitialClientId = normalizeClientId(initialClientId);
+      if (normalizedInitialClientId) {
+        setSelectedClientId(normalizedInitialClientId);
+        setActiveClientId(normalizedInitialClientId);
+      }
     }
-  }, [initialClientId]);
+  }, [initialClientId, setActiveClientId, validClientIds]);
+
+  const hasInvalidRouteScope = useMemo(() => {
+    if (clientsLoading) return false;
+    if (!routeClientId) return false;
+    return !normalizeClientId(routeClientId);
+  }, [clientsLoading, routeClientId, validClientIds]);
 
   const metaBanner = useMemo(() => {
     const params = new URLSearchParams(location.search || "");
@@ -685,6 +741,11 @@ export default function Integrations() {
           >
             <p className="font-semibold">{metaBanner.title}</p>
             <p className="text-xs mt-1">{metaBanner.detail}</p>
+          </div>
+        ) : null}
+        {hasInvalidRouteScope ? (
+          <div className="rounded-[12px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            O clientId da URL não existe mais neste tenant. O escopo foi limpo para evitar falha na reconexão.
           </div>
         ) : null}
 

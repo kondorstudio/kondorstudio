@@ -16,6 +16,7 @@ function resetModule(path) {
 }
 
 test.afterEach(() => {
+  delete process.env.GA4_OAUTH_INVALID_SCOPE_POLICY;
   [
     '../src/middleware/auth',
     '../src/middleware/tenantGuard',
@@ -45,6 +46,7 @@ function buildApp({
   oauthStatePayload = null,
   propertiesSelectScopeResult = null,
   resolvedBrandPropertyId = '383714125',
+  invalidOauthContextIds = [],
 } = {}) {
   const tracker = {
     buildAuthUrlArgs: null,
@@ -60,6 +62,10 @@ function buildApp({
     tracker.requiredRoleSets.push(roles);
     return (_req, _res, next) => next();
   };
+  const invalidContextSet = new Set(
+    (invalidOauthContextIds || []).map((value) => String(value)),
+  );
+
   mockModule('../src/middleware/auth', auth);
 
   mockModule('../src/middleware/tenantGuard', (req, _res, next) => {
@@ -82,10 +88,18 @@ function buildApp({
       client: {
         count: async ({ where }) => {
           const ids = Array.isArray(where?.id?.in) ? where.id.in : [];
-          return ids.length;
+          return ids.filter((id) => !invalidContextSet.has(String(id))).length;
+        },
+        findMany: async ({ where }) => {
+          const ids = Array.isArray(where?.id?.in) ? where.id.in : [];
+          return ids
+            .map((id) => String(id))
+            .filter((id) => !invalidContextSet.has(id))
+            .map((id) => ({ id }));
         },
         findFirst: async ({ where }) => {
           if (!where?.id || !where?.tenantId) return null;
+          if (invalidContextSet.has(String(where.id))) return null;
           return { id: String(where.id), tenantId: String(where.tenantId) };
         },
       },
@@ -234,6 +248,7 @@ test('GET /integrations/ga4/oauth/start returns url', async () => {
   const res = await request(app).get('/api/integrations/ga4/oauth/start');
   assert.equal(res.statusCode, 200);
   assert.equal(res.body.url, 'http://example.com/oauth');
+  assert.equal(res.body?.scopeContext?.sanitized, false);
   assert.equal(Boolean(tracker.buildAuthUrlArgs?.forceConsent), true);
 });
 
@@ -253,6 +268,40 @@ test('GET /integrations/ga4/oauth/start forwards brand/client context into oauth
   assert.equal(res.statusCode, 200);
   assert.equal(String(tracker.buildStateArgs?.clientId || ''), brandId);
   assert.equal(String(tracker.buildStateArgs?.brandId || ''), brandId);
+});
+
+test('GET /integrations/ga4/oauth/start ignores invalid brand/client scope when policy=ignore', async () => {
+  process.env.GA4_OAUTH_INVALID_SCOPE_POLICY = 'ignore';
+  const invalidId = 'f2bfdf74-121c-4bb4-a002-fab958c32609';
+  const { app, tracker } = buildApp({
+    invalidOauthContextIds: [invalidId],
+  });
+
+  const res = await request(app)
+    .get(`/api/integrations/ga4/oauth/start?clientId=${invalidId}&brandId=${invalidId}`);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.url, 'http://example.com/oauth');
+  assert.equal(res.body?.scopeContext?.sanitized, true);
+  assert.equal(res.body?.scopeContext?.warningCode, 'BRAND_SCOPE_INVALID_IGNORED');
+  assert.equal(res.body?.scopeContext?.appliedClientId, null);
+  assert.equal(res.body?.scopeContext?.appliedBrandId, null);
+  assert.equal(tracker.buildStateArgs?.clientId || null, null);
+  assert.equal(tracker.buildStateArgs?.brandId || null, null);
+});
+
+test('GET /integrations/ga4/oauth/start returns 404 for invalid brand/client scope when policy=error', async () => {
+  process.env.GA4_OAUTH_INVALID_SCOPE_POLICY = 'error';
+  const invalidId = 'f2bfdf74-121c-4bb4-a002-fab958c32609';
+  const { app } = buildApp({
+    invalidOauthContextIds: [invalidId],
+  });
+
+  const res = await request(app)
+    .get(`/api/integrations/ga4/oauth/start?clientId=${invalidId}&brandId=${invalidId}`);
+
+  assert.equal(res.statusCode, 404);
+  assert.match(String(res.body?.error || ''), /Marca não encontrada/);
 });
 
 test('GET /integrations/ga4/properties/sync returns properties', async () => {
@@ -388,4 +437,26 @@ test('GET /integrations/ga4/status exposes propertyScope mismatch when brand sco
   assert.equal(res.body?.propertyScope?.brandActivePropertyId, '383714125');
   assert.equal(res.body?.propertyScope?.integrationSelectedPropertyId, '123456789');
   assert.equal(res.body?.propertyScope?.mismatch, true);
+  assert.equal(res.body?.scopeContext?.requestedBrandId, 'brand-1');
+  assert.equal(res.body?.scopeContext?.resolvedBrandId, 'brand-1');
+  assert.equal(res.body?.scopeContext?.valid, true);
+});
+
+test('GET /integrations/ga4/status marks invalid scopeContext when brand does not exist', async () => {
+  const invalidBrandId = 'f2bfdf74-121c-4bb4-a002-fab958c32609';
+  const { app } = buildApp({
+    invalidOauthContextIds: [invalidBrandId],
+    statusIntegration: {
+      id: 'ga4-integration-1',
+      status: 'CONNECTED',
+      googleAccountEmail: 'ga4@example.com',
+      lastError: null,
+    },
+  });
+
+  const res = await request(app).get(`/api/integrations/ga4/status?brandId=${invalidBrandId}`);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body?.scopeContext?.requestedBrandId, invalidBrandId);
+  assert.equal(res.body?.scopeContext?.resolvedBrandId, null);
+  assert.equal(res.body?.scopeContext?.valid, false);
 });

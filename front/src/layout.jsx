@@ -132,7 +132,7 @@ function LayoutContent() {
   const agencyLogo = branding.logoUrl || logoHeader;
   const agencyName = branding.name || "Kondor Studio";
 
-  const { data: clients = [] } = useQuery({
+  const { data: clients = [], isLoading: clientsLoading } = useQuery({
     queryKey: ["clients"],
     queryFn: () => base44.entities.Client.list(),
   });
@@ -153,6 +153,15 @@ function LayoutContent() {
       document.body.style.overflow = "";
     };
   }, [mobileOpen]);
+
+  useEffect(() => {
+    if (clientsLoading) return;
+    if (!activeClientId) return;
+    const exists = clients.some((client) => String(client?.id || "") === String(activeClientId));
+    if (!exists) {
+      setActiveClientId("");
+    }
+  }, [activeClientId, clients, clientsLoading, setActiveClientId]);
 
   const toggleMobile = () => setMobileOpen((prev) => !prev);
   const closeMobile = () => setMobileOpen(false);
