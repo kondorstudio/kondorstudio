@@ -229,7 +229,7 @@ router.post("/:id/send-to-approval", async (req, res) => {
     if (err instanceof whatsappCloud.WhatsAppSendError) {
       const status = err.statusCode || 500;
       const payload = { error: err.message, code: err.code };
-      if (status < 500 && err.details) payload.details = err.details;
+      if (err.details) payload.details = err.details;
       return res.status(status).json(payload);
     }
     if (err instanceof PostValidationError) {

@@ -286,6 +286,10 @@ function parseTags(value) {
 function mapApprovalSendError(error) {
   const code = String(error?.data?.code || error?.code || "").toUpperCase();
   const apiMessage = error?.data?.error || error?.message || "Falha ao enviar para aprovação.";
+  const providerMessage =
+    error?.data?.details?.providerMessage ||
+    error?.data?.details?.message ||
+    null;
 
   if (code === "INVALID_CLIENT_WHATSAPP") {
     return "Cliente sem WhatsApp válido (+55...) no cadastro.";
@@ -298,6 +302,12 @@ function mapApprovalSendError(error) {
   }
   if (code === "ALREADY_SENT") {
     return "Pedido de aprovação já enviado anteriormente para este post.";
+  }
+  if (code === "TEMPLATE_REQUIRED") {
+    return "Cliente fora da janela de 24h do WhatsApp. Envie template aprovado ou peça uma mensagem inicial do cliente.";
+  }
+  if (code === "CLOUD_API_SEND_FAILED" && providerMessage) {
+    return providerMessage;
   }
 
   return apiMessage;
@@ -896,6 +906,7 @@ export function PostForm({
 
   const submitPost = async (statusOverride, options = {}) => {
     const sendApproval = options.sendApproval === true;
+    let shouldCloseAfterSubmit = true;
     if (!formData.clientId) {
       alert("Selecione um cliente antes de salvar o post.");
       return;
@@ -1140,9 +1151,13 @@ export function PostForm({
         } else {
           alert(feedbackMessage);
         }
+
+        if (failedCount === approvalResults.length) {
+          shouldCloseAfterSubmit = false;
+        }
       }
 
-      if (onCancel) {
+      if (onCancel && shouldCloseAfterSubmit) {
         onCancel();
       }
     } catch (error) {

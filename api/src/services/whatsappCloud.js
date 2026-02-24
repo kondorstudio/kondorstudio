@@ -405,6 +405,69 @@ class WhatsAppSendError extends Error {
   }
 }
 
+function buildCloudSendError(err, { interactiveError = null } = {}) {
+  const rawError = isPlainObject(err?.raw?.error) ? err.raw.error : {};
+  const status = Number(err?.status || err?.statusCode || 500);
+  const providerCode = rawError.code ?? null;
+  const providerSubcode = rawError.error_subcode ?? null;
+  const providerMessage = rawError.message || err?.message || null;
+  const fbtraceId = rawError.fbtrace_id || null;
+
+  const details = {
+    status,
+    providerCode,
+    providerSubcode,
+    providerMessage,
+    fbtraceId,
+    interactiveError,
+  };
+
+  // Meta limita mensagens livres quando o cliente não abriu conversa nas últimas 24h.
+  if (Number(providerCode) === 131047) {
+    return new WhatsAppSendError(
+      'Cliente fora da janela de 24h. Use template aprovado ou peça para o cliente enviar uma mensagem primeiro.',
+      {
+        statusCode: 400,
+        code: 'TEMPLATE_REQUIRED',
+        details,
+      },
+    );
+  }
+
+  if (Number(providerCode) === 131026) {
+    return new WhatsAppSendError(
+      'Número de destino inválido ou sem WhatsApp ativo.',
+      {
+        statusCode: 400,
+        code: 'INVALID_CLIENT_WHATSAPP',
+        details,
+      },
+    );
+  }
+
+  if (Number(providerCode) === 190 || status === 401 || status === 403) {
+    return new WhatsAppSendError(
+      'Token da integração WhatsApp inválido ou expirado. Reconecte a integração da agência.',
+      {
+        statusCode: 401,
+        code: 'INTEGRATION_INVALID',
+        details,
+      },
+    );
+  }
+
+  return new WhatsAppSendError(
+    providerMessage
+      ? `Falha ao enviar mensagem via WhatsApp Cloud API: ${providerMessage}`
+      : 'Falha ao enviar mensagem via WhatsApp Cloud API',
+    {
+      statusCode: status >= 400 && status < 600 ? status : 500,
+      code: 'CLOUD_API_SEND_FAILED',
+      details,
+    },
+  );
+}
+
 async function resolvePendingApproval(tenantId, post) {
   const currentPending = await prisma.approval.findFirst({
     where: { tenantId, postId: post.id, status: 'PENDING' },
@@ -604,16 +667,7 @@ async function sendApprovalRequest({ tenantId, postId }) {
       sendMode = 'text_link';
       waMessageId = fallbackResult?.waMessageId || null;
     } catch (err) {
-      const status = err?.status || err?.statusCode || null;
-      throw new WhatsAppSendError('Falha ao enviar mensagem via WhatsApp Cloud API', {
-        statusCode: 500,
-        code: 'CLOUD_API_SEND_FAILED',
-        details: {
-          status,
-          message: err?.message || null,
-          interactiveError,
-        },
-      });
+      throw buildCloudSendError(err, { interactiveError });
     }
   }
 
