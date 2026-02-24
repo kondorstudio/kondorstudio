@@ -513,7 +513,7 @@ async function updatePostDeliveryState(post, nextWhatsAppMeta = {}, overrides = 
   });
 }
 
-async function sendApprovalRequest({ tenantId, postId }) {
+async function sendApprovalRequest({ tenantId, postId, requestId = null }) {
   if (!tenantId) {
     throw new WhatsAppSendError('tenantId é obrigatório', {
       statusCode: 400,
@@ -564,10 +564,28 @@ async function sendApprovalRequest({ tenantId, postId }) {
   try {
     integrationBundle = await getAgencyWhatsAppIntegration(tenantId);
   } catch (err) {
-    throw new WhatsAppSendError('Integração WhatsApp Cloud inválida ou incompleta', {
-      statusCode: 500,
+    const integrationMessage = String(err?.message || 'integration_invalid');
+    const normalizedMessage = integrationMessage.toLowerCase();
+    const isAuthLikeError =
+      normalizedMessage.includes('token') ||
+      normalizedMessage.includes('decrypt') ||
+      normalizedMessage.includes('encrypted') ||
+      normalizedMessage.includes('crypto') ||
+      normalizedMessage.includes('key');
+    const statusCode = isAuthLikeError ? 401 : 500;
+    console.error('[whatsappCloud.sendApprovalRequest] integration check failed', {
+      requestId,
+      tenantId,
+      postId,
+      approvalId: null,
       code: 'INTEGRATION_INVALID',
-      details: { message: err?.message || null },
+      statusCode,
+      message: integrationMessage,
+    });
+    throw new WhatsAppSendError('Integração WhatsApp Cloud inválida ou incompleta', {
+      statusCode,
+      code: 'INTEGRATION_INVALID',
+      details: { message: integrationMessage },
     });
   }
 
@@ -667,7 +685,16 @@ async function sendApprovalRequest({ tenantId, postId }) {
       sendMode = 'text_link';
       waMessageId = fallbackResult?.waMessageId || null;
     } catch (err) {
-      throw buildCloudSendError(err, { interactiveError });
+      const mappedError = buildCloudSendError(err, { interactiveError });
+      console.error('[whatsappCloud.sendApprovalRequest] cloud send failed', {
+        requestId,
+        tenantId,
+        postId: post.id,
+        approvalId: approval.id,
+        code: mappedError.code,
+        statusCode: mappedError.statusCode,
+      });
+      throw mappedError;
     }
   }
 

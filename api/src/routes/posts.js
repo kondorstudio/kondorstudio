@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const { randomUUID } = require("crypto");
 
 const authMiddleware = require("../middleware/auth");
 const tenantMiddleware = require("../middleware/tenant");
@@ -205,20 +206,25 @@ router.delete("/:id", async (req, res) => {
  * Atualiza o post para status AGUARDANDO_APROVACAO e cria uma approval
  */
 router.post("/:id/send-to-approval", async (req, res) => {
+  const requestId = randomUUID();
+  const timestamp = new Date().toISOString();
+  const postId = req.params.id;
+  let approvalResult = null;
   try {
-    const postId = req.params.id;
     const userId = req.user?.id || null;
     const forceNewLink = Boolean(req.body?.forceNewLink || false);
 
-    const approvalResult = await postsService.requestApproval(req.tenantId, postId, {
+    approvalResult = await postsService.requestApproval(req.tenantId, postId, {
       userId,
       forceNewLink,
       enqueueWhatsapp: false,
+      requestId,
     });
 
     const sendResult = await whatsappCloud.sendApprovalRequest({
       tenantId: req.tenantId,
       postId,
+      requestId,
     });
 
     return res.json({
@@ -226,18 +232,68 @@ router.post("/:id/send-to-approval", async (req, res) => {
       whatsappSend: sendResult,
     });
   } catch (err) {
+    const logContext = {
+      requestId,
+      tenantId: req.tenantId,
+      postId,
+      approvalId: approvalResult?.approvalId || null,
+    };
+
     if (err instanceof whatsappCloud.WhatsAppSendError) {
       const status = err.statusCode || 500;
       const payload = { error: err.message, code: err.code };
       if (err.details) payload.details = err.details;
+      payload.requestId = requestId;
+      payload.timestamp = timestamp;
+      console.error("POST /posts/:id/send-to-approval domain error:", {
+        ...logContext,
+        code: err.code || "WHATSAPP_SEND_ERROR",
+        status,
+      });
       return res.status(status).json(payload);
     }
     if (err instanceof PostValidationError) {
       const statusCode = err.code === "NOT_FOUND" ? 404 : err.code === "MISSING_CLIENT" ? 400 : 409;
-      return res.status(statusCode).json({ error: err.message, code: err.code });
+      console.error("POST /posts/:id/send-to-approval validation error:", {
+        ...logContext,
+        code: err.code || "POST_VALIDATION_ERROR",
+        status: statusCode,
+      });
+      return res.status(statusCode).json({
+        error: err.message,
+        code: err.code,
+        requestId,
+        timestamp,
+      });
     }
-    console.error('POST /posts/:id/send-to-approval error:', err);
-    return res.status(500).json({ error: "Erro ao solicitar aprovação" });
+    if (
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      (err.code === "P2021" || err.code === "P2022")
+    ) {
+      console.error("POST /posts/:id/send-to-approval schema error:", {
+        ...logContext,
+        code: "DATABASE_SCHEMA_OUTDATED",
+        prismaCode: err.code,
+      });
+      return res.status(500).json({
+        error: "Banco desatualizado. Execute as migrations do backend.",
+        code: "DATABASE_SCHEMA_OUTDATED",
+        requestId,
+        timestamp,
+      });
+    }
+    console.error("POST /posts/:id/send-to-approval error:", {
+      ...logContext,
+      code: "APPROVAL_SEND_INTERNAL",
+      name: err?.name || null,
+      message: err?.message || null,
+    });
+    return res.status(500).json({
+      error: "Falha interna ao preparar envio para aprovação.",
+      code: "APPROVAL_SEND_INTERNAL",
+      requestId,
+      timestamp,
+    });
   }
 });
 

@@ -611,7 +611,72 @@ function buildCompareRange(start, end, mode) {
     return { start: fmt(prevFrom), end: fmt(prevTo) };
   }
 
+  if (mode === 'previous_year') {
+    const prevYearFrom = new Date(from);
+    const prevYearTo = new Date(to);
+    prevYearFrom.setUTCFullYear(prevYearFrom.getUTCFullYear() - 1);
+    prevYearTo.setUTCFullYear(prevYearTo.getUTCFullYear() - 1);
+    return { start: fmt(prevYearFrom), end: fmt(prevYearTo) };
+  }
+
   return null;
+}
+
+function toPositiveInt(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return Math.floor(parsed);
+}
+
+function toOffsetInt(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) return 0;
+  return Math.floor(parsed);
+}
+
+function resolvePaginationWindow(pagination, limit) {
+  const cap = toPositiveInt(limit);
+  const hasPaginationObject = Boolean(pagination && typeof pagination === 'object');
+  const pageSizeMode = hasPaginationObject ? toPositiveInt(pagination.pageSize) : null;
+  const pageMode = hasPaginationObject ? toPositiveInt(pagination.page) : null;
+  const limitMode = hasPaginationObject ? toPositiveInt(pagination.limit) : null;
+  const offsetMode = hasPaginationObject ? toOffsetInt(pagination.offset || 0) : 0;
+
+  const explicitPagination = Boolean(
+    pageSizeMode ||
+      pageMode ||
+      limitMode ||
+      (hasPaginationObject && pagination.offset !== undefined),
+  );
+
+  let requestedLimit = null;
+  let offset = 0;
+
+  if (pageSizeMode || pageMode) {
+    requestedLimit = Math.max(1, Math.min(5000, Number(pageSizeMode || 25)));
+    const page = Math.max(1, Number(pageMode || 1));
+    offset = (page - 1) * requestedLimit;
+  } else if (explicitPagination) {
+    requestedLimit = Math.max(1, Math.min(5000, Number(limitMode || 25)));
+    offset = Math.max(0, Number(offsetMode || 0));
+  } else if (cap) {
+    requestedLimit = Math.max(1, Math.min(5000, Number(cap)));
+    offset = 0;
+  } else {
+    return null;
+  }
+
+  const effectiveLimit = cap
+    ? Math.max(0, Math.min(requestedLimit, Math.max(0, cap - offset)))
+    : requestedLimit;
+
+  return {
+    cap,
+    offset,
+    requestedLimit,
+    effectiveLimit,
+    explicitPagination,
+  };
 }
 
 function buildWhereClause({
@@ -772,19 +837,37 @@ async function runAggregates({
     orderBySql = ` ORDER BY ${sort.alias} ${dir}`;
   }
 
+  const paginationWindow = resolvePaginationWindow(pagination, limit);
+
   let limitSql = '';
-  if (pagination?.pageSize || pagination?.page) {
-    const pageSize = Math.max(1, Math.min(5000, Number(pagination.pageSize || 25)));
-    const page = Math.max(1, Number(pagination.page || 1));
-    const offset = (page - 1) * pageSize;
-    limitSql = ` LIMIT ${pageSize} OFFSET ${offset}`;
-  } else if (pagination?.limit || pagination?.offset) {
-    const pageSize = Math.max(1, Math.min(5000, Number(pagination.limit || 25)));
-    const offset = Math.max(0, Number(pagination.offset || 0));
-    limitSql = ` LIMIT ${pageSize} OFFSET ${offset}`;
-  } else if (limit) {
-    const safeLimit = Math.max(1, Math.min(5000, Number(limit)));
-    limitSql = ` LIMIT ${safeLimit}`;
+  if (paginationWindow?.effectiveLimit > 0) {
+    const limitParamIndex = params.length + 1;
+    params.push(Number(paginationWindow.effectiveLimit) + 1);
+    const offsetParamIndex = params.length + 1;
+    params.push(Number(paginationWindow.offset || 0));
+    limitSql = ` LIMIT $${limitParamIndex} OFFSET $${offsetParamIndex}`;
+  } else if (paginationWindow && paginationWindow.effectiveLimit <= 0) {
+    const totalsSql = `
+      SELECT
+        ${baseSelect.length ? baseSelect.join(', ') : '0 AS "spend"'}
+      FROM "fact_kondor_metrics_daily"
+      WHERE "tenantId" = $1
+        AND "brandId" = $2
+        AND "date" >= $3::date
+        AND "date" <= $4::date
+        ${filterSql}
+    `;
+    const totalsRows = await prisma.$queryRawUnsafe(totalsSql, ...params);
+    const totals = Array.isArray(totalsRows) && totalsRows[0] ? totalsRows[0] : {};
+    return {
+      rows: [],
+      totals: totals || {},
+      pageInfo: {
+        limit: Number(paginationWindow.requestedLimit || 0),
+        offset: Number(paginationWindow.offset || 0),
+        hasMore: false,
+      },
+    };
   }
 
   const baseSql = `
@@ -810,11 +893,68 @@ async function runAggregates({
     ${baseSql}
   `;
 
-  const rows = await prisma.$queryRawUnsafe(querySql, ...params);
+  const rawRows = await prisma.$queryRawUnsafe(querySql, ...params);
   const totalsRows = await prisma.$queryRawUnsafe(totalsSql, ...params);
   const totals = Array.isArray(totalsRows) && totalsRows[0] ? totalsRows[0] : {};
 
-  return { rows: rows || [], totals: totals || {} };
+  let rows = Array.isArray(rawRows) ? [...rawRows] : [];
+  let pageInfo = null;
+
+  if (paginationWindow) {
+    const effectiveLimit = Number(paginationWindow.effectiveLimit || 0);
+    const hasMoreByRows = effectiveLimit > 0 && rows.length > effectiveLimit;
+    if (hasMoreByRows) {
+      rows = rows.slice(0, effectiveLimit);
+    }
+
+    let hasMore = hasMoreByRows;
+    if (paginationWindow.cap && paginationWindow.offset + effectiveLimit >= paginationWindow.cap) {
+      hasMore = false;
+    }
+
+    pageInfo = {
+      limit: Number(paginationWindow.requestedLimit || 0),
+      offset: Number(paginationWindow.offset || 0),
+      hasMore,
+    };
+  }
+
+  return { rows, totals: totals || {}, pageInfo };
+}
+
+function toMetricNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function computeDerivedMetric(metricKey, source = {}) {
+  const spend = toMetricNumber(source.spend);
+  const impressions = toMetricNumber(source.impressions);
+  const clicks = toMetricNumber(source.clicks);
+  const conversions = toMetricNumber(source.conversions);
+  const revenue = toMetricNumber(source.revenue);
+
+  if (metricKey === 'ctr') {
+    if (impressions === 0) return 0;
+    return clicks / impressions;
+  }
+  if (metricKey === 'cpc') {
+    if (clicks === 0) return 0;
+    return spend / clicks;
+  }
+  if (metricKey === 'cpm') {
+    if (impressions === 0) return 0;
+    return (spend / impressions) * 1000;
+  }
+  if (metricKey === 'cpa') {
+    if (conversions === 0) return 0;
+    return spend / conversions;
+  }
+  if (metricKey === 'roas') {
+    if (spend === 0) return 0;
+    return revenue / spend;
+  }
+  return 0;
 }
 
 function buildRows(plan, rawRows = []) {
@@ -826,11 +966,16 @@ function buildRows(plan, rawRows = []) {
     });
 
     (plan.baseMetrics || []).forEach((m) => {
-      entry[m.key] = Number(row?.[m.key] ?? 0);
+      entry[m.key] = toMetricNumber(row?.[m.key]);
     });
 
     (plan.derivedMetrics || []).forEach((m) => {
-      entry[m.key] = Number(row?.[m.key] ?? 0);
+      const rawValue = row?.[m.key];
+      if (rawValue !== undefined && rawValue !== null && rawValue !== '') {
+        entry[m.key] = toMetricNumber(rawValue);
+      } else {
+        entry[m.key] = computeDerivedMetric(m.key, entry);
+      }
     });
 
     out.push(entry);
@@ -841,10 +986,15 @@ function buildRows(plan, rawRows = []) {
 function buildTotals(plan, rawTotals = {}) {
   const totals = {};
   (plan.baseMetrics || []).forEach((m) => {
-    totals[m.key] = Number(rawTotals?.[m.key] ?? 0);
+    totals[m.key] = toMetricNumber(rawTotals?.[m.key]);
   });
   (plan.derivedMetrics || []).forEach((m) => {
-    totals[m.key] = null;
+    const rawValue = rawTotals?.[m.key];
+    if (rawValue !== undefined && rawValue !== null && rawValue !== '') {
+      totals[m.key] = toMetricNumber(rawValue);
+    } else {
+      totals[m.key] = computeDerivedMetric(m.key, totals);
+    }
   });
   return totals;
 }
@@ -859,6 +1009,11 @@ function formatReporteiResponse(result = {}, options = {}) {
       totals: result?.totals || {},
     },
   };
+}
+
+function buildDebugPayload() {
+  if (!isMetricsDebugEnabled()) return null;
+  return { syncOnQuery: false };
 }
 
 async function executeQueryMetrics(tenantId, payload = {}) {
@@ -1121,7 +1276,9 @@ async function executeQueryMetrics(tenantId, payload = {}) {
         },
         rows: liveResult?.rows || [],
         totals: liveResult?.totals || {},
+        pageInfo: liveResult?.pageInfo || null,
         compare: liveResult?.compare || null,
+        ...(buildDebugPayload() ? { debug: buildDebugPayload() } : {}),
       };
     } catch (err) {
       if (err?.code === 'GA4_UNSUPPORTED_METRICS' || err?.code === 'GA4_UNSUPPORTED_DIMENSIONS') {
@@ -1249,6 +1406,7 @@ async function executeQueryMetrics(tenantId, payload = {}) {
     },
     baseResult.totals,
   );
+  const pageInfo = baseResult.pageInfo || null;
 
   let compare = null;
   if (compareTo?.mode) {
@@ -1269,17 +1427,27 @@ async function executeQueryMetrics(tenantId, payload = {}) {
         filters,
         ga4PropertyId,
         sort: null,
-        pagination: null,
-        limit: null,
+        pagination: payload.pagination || null,
+        limit,
         applyGa4Scoping,
       });
 
       compare = {
         dateRange: range,
+        rows: buildRows(
+          {
+            dimensions,
+            requestedMetrics: metrics,
+            baseMetrics: plan.baseMetrics,
+            derivedMetrics: plan.derivedMetrics,
+          },
+          compareResult.rows,
+        ),
         totals: buildTotals(
           { requestedMetrics: metrics, baseMetrics: plan.baseMetrics, derivedMetrics: plan.derivedMetrics },
           compareResult.totals,
         ),
+        pageInfo: compareResult.pageInfo || null,
       };
     }
   }
@@ -1302,7 +1470,9 @@ async function executeQueryMetrics(tenantId, payload = {}) {
     },
     rows,
     totals,
+    pageInfo,
     compare,
+    ...(buildDebugPayload() ? { debug: buildDebugPayload() } : {}),
   };
 }
 

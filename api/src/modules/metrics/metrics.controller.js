@@ -47,6 +47,8 @@ function normalizePlatforms(value) {
 }
 
 const querySchema = z.object({
+  tenantId: z.string().optional(),
+
   brandId: z.string().min(1),
 
   dateRange: z.object({
@@ -125,6 +127,15 @@ async function queryMetrics(req, res) {
     }
 
     const payload = parsed.data;
+
+    if (payload.tenantId && String(payload.tenantId) !== String(tenantId)) {
+      return res.status(403).json({
+        error: {
+          code: 'TENANT_MISMATCH',
+          message: 'tenantId no payload não corresponde ao tenant autenticado',
+        },
+      });
+    }
 
     payload.requiredPlatforms = normalizePlatforms(payload.requiredPlatforms);
 

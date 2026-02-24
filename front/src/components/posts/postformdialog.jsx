@@ -300,6 +300,12 @@ function mapApprovalSendError(error) {
   if (code === "INTEGRATION_INVALID") {
     return "Integração WhatsApp da agência inválida ou incompleta.";
   }
+  if (code === "DATABASE_SCHEMA_OUTDATED") {
+    return "Banco desatualizado. Executar migrations no backend.";
+  }
+  if (code === "APPROVAL_SEND_INTERNAL") {
+    return "Falha interna ao preparar envio. Tente novamente e verifique logs.";
+  }
   if (code === "ALREADY_SENT") {
     return "Pedido de aprovação já enviado anteriormente para este post.";
   }

@@ -1113,6 +1113,8 @@ module.exports = {
   async requestApproval(tenantId, postId, options = {}) {
     const userId = options.userId || null;
     const forceNewLink = options.forceNewLink || false;
+    const shouldEnqueueWhatsapp = options.enqueueWhatsapp !== false;
+    const requestId = options.requestId || null;
 
     const post = await prisma.post.findFirst({
       where: { id: postId, tenantId },
@@ -1182,17 +1184,34 @@ module.exports = {
         : 'client_opt_out';
     } else if (whatsappInfo.alreadySent) {
       whatsappInfo.skippedReason = 'already_sent';
-    } else {
-      const integration = await whatsappCloud.getAgencyWhatsAppIntegration(tenantId);
-      if (!integration || integration.incomplete) {
-        whatsappInfo.skippedReason = 'integration_missing';
+    } else if (shouldEnqueueWhatsapp) {
+      try {
+        const integration = await whatsappCloud.getAgencyWhatsAppIntegration(tenantId);
+        if (!integration || integration.incomplete) {
+          whatsappInfo.skippedReason = 'integration_missing';
+          whatsappInfo.ready = false;
+        } else {
+          whatsappInfo.integrationId = integration.integration?.id || null;
+        }
+      } catch (err) {
+        const integrationError = err?.message || 'integration_check_failed';
+        whatsappInfo.skippedReason = 'integration_invalid';
         whatsappInfo.ready = false;
-      } else {
-        whatsappInfo.integrationId = integration.integration?.id || null;
+        whatsappInfo.integrationError = integrationError;
+        console.error('[postsService.requestApproval] WhatsApp integration precheck failed', {
+          requestId,
+          tenantId,
+          postId: updatedPost.id,
+          approvalId: approval.id,
+          code: 'INTEGRATION_INVALID',
+          message: integrationError,
+        });
       }
+    } else {
+      whatsappInfo.precheckSkipped = true;
     }
 
-    if (!whatsappInfo.alreadySent && whatsappInfo.ready && options.enqueueWhatsapp !== false) {
+    if (!whatsappInfo.alreadySent && whatsappInfo.ready && shouldEnqueueWhatsapp) {
       const enqueueResult = await enqueueWhatsappApprovalJob({
         tenantId,
         postId: updatedPost.id,
