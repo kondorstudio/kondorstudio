@@ -70,7 +70,7 @@ function truncateText(value, maxLength) {
   const text = String(value).trim();
   if (!text) return '';
   if (text.length <= maxLength) return text;
-  return `${text.slice(0, Math.max(0, maxLength - 1)).trim()}…`;
+  return `${text.slice(0, Math.max(0, maxLength - 3)).trim()}...`;
 }
 
 function formatSuggestedDate(value) {
@@ -227,6 +227,28 @@ async function sendCloudPayload({
 
   const waMessageId = data?.messages?.[0]?.id || null;
   if (tenantId) {
+    try {
+      const outboundType = `OUTBOUND_${String(payload?.type || 'message').toUpperCase()}`;
+      const outboundText =
+        payload?.text?.body ||
+        payload?.interactive?.body?.text ||
+        null;
+      await whatsappRuntime.persistInboundMessage({
+        tenantId,
+        fromE164: toE164,
+        waMessageId,
+        phoneNumberId,
+        type: outboundType,
+        textBody: outboundText,
+        rawPayload: {
+          direction: 'OUTBOUND',
+          request: payload,
+          response: data,
+        },
+      });
+    } catch (_) {
+      // best-effort logging
+    }
     try {
       await whatsappRuntime.logWhatsAppMessage({
         tenantId,

@@ -3,25 +3,6 @@
 const { prisma } = require('../prisma');
 const whatsappCloud = require('../services/whatsappCloud');
 
-function buildApprovalMessage(post, approvalLink) {
-  const titlePart = post?.title ? ` "${post.title}"` : '';
-  const base =
-    `Olá! Você tem um novo conteúdo${titlePart} para aprovar do estúdio da sua agência.` +
-    (approvalLink ? ` Abra o link para revisar: ${approvalLink}` : '');
-
-  return base || 'Você tem um novo conteúdo para aprovar.';
-}
-
-function resolvePublicBaseUrl() {
-  return (
-    process.env.APP_PUBLIC_URL ||
-    process.env.PUBLIC_APP_URL ||
-    process.env.PUBLIC_APP_BASE_URL ||
-    process.env.RENDER_EXTERNAL_URL ||
-    ''
-  ).replace(/\/$/, '');
-}
-
 async function logJob(status, data = {}) {
   try {
     await prisma.jobLog.create({
@@ -40,7 +21,7 @@ async function logJob(status, data = {}) {
 }
 
 async function processApprovalRequestJob(payload = {}, jobMeta = {}) {
-  const { tenantId, postId, clientId, approvalId, publicToken } = payload;
+  const { tenantId, postId, clientId, approvalId } = payload;
   if (!tenantId || !postId || !clientId || !approvalId) {
     throw new Error('Parâmetros obrigatórios ausentes no job de aprovação via WhatsApp');
   }
@@ -54,7 +35,7 @@ async function processApprovalRequestJob(payload = {}, jobMeta = {}) {
     throw new Error('Post ou cliente não encontrado para este tenant');
   }
 
-  if (post.whatsappSentAt) {
+  if (post.whatsappSentAt && post.whatsappMessageId) {
     await logJob('COMPLETED', {
       jobId: jobMeta.jobId,
       tenantId,
@@ -86,34 +67,9 @@ async function processApprovalRequestJob(payload = {}, jobMeta = {}) {
     };
   }
 
-  const integration = await whatsappCloud.getAgencyWhatsAppIntegration(tenantId);
-  if (!integration || integration.incomplete) {
-    throw new Error('Integração WhatsApp da agência não configurada');
-  }
-
-  const publicBase = resolvePublicBaseUrl();
-  const approvalLink = publicToken
-    ? `${publicBase || ''}/public/approvals/${publicToken}`
-    : null;
-  const message = buildApprovalMessage(post, approvalLink);
-
-  const sendResult = await whatsappCloud.sendTextMessage({
-    phoneNumberId: integration.phoneNumberId,
-    accessToken: integration.accessToken,
-    toE164: client.whatsappNumberE164,
-    text: message,
-  });
-
-  if (!sendResult.ok) {
-    throw new Error(sendResult.error || 'Falha ao enviar mensagem pelo WhatsApp Cloud');
-  }
-
-  await prisma.post.update({
-    where: { id: post.id },
-    data: {
-      whatsappSentAt: new Date(),
-      whatsappMessageId: sendResult.messageId || null,
-    },
+  const sendResult = await whatsappCloud.sendApprovalRequest({
+    tenantId,
+    postId,
   });
 
   await logJob('COMPLETED', {
@@ -125,7 +81,9 @@ async function processApprovalRequestJob(payload = {}, jobMeta = {}) {
   return {
     ok: true,
     postId,
-    messageId: sendResult.messageId || null,
+    waMessageId: sendResult?.waMessageId || null,
+    mode: sendResult?.mode || null,
+    fallbackUsed: Boolean(sendResult?.fallbackUsed),
   };
 }
 

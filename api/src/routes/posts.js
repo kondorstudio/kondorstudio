@@ -67,6 +67,20 @@ router.get("/suggest", async (req, res) => {
 });
 
 /**
+ * GET /posts/:id/approval-history
+ */
+router.get("/:id/approval-history", async (req, res) => {
+  try {
+    const history = await postsService.getApprovalHistory(req.tenantId, req.params.id);
+    if (!history) return res.status(404).json({ error: "Post não encontrado" });
+    return res.json(history);
+  } catch (err) {
+    console.error("GET /posts/:id/approval-history error:", err);
+    return res.status(500).json({ error: "Erro ao buscar histórico de aprovação" });
+  }
+});
+
+/**
  * GET /posts/:id
  */
 router.get("/:id", async (req, res) => {

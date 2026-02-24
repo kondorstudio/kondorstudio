@@ -210,6 +210,17 @@ router.post('/:id/status', async (req, res) => {
       approverId,
     };
 
+    if (status !== 'PENDING') {
+      approvalUpdateData.resolvedAt = new Date();
+      approvalUpdateData.resolvedSource = 'INTERNAL';
+      approvalUpdateData.resolvedByPhone = null;
+      approvalUpdateData.postVersion = Number(post?.version || approval.postVersion || 1);
+    } else {
+      approvalUpdateData.resolvedAt = null;
+      approvalUpdateData.resolvedSource = null;
+      approvalUpdateData.resolvedByPhone = null;
+    }
+
     if (typeof notes === 'string') {
       approvalUpdateData.notes = notes;
     } else if (approval.notes !== undefined) {

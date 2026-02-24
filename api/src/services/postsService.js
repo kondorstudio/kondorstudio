@@ -473,6 +473,7 @@ async function ensureApprovalRequest(tenantId, post, userId) {
       // Mantém simples e compatível com o schema atual
       notes: post.caption || post.content || null,
       requesterId: userId || null,
+      postVersion: Number(post.version || 1),
     },
   });
 }
@@ -511,12 +512,17 @@ async function syncApprovalWithPostStatus(tenantId, post, postStatus, userId, ap
     data: {
       status: approvalStatusToApply,
       approverId: userId || latestPending.approverId || null,
+      postVersion: Number(post.version || latestPending.postVersion || 1),
+      resolvedAt: new Date(),
+      resolvedSource: 'INTERNAL',
+      resolvedByPhone: null,
     },
   });
 }
 
 async function getOrCreatePendingApproval(tenantId, post, userId, { forceNewToken = false } = {}) {
   if (!post) return null;
+  let createdNew = false;
 
   let approval = await prisma.approval.findFirst({
     where: { tenantId, postId: post.id, status: 'PENDING' },
@@ -524,6 +530,7 @@ async function getOrCreatePendingApproval(tenantId, post, userId, { forceNewToke
   });
 
   if (!approval) {
+    createdNew = true;
     approval = await prisma.approval.create({
       data: {
         tenantId,
@@ -531,6 +538,7 @@ async function getOrCreatePendingApproval(tenantId, post, userId, { forceNewToke
         status: 'PENDING',
         notes: post.caption || post.content || null,
         requesterId: userId || null,
+        postVersion: Number(post.version || 1),
       },
     });
   }
@@ -541,7 +549,7 @@ async function getOrCreatePendingApproval(tenantId, post, userId, { forceNewToke
     ttlHours,
   });
 
-  return { approval, publicLink };
+  return { approval, publicLink, createdNew };
 }
 
 async function enqueueWhatsappApprovalJob(payload = {}) {
@@ -1123,19 +1131,40 @@ module.exports = {
     }
 
     const client = post.client;
-    const { approval, publicLink } = await getOrCreatePendingApproval(
+    const { approval, publicLink, createdNew } = await getOrCreatePendingApproval(
       tenantId,
       post,
       userId,
       { forceNewToken: forceNewLink },
     );
 
-    const shouldUpdateStatus = post.status !== 'PENDING_APPROVAL';
+    const shouldUpdateStatus = post.status !== 'PENDING_APPROVAL' || createdNew;
     let updatedPost = post;
     if (shouldUpdateStatus) {
+      const nextMetadata = isPlainObject(post.metadata) ? { ...post.metadata } : {};
+      const currentWa = isPlainObject(nextMetadata.whatsappApproval)
+        ? { ...nextMetadata.whatsappApproval }
+        : {};
+      delete currentWa.pendingInput;
+      currentWa.approvalId = approval.id;
+      nextMetadata.whatsappApproval = currentWa;
+      nextMetadata.workflowStatus = 'CLIENT_APPROVAL';
+
       updatedPost = await prisma.post.update({
         where: { id: post.id },
-        data: { status: 'PENDING_APPROVAL', clientFeedback: null },
+        data: {
+          status: 'PENDING_APPROVAL',
+          clientFeedback: null,
+          metadata: nextMetadata,
+          ...(createdNew
+            ? {
+                sentAt: null,
+                sentMethod: null,
+                whatsappSentAt: null,
+                whatsappMessageId: null,
+              }
+            : {}),
+        },
       });
     }
 
@@ -1190,6 +1219,139 @@ module.exports = {
     };
   },
 
+  async getApprovalHistory(tenantId, postId) {
+    if (!postId) return null;
+
+    const post = await prisma.post.findFirst({
+      where: { id: postId, tenantId },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        version: true,
+        clientFeedback: true,
+        createdAt: true,
+        updatedAt: true,
+        whatsappMessageId: true,
+        metadata: true,
+      },
+    });
+    if (!post) return null;
+
+    const [approvals, waLogs] = await Promise.all([
+      prisma.approval.findMany({
+        where: { tenantId, postId },
+        orderBy: { createdAt: 'asc' },
+      }),
+      prisma.whatsAppMessageLog.findMany({
+        where: { tenantId, postId },
+        orderBy: { createdAt: 'asc' },
+      }),
+    ]);
+
+    const approvalIdSet = new Set(approvals.map((item) => item.id));
+    const approvalIds = Array.from(approvalIdSet);
+    const auditWhere = {
+      tenantId,
+      OR: [{ resource: 'post', resourceId: postId }],
+    };
+    if (approvalIds.length) {
+      auditWhere.OR.push({
+        resource: 'approval',
+        resourceId: { in: approvalIds },
+      });
+    }
+
+    const auditLogs = await prisma.auditLog.findMany({
+      where: auditWhere,
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const filteredAuditLogs = auditLogs.filter((entry) => {
+      if (entry.resource === 'post' && entry.resourceId === postId) return true;
+      if (entry.resource === 'approval' && approvalIdSet.has(entry.resourceId || '')) return true;
+      const meta = isPlainObject(entry.meta) ? entry.meta : null;
+      return meta?.postId === postId || (meta?.approvalId && approvalIdSet.has(meta.approvalId));
+    });
+
+    const events = [];
+    for (const approval of approvals) {
+      events.push({
+        type: 'APPROVAL_REQUESTED',
+        channel: 'KONDOR',
+        at: approval.createdAt,
+        approvalId: approval.id,
+        postVersion: approval.postVersion || 1,
+        status: approval.status,
+        comment: approval.notes || null,
+      });
+
+      if (approval.status !== 'PENDING') {
+        events.push({
+          type: approval.status === 'APPROVED' ? 'APPROVAL_APPROVED' : 'APPROVAL_REJECTED',
+          channel:
+            approval.resolvedSource && String(approval.resolvedSource).startsWith('WHATSAPP')
+              ? 'WHATSAPP'
+              : approval.resolvedSource === 'PUBLIC_LINK'
+                ? 'PUBLIC_LINK'
+                : 'KONDOR',
+          at: approval.resolvedAt || approval.updatedAt,
+          approvalId: approval.id,
+          postVersion: approval.postVersion || 1,
+          status: approval.status,
+          comment: approval.notes || null,
+          resolvedSource: approval.resolvedSource || null,
+          resolvedByPhone: approval.resolvedByPhone || null,
+        });
+      }
+    }
+
+    for (const log of waLogs) {
+      events.push({
+        type: log.direction === 'OUTBOUND' ? 'WHATSAPP_OUTBOUND' : 'WHATSAPP_INBOUND',
+        channel: 'WHATSAPP',
+        at: log.createdAt,
+        waMessageId: log.waMessageId || null,
+        direction: log.direction,
+        payload: log.payload || null,
+      });
+    }
+
+    for (const log of filteredAuditLogs) {
+      events.push({
+        type: 'AUDIT_EVENT',
+        channel: 'KONDOR',
+        at: log.createdAt,
+        action: log.action,
+        resource: log.resource || null,
+        resourceId: log.resourceId || null,
+        meta: log.meta || null,
+      });
+    }
+
+    events.sort((a, b) => {
+      const aDate = new Date(a.at || 0).getTime();
+      const bDate = new Date(b.at || 0).getTime();
+      return aDate - bDate;
+    });
+
+    return {
+      post: {
+        id: post.id,
+        title: post.title,
+        status: post.status,
+        version: post.version,
+        clientFeedback: post.clientFeedback || null,
+        whatsappMessageId: post.whatsappMessageId || null,
+        metadata: post.metadata || null,
+      },
+      approvals,
+      whatsappLogs: waLogs,
+      auditLogs: filteredAuditLogs,
+      timeline: events,
+    };
+  },
+
   async requestChanges(tenantId, postId, note, userId = null) {
     const feedback = sanitizeString(note);
     if (!feedback || feedback.length < 3) {
@@ -1217,6 +1379,10 @@ module.exports = {
             status: 'REJECTED',
             notes: feedback,
             approverId: userId || latestApproval.approverId || null,
+            postVersion: Number(existing.version || latestApproval.postVersion || 1),
+            resolvedAt: new Date(),
+            resolvedSource: 'INTERNAL',
+            resolvedByPhone: null,
           },
         }),
         prisma.post.update({

@@ -141,6 +141,10 @@ function normalizeFeedback(input) {
   return trimmed ? trimmed : null;
 }
 
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
 /**
  * GET /api/public/approvals/:token
  * Retorna um snapshot seguro da approval para ser exibido em uma tela pública.
@@ -191,7 +195,7 @@ router.get('/approvals/:token', async (req, res) => {
     console.error('GET /public/approvals/:token error:', err && err.stack ? err.stack : err);
     return res.status(500).json({ error: 'Erro ao carregar approval pública' });
   }
-}
+});
 
 router.post('/approvals/:token/confirm', approvePublic);
 router.post('/approvals/:token/approve', approvePublic);
@@ -231,6 +235,10 @@ router.post('/approvals/:token/reject', async (req, res) => {
           data: {
             status: 'REJECTED',
             notes: notes || approval.notes || null,
+            postVersion: Number(post.version || approval.postVersion || 1),
+            resolvedAt: new Date(),
+            resolvedSource: 'PUBLIC_LINK',
+            resolvedByPhone: null,
           },
         }),
         prisma.post.update({
@@ -238,6 +246,10 @@ router.post('/approvals/:token/reject', async (req, res) => {
           data: {
             status: 'CANCELLED',
             clientFeedback: notes || post.clientFeedback || null,
+            metadata: {
+              ...(isPlainObject(post.metadata) ? post.metadata : {}),
+              workflowStatus: 'DONE',
+            },
           },
         }),
       ]);
@@ -250,6 +262,10 @@ router.post('/approvals/:token/reject', async (req, res) => {
       data: {
         status: 'REJECTED',
         notes: notes || approval.notes || null,
+        postVersion: Number(post?.version || approval.postVersion || 1),
+        resolvedAt: new Date(),
+        resolvedSource: 'PUBLIC_LINK',
+        resolvedByPhone: null,
       },
     });
 
@@ -258,7 +274,7 @@ router.post('/approvals/:token/reject', async (req, res) => {
     console.error('POST /public/approvals/:token/reject error:', err && err.stack ? err.stack : err);
     return res.status(500).json({ error: 'Erro ao rejeitar approval pública' });
   }
-}
+});
 
 /**
  * POST /api/public/approvals/:token/request-changes
@@ -296,6 +312,10 @@ router.post('/approvals/:token/request-changes', async (req, res) => {
         data: {
           status: 'REJECTED',
           notes: note,
+          postVersion: Number(post.version || approval.postVersion || 1),
+          resolvedAt: new Date(),
+          resolvedSource: 'PUBLIC_LINK',
+          resolvedByPhone: null,
         },
       }),
       prisma.post.update({
@@ -303,6 +323,10 @@ router.post('/approvals/:token/request-changes', async (req, res) => {
         data: {
           status: 'DRAFT',
           clientFeedback: note,
+          metadata: {
+            ...(isPlainObject(post.metadata) ? post.metadata : {}),
+            workflowStatus: 'CHANGES',
+          },
         },
       }),
     ]);
@@ -385,6 +409,10 @@ async function approvePublic(req, res) {
           data: {
             status: 'APPROVED',
             // approverId fica null aqui, pois aprovação externa não tem user logado
+            postVersion: Number(post.version || approval.postVersion || 1),
+            resolvedAt: new Date(),
+            resolvedSource: 'PUBLIC_LINK',
+            resolvedByPhone: null,
           },
         }),
         prisma.post.update({

@@ -107,7 +107,7 @@ module.exports = {
       dueDate: toDateOrNull(data.dueDate || data.due_date),
       metadata,
       attachments: data.attachments || null,
-      version: data.version || 1,
+      postVersion: Number(data.postVersion || data.post_version || data.version || 1),
     };
 
     return prisma.approval.create({ data: payload });
@@ -158,7 +158,15 @@ module.exports = {
         : baseMetadata;
     }
     if (data.attachments !== undefined) updateData.attachments = data.attachments;
-    if (data.version !== undefined) updateData.version = data.version;
+    if (
+      data.postVersion !== undefined ||
+      data.post_version !== undefined ||
+      data.version !== undefined
+    ) {
+      updateData.postVersion = Number(
+        data.postVersion || data.post_version || data.version || existing.postVersion || 1,
+      );
+    }
 
     await prisma.approval.update({
       where: { id },

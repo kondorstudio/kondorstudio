@@ -7,7 +7,9 @@ const { reportScheduleQueue } = require("../../queues");
 const reportsService = require("./reports.service");
 const reportingGeneration = require("./reportingGeneration.service");
 const reportExportsService = require("./reportExports.service");
+const reportingSnapshotsService = require("./reportingSnapshots.service");
 const emailService = require("../../services/emailService");
+const whatsappCloud = require("../../services/whatsappCloud");
 const { hasBrandScope, isBrandAllowed, assertBrandAccess } = require("./reportingScope.service");
 
 dayjs.extend(utc);
@@ -15,6 +17,15 @@ dayjs.extend(timezone);
 dayjs.extend(isoWeek);
 
 const DEFAULT_TZ = "America/Sao_Paulo";
+const BIWEEKLY_INTERVAL_DAYS = 14;
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isWhatsAppSummaryEnabled() {
+  return process.env.WHATSAPP_REPORT_SUMMARY_ENABLED !== "false";
+}
 
 async function assertBrand(tenantId, brandId) {
   if (!brandId) return null;
@@ -66,6 +77,21 @@ function resolveScheduleConfig(config) {
   return { ...config };
 }
 
+function mergeScheduleConfig(existing, incoming) {
+  const base = resolveScheduleConfig(existing);
+  const patch = resolveScheduleConfig(incoming);
+  const merged = { ...base, ...patch };
+
+  if (isPlainObject(base.whatsapp) || isPlainObject(patch.whatsapp)) {
+    merged.whatsapp = {
+      ...(isPlainObject(base.whatsapp) ? base.whatsapp : {}),
+      ...(isPlainObject(patch.whatsapp) ? patch.whatsapp : {}),
+    };
+  }
+
+  return merged;
+}
+
 function resolveTimezone(tz) {
   return tz && String(tz).trim() ? String(tz).trim() : DEFAULT_TZ;
 }
@@ -81,7 +107,7 @@ function buildCron(schedule) {
   const safeHour = Number.isNaN(hour) ? 9 : hour;
   const safeMinute = Number.isNaN(minute) ? 0 : minute;
 
-  if (schedule.frequency === "WEEKLY") {
+  if (schedule.frequency === "WEEKLY" || schedule.frequency === "BIWEEKLY") {
     const dayOfWeek =
       Number.isFinite(Number(config.dayOfWeek)) ? Number(config.dayOfWeek) : 1;
     return {
@@ -157,6 +183,11 @@ function buildDateRange(schedule, now = dayjs()) {
 
   if (schedule.frequency === "WEEKLY") {
     const start = end.startOf("isoWeek");
+    return { dateFrom: start.toDate(), dateTo: end.toDate() };
+  }
+
+  if (schedule.frequency === "BIWEEKLY") {
+    const start = end.subtract(BIWEEKLY_INTERVAL_DAYS - 1, "day");
     return { dateFrom: start.toDate(), dateTo: end.toDate() };
   }
 
@@ -242,6 +273,335 @@ async function sendScheduleEmails({ schedule, report, exportResult }) {
   return { ok: true, results, recipients };
 }
 
+function normalizeWhatsappConfig(rawConfig) {
+  if (!isPlainObject(rawConfig)) return { enabled: false };
+  const next = { ...rawConfig };
+  const toMode =
+    next.toMode === "override" || next.toMode === "client_whatsapp"
+      ? next.toMode
+      : "client_whatsapp";
+
+  return {
+    enabled: next.enabled === true,
+    toMode,
+    toOverride: next.toOverride ? String(next.toOverride).trim() : null,
+    kpis: Array.isArray(next.kpis)
+      ? next.kpis.map((item) => String(item).trim()).filter(Boolean)
+      : [],
+    nextSteps: next.nextSteps ? String(next.nextSteps).trim() : null,
+    dashboardId: next.dashboardId ? String(next.dashboardId).trim() : null,
+  };
+}
+
+function isBiweeklyDue(schedule, now = dayjs()) {
+  if (schedule.frequency !== "BIWEEKLY") return true;
+  const config = resolveScheduleConfig(schedule.scheduleConfig);
+  const lastRunAt = config.lastRunAt ? dayjs(config.lastRunAt) : null;
+  if (!lastRunAt || !lastRunAt.isValid()) return true;
+  return now.diff(lastRunAt, "day") >= BIWEEKLY_INTERVAL_DAYS;
+}
+
+function parseMetricValue(value) {
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return null;
+    return value;
+  }
+  if (typeof value === "string") {
+    const normalized = value
+      .replace(/\s+/g, "")
+      .replace(/\./g, "")
+      .replace(",", ".");
+    const asNumber = Number(normalized);
+    return Number.isFinite(asNumber) ? asNumber : null;
+  }
+  return null;
+}
+
+function formatMetricValue(value) {
+  if (value === null || value === undefined) return "-";
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 }).format(value);
+  }
+  return String(value);
+}
+
+function resolveFrontendBaseUrl() {
+  const base =
+    process.env.APP_PUBLIC_URL ||
+    process.env.PUBLIC_APP_URL ||
+    process.env.PUBLIC_APP_BASE_URL ||
+    process.env.RENDER_EXTERNAL_URL ||
+    "";
+  return String(base || "").replace(/\/+$/, "");
+}
+
+function buildDashboardLink(dashboardId) {
+  if (!dashboardId) return null;
+  const base = resolveFrontendBaseUrl();
+  if (!base) return null;
+  return `${base}/relatorios/v2/${dashboardId}`;
+}
+
+async function collectReportMetricsForSummary(tenantId, reportId, scope, preferredKeys = []) {
+  const snapshots = await reportingSnapshotsService.listReportSnapshots(
+    tenantId,
+    reportId,
+    scope,
+  );
+  const items = Array.isArray(snapshots?.items) ? snapshots.items : [];
+
+  const metricMap = new Map();
+  for (const item of items) {
+    const totals = isPlainObject(item?.data?.totals) ? item.data.totals : null;
+    if (!totals) continue;
+    for (const [key, value] of Object.entries(totals)) {
+      if (!key || metricMap.has(key)) continue;
+      const parsedValue = parseMetricValue(value);
+      metricMap.set(key, parsedValue !== null ? parsedValue : value);
+    }
+  }
+
+  const keys = preferredKeys.length
+    ? preferredKeys
+    : Array.from(metricMap.keys()).slice(0, 4);
+
+  return keys
+    .filter((key) => metricMap.has(key))
+    .map((key) => ({
+      key,
+      value: metricMap.get(key),
+    }));
+}
+
+function buildWhatsappSummaryMessage({
+  schedule,
+  dateFrom,
+  dateTo,
+  metrics,
+  nextSteps,
+  dashboardLink,
+  exportUrl,
+}) {
+  const lines = [];
+  lines.push(`Relatorio ${schedule.name || "Kondor"}`.trim());
+  lines.push(`Periodo: ${dayjs(dateFrom).format("DD/MM")} a ${dayjs(dateTo).format("DD/MM")}`);
+  lines.push("");
+
+  if (metrics.length) {
+    lines.push("Principais indicadores:");
+    for (const metric of metrics) {
+      lines.push(`- ${metric.key}: ${formatMetricValue(metric.value)}`);
+    }
+    lines.push("");
+  }
+
+  if (nextSteps) {
+    lines.push(`Proximos passos: ${nextSteps}`);
+  }
+
+  if (dashboardLink) {
+    lines.push(`Dashboard completo: ${dashboardLink}`);
+  } else if (exportUrl) {
+    lines.push(`Relatorio completo: ${exportUrl}`);
+  }
+
+  return lines.filter(Boolean).join("\n");
+}
+
+function resolveWhatsappRecipient(schedule, whatsappConfig) {
+  if (whatsappConfig.toMode === "override" && whatsappConfig.toOverride) {
+    return whatsappCloud.normalizeE164(whatsappConfig.toOverride);
+  }
+  if (schedule.scope !== "BRAND") return null;
+  return whatsappCloud.normalizeE164(schedule?.brand?.whatsappNumberE164 || null);
+}
+
+async function sendScheduleWhatsappSummary({
+  schedule,
+  report,
+  dateFrom,
+  dateTo,
+  exportResult,
+  scope,
+}) {
+  if (!isWhatsAppSummaryEnabled()) {
+    return { ok: false, skipped: true, reason: "feature_disabled" };
+  }
+
+  const config = resolveScheduleConfig(schedule.scheduleConfig);
+  const whatsappConfig = normalizeWhatsappConfig(config.whatsapp);
+  if (!whatsappConfig.enabled) {
+    return { ok: false, skipped: true, reason: "schedule_whatsapp_disabled" };
+  }
+  if (schedule.scope !== "BRAND") {
+    return { ok: false, skipped: true, reason: "scope_not_supported" };
+  }
+
+  const destination = resolveWhatsappRecipient(schedule, whatsappConfig);
+  const exportUrl = resolveFileUrl(exportResult?.url || exportResult?.file?.url);
+  const dashboardLink = buildDashboardLink(whatsappConfig.dashboardId);
+  const metrics = await collectReportMetricsForSummary(
+    schedule.tenantId,
+    report.id,
+    scope,
+    whatsappConfig.kpis,
+  );
+  const message = buildWhatsappSummaryMessage({
+    schedule,
+    dateFrom,
+    dateTo,
+    metrics,
+    nextSteps: whatsappConfig.nextSteps,
+    dashboardLink,
+    exportUrl,
+  });
+
+  const delivery = await prisma.reportDelivery.create({
+    data: {
+      tenantId: schedule.tenantId,
+      reportId: report.id,
+      exportId: exportResult?.export?.id || null,
+      brandId: schedule.brandId || null,
+      channel: "WHATSAPP",
+      status: "PENDING",
+      to:
+        destination ||
+        whatsappConfig.toOverride ||
+        schedule?.brand?.whatsappNumberE164 ||
+        null,
+      payload: {
+        kind: "schedule_whatsapp_summary",
+        scheduleId: schedule.id,
+        scheduleName: schedule.name,
+        kpis: metrics,
+        nextSteps: whatsappConfig.nextSteps || null,
+        dashboardLink: dashboardLink || null,
+      },
+    },
+  });
+
+  if (!destination) {
+    await prisma.reportDelivery.update({
+      where: { id: delivery.id },
+      data: {
+        status: "FAILED",
+        error: "destination_missing",
+        providerResult: {
+          provider: "WHATSAPP_META_CLOUD",
+          mode: "summary_text",
+          error: "destination_missing",
+        },
+      },
+    });
+    return {
+      ok: false,
+      skipped: false,
+      reason: "destination_missing",
+      deliveryId: delivery.id,
+    };
+  }
+
+  let integration;
+  try {
+    integration = await whatsappCloud.getAgencyWhatsAppIntegration(schedule.tenantId);
+  } catch (err) {
+    await prisma.reportDelivery.update({
+      where: { id: delivery.id },
+      data: {
+        status: "FAILED",
+        error: err?.message || "integration_invalid",
+        providerResult: {
+          provider: "WHATSAPP_META_CLOUD",
+          mode: "summary_text",
+          error: err?.message || "integration_invalid",
+        },
+      },
+    });
+    return {
+      ok: false,
+      skipped: false,
+      reason: "integration_invalid",
+      deliveryId: delivery.id,
+      error: err?.message || "integration_invalid",
+    };
+  }
+  if (!integration || integration.incomplete || !integration.accessToken || !integration.phoneNumberId) {
+    await prisma.reportDelivery.update({
+      where: { id: delivery.id },
+      data: {
+        status: "FAILED",
+        error: "integration_missing",
+        providerResult: {
+          provider: "WHATSAPP_META_CLOUD",
+          mode: "summary_text",
+          error: "integration_missing",
+        },
+      },
+    });
+    return {
+      ok: false,
+      skipped: false,
+      reason: "integration_missing",
+      deliveryId: delivery.id,
+    };
+  }
+
+  try {
+    const sendResult = await whatsappCloud.sendTextMessage({
+      phoneNumberId: integration.phoneNumberId,
+      accessToken: integration.accessToken,
+      toE164: destination,
+      text: message,
+      tenantId: schedule.tenantId,
+      postId: null,
+    });
+
+    await prisma.reportDelivery.update({
+      where: { id: delivery.id },
+      data: {
+        status: "SENT",
+        sentAt: new Date(),
+        providerResult: {
+          provider: "WHATSAPP_META_CLOUD",
+          mode: "summary_text",
+          waMessageId: sendResult?.waMessageId || null,
+          raw: sendResult?.raw || null,
+        },
+      },
+    });
+
+    return {
+      ok: true,
+      deliveryId: delivery.id,
+      waMessageId: sendResult?.waMessageId || null,
+      destination,
+      metricsCount: metrics.length,
+      dashboardLink: dashboardLink || null,
+    };
+  } catch (err) {
+    await prisma.reportDelivery.update({
+      where: { id: delivery.id },
+      data: {
+        status: "FAILED",
+        error: err?.message || "whatsapp_send_failed",
+        providerResult: {
+          provider: "WHATSAPP_META_CLOUD",
+          mode: "summary_text",
+          error: err?.message || "whatsapp_send_failed",
+        },
+      },
+    });
+
+    return {
+      ok: false,
+      skipped: false,
+      reason: "send_failed",
+      deliveryId: delivery.id,
+      error: err?.message || "whatsapp_send_failed",
+    };
+  }
+}
+
 async function runSchedule(tenantId, scheduleId, scope) {
   const schedule = await prisma.reportSchedule.findFirst({
     where: { id: scheduleId, tenantId },
@@ -267,6 +627,9 @@ async function runSchedule(tenantId, scheduleId, scope) {
 
   if (!schedule.isActive) {
     return { ok: false, skipped: true, reason: "inactive" };
+  }
+  if (!isBiweeklyDue(schedule, dayjs())) {
+    return { ok: false, skipped: true, reason: "biweekly_not_due" };
   }
 
   const tz = resolveTimezone(schedule.timezone);
@@ -325,6 +688,25 @@ async function runSchedule(tenantId, scheduleId, scope) {
     emailResult = { ok: false, error: err?.message || "email_error" };
   }
 
+  let whatsappResult = { ok: false, skipped: true };
+  try {
+    whatsappResult = await sendScheduleWhatsappSummary({
+      schedule,
+      report,
+      dateFrom,
+      dateTo,
+      exportResult,
+      scope,
+    });
+  } catch (err) {
+    whatsappResult = {
+      ok: false,
+      skipped: false,
+      reason: "whatsapp_error",
+      error: err?.message || "whatsapp_error",
+    };
+  }
+
   const nextConfig = resolveScheduleConfig(schedule.scheduleConfig);
   nextConfig.lastRunAt = new Date().toISOString();
   nextConfig.lastReportId = report.id;
@@ -332,6 +714,14 @@ async function runSchedule(tenantId, scheduleId, scope) {
   nextConfig.lastExportUrl = resolveFileUrl(exportResult?.url || exportResult?.file?.url);
   nextConfig.lastRunStatus = generation?.status || "READY";
   nextConfig.lastEmailStatus = emailResult?.ok ? "sent" : "skipped";
+  nextConfig.lastWhatsappStatus = whatsappResult?.ok
+    ? "sent"
+    : whatsappResult?.skipped
+      ? "skipped"
+      : "failed";
+  nextConfig.lastWhatsappReason =
+    whatsappResult?.reason ||
+    (whatsappResult?.ok ? null : whatsappResult?.error || null);
 
   await prisma.reportSchedule.update({
     where: { id: schedule.id },
@@ -345,6 +735,7 @@ async function runSchedule(tenantId, scheduleId, scope) {
     exportUrl: resolveFileUrl(exportResult?.url || exportResult?.file?.url),
     generation,
     emailResult,
+    whatsappResult,
   };
 }
 
@@ -510,10 +901,7 @@ async function updateSchedule(tenantId, id, payload, scope) {
         payload.timezone !== undefined ? payload.timezone : existing.timezone,
       scheduleConfig:
         payload.scheduleConfig !== undefined
-          ? {
-              ...resolveScheduleConfig(existing.scheduleConfig),
-              ...resolveScheduleConfig(payload.scheduleConfig),
-            }
+          ? mergeScheduleConfig(existing.scheduleConfig, payload.scheduleConfig)
           : existing.scheduleConfig,
       isActive:
         payload.isActive !== undefined ? payload.isActive : existing.isActive,

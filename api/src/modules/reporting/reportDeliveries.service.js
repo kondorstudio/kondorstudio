@@ -24,6 +24,10 @@ function normalizeScheduledAt(value) {
   return date;
 }
 
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 function buildPayload(input = {}, actor) {
   if (!input || typeof input !== "object") return null;
   const omit = new Set([
@@ -78,9 +82,33 @@ async function listReportDeliveries(tenantId, reportId, scope) {
   if (hasBrandScope(scope)) {
     where.brandId = { in: scope.allowedBrandIds };
   }
-  return prisma.reportDelivery.findMany({
+  const rows = await prisma.reportDelivery.findMany({
     where,
     orderBy: { createdAt: "desc" },
+  });
+
+  return rows.map((row) => {
+    const payload = isPlainObject(row.payload) ? row.payload : {};
+    const providerResult = isPlainObject(row.providerResult) ? row.providerResult : {};
+    const interactionsFromPayload = Array.isArray(payload.interactions)
+      ? payload.interactions
+      : [];
+    const interactionsFromProvider = Array.isArray(providerResult.responses)
+      ? providerResult.responses
+      : [];
+
+    const interactions = [...interactionsFromPayload, ...interactionsFromProvider]
+      .filter((item) => item && typeof item === "object")
+      .sort((a, b) => {
+        const aTs = new Date(a.at || a.createdAt || 0).getTime();
+        const bTs = new Date(b.at || b.createdAt || 0).getTime();
+        return aTs - bTs;
+      });
+
+    return {
+      ...row,
+      interactions,
+    };
   });
 }
 

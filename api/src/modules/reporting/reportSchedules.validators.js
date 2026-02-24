@@ -1,8 +1,19 @@
 const { z } = require("zod");
 
 const REPORT_SCOPES = ["BRAND", "GROUP"];
-const REPORT_FREQUENCIES = ["WEEKLY", "MONTHLY"];
+const REPORT_FREQUENCIES = ["WEEKLY", "MONTHLY", "BIWEEKLY"];
 const COMPARE_MODES = ["NONE", "PREVIOUS_PERIOD", "PREVIOUS_YEAR", "CUSTOM"];
+
+const scheduleWhatsappSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    toMode: z.enum(["client_whatsapp", "override"]).optional(),
+    toOverride: z.string().optional(),
+    kpis: z.array(z.string()).optional(),
+    nextSteps: z.string().optional(),
+    dashboardId: z.string().optional(),
+  })
+  .partial();
 
 const scheduleConfigSchema = z
   .object({
@@ -19,6 +30,7 @@ const scheduleConfigSchema = z
     dayOfMonth: z.number().int().min(1).max(28).optional(),
     subject: z.string().optional(),
     message: z.string().optional(),
+    whatsapp: scheduleWhatsappSchema.optional(),
   })
   .partial();
 
