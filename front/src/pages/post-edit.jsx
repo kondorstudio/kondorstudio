@@ -90,9 +90,24 @@ export default function PostEdit() {
 
   const handleSubmit = React.useCallback(
     async (data) => {
-      await updateMutation.mutateAsync(data);
+      return updateMutation.mutateAsync(data);
     },
     [updateMutation]
+  );
+
+  const handleSendToApproval = React.useCallback(
+    (id) => base44.entities.Post.sendToApproval(id),
+    []
+  );
+
+  const handleApprovalFeedback = React.useCallback(
+    ({ type, message }) => {
+      if (message) {
+        showToast(message, type || "info");
+      }
+      queryClient.invalidateQueries({ queryKey: ["posts"] });
+    },
+    [queryClient, showToast]
   );
 
   if (!postId) {
@@ -194,6 +209,8 @@ export default function PostEdit() {
           clients={clients}
           integrations={integrations}
           onSubmit={handleSubmit}
+          onSendToApproval={handleSendToApproval}
+          onApprovalFeedback={handleApprovalFeedback}
           isSaving={updateMutation.isPending}
           onDelete={() => deleteMutation.mutate()}
           onDeleteLocal={() => deleteLocalMutation.mutate()}

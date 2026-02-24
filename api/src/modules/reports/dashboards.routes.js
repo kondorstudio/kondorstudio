@@ -17,6 +17,7 @@ router.delete('/:id', allowEditor, dashboardsController.remove);
 router.post('/:id/clone', allowEditor, dashboardsController.clone);
 router.post('/:id/exports', allowEditor, exportsController.create);
 router.post('/:id/export-pdf', allowEditor, exportsController.exportPdf);
+router.post('/:id/send-whatsapp', allowEditor, exportsController.sendWhatsapp);
 router.post('/:id/versions', allowEditor, dashboardsController.createVersion);
 router.get('/:id/versions', allowEditor, dashboardsController.listVersions);
 router.post('/:id/publish', allowEditor, dashboardsController.publish);

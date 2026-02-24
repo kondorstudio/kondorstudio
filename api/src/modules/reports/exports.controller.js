@@ -1,4 +1,8 @@
-const { exportSchema, exportPdfSchema } = require('./exports.validators');
+const {
+  exportSchema,
+  exportPdfSchema,
+  sendWhatsappPdfSchema,
+} = require('./exports.validators');
 const exportsService = require('./exports.service');
 
 function formatValidationError(error) {
@@ -107,8 +111,34 @@ async function exportPdf(req, res) {
   }
 }
 
+async function sendWhatsapp(req, res) {
+  const parsed = sendWhatsappPdfSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'Dados inválidos',
+        details: formatValidationError(parsed.error),
+      },
+    });
+  }
+
+  try {
+    const result = await exportsService.sendDashboardPdfToWhatsapp(
+      req.tenantId,
+      req.user?.id,
+      req.params.id,
+      parsed.data,
+    );
+    return res.status(200).json(result);
+  } catch (err) {
+    return handleError(res, err);
+  }
+}
+
 module.exports = {
   create,
   download,
   exportPdf,
+  sendWhatsapp,
 };

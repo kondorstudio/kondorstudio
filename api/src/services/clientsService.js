@@ -12,6 +12,13 @@ function sanitizeString(value) {
   return str.length ? str : null;
 }
 
+function createClientValidationError(message, code = 'VALIDATION_ERROR') {
+  const err = new Error(message);
+  err.code = code;
+  err.statusCode = 400;
+  return err;
+}
+
 function normalizeHandle(value) {
   const sanitized = sanitizeString(value);
   if (!sanitized) return null;
@@ -294,7 +301,13 @@ module.exports = {
   async create(tenantId, data = {}) {
     const prepared = buildPreparedInput(data);
     if (!prepared.prepared.name) {
-      throw new Error('name is required');
+      throw createClientValidationError('Nome do cliente é obrigatório', 'NAME_REQUIRED');
+    }
+    if (!prepared.prepared.whatsappNumberE164) {
+      throw createClientValidationError(
+        'WhatsApp do cliente obrigatório em formato E.164 (+5511999999999)',
+        'INVALID_WHATSAPP_NUMBER',
+      );
     }
 
     const portalCreds = await resolvePortalCredentials({

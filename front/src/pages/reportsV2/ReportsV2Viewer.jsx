@@ -1,9 +1,19 @@
 import React from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient, useMutation, useIsFetching } from "@tanstack/react-query";
-import { ArrowLeft, Edit3, Share2, Download, Copy, RefreshCw, Link2Off } from "lucide-react";
+import {
+  ArrowLeft,
+  Edit3,
+  Share2,
+  Download,
+  Copy,
+  RefreshCw,
+  Link2Off,
+  MessageCircle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button.jsx";
 import { Input } from "@/components/ui/input.jsx";
+import { Textarea } from "@/components/ui/textarea.jsx";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select.jsx";
 import {
   Dialog,
@@ -112,6 +122,10 @@ export default function ReportsV2Viewer() {
   const [exportOpen, setExportOpen] = React.useState(false);
   const [exportPage, setExportPage] = React.useState("current");
   const [exportOrientation, setExportOrientation] = React.useState("landscape");
+  const [whatsAppOpen, setWhatsAppOpen] = React.useState(false);
+  const [whatsAppPage, setWhatsAppPage] = React.useState("current");
+  const [whatsAppOrientation, setWhatsAppOrientation] = React.useState("landscape");
+  const [whatsAppMessage, setWhatsAppMessage] = React.useState("");
   const [blockedAction, setBlockedAction] = React.useState(null);
   const [widgetStatusesByPage, setWidgetStatusesByPage] = React.useState({});
   const [isAutoRefreshing, setIsAutoRefreshing] = React.useState(false);
@@ -121,6 +135,10 @@ export default function ReportsV2Viewer() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["reportsV2-dashboard", id],
     queryFn: () => base44.reportsV2.getDashboard(id),
+  });
+  const { data: clients = [] } = useQuery({
+    queryKey: ["reportsV2-clients"],
+    queryFn: () => base44.entities.Client.list(),
   });
 
   const dashboard = data || null;
@@ -153,6 +171,10 @@ export default function ReportsV2Viewer() {
   });
   const connections = connectionsQuery.data?.items || [];
   const health = healthQuery.data || null;
+  const selectedBrand = React.useMemo(
+    () => clients.find((item) => item.id === dashboard?.brandId) || null,
+    [clients, dashboard?.brandId]
+  );
   const healthStatus = health?.status || null;
   const missingPlatforms = Array.isArray(health?.summary?.missingPlatforms)
     ? health.summary.missingPlatforms
@@ -178,6 +200,12 @@ export default function ReportsV2Viewer() {
 
   React.useEffect(() => {
     setShareUrl("");
+  }, [id]);
+
+  React.useEffect(() => {
+    setWhatsAppMessage("");
+    setWhatsAppPage("current");
+    setWhatsAppOrientation("landscape");
   }, [id]);
 
   React.useEffect(() => {
@@ -239,6 +267,13 @@ export default function ReportsV2Viewer() {
       setExportPage("current");
     }
   }, [canExportAllPages, exportPage]);
+
+  React.useEffect(() => {
+    if (canExportAllPages) return;
+    if (whatsAppPage === "all") {
+      setWhatsAppPage("current");
+    }
+  }, [canExportAllPages, whatsAppPage]);
   const widgetTitleById = React.useMemo(() => {
     const map = new Map();
     pages.forEach((page) => {
@@ -486,6 +521,49 @@ export default function ReportsV2Viewer() {
     },
   });
 
+  const sendWhatsAppMutation = useMutation({
+    mutationFn: () =>
+      base44.reportsV2.sendWhatsAppPdf(id, {
+        filters,
+        page: whatsAppPage,
+        activePageId: whatsAppPage === "current" ? activePageId : null,
+        orientation: whatsAppOrientation,
+        message: whatsAppMessage ? whatsAppMessage.trim() : undefined,
+      }),
+    onSuccess: (result) => {
+      const mode = result?.mode || "document";
+      if (mode === "document") {
+        showToast("Relatório enviado no WhatsApp com PDF anexo.", "success");
+      } else {
+        showToast("PDF não pôde ser anexado. Enviado por link no WhatsApp.", "info");
+      }
+      queryClient.invalidateQueries({ queryKey: ["reportsV2-dashboard", id] });
+      setWhatsAppOpen(false);
+      setWhatsAppMessage("");
+    },
+    onError: (err) => {
+      if (err?.data?.error?.code === "DASHBOARD_BLOCKED") {
+        setBlockedAction("whatsapp");
+        return;
+      }
+      const message =
+        err?.data?.error?.message ||
+        err?.message ||
+        "Não foi possível enviar no WhatsApp.";
+      showToast(message, "error");
+    },
+  });
+
+  const whatsappNumber = selectedBrand?.whatsappNumberE164 || "";
+  const whatsappBlockedReason =
+    !selectedBrand
+      ? "Cliente da marca não encontrado."
+      : !whatsappNumber
+      ? "Cliente sem WhatsApp cadastrado."
+      : selectedBrand?.whatsappOptIn === false
+      ? "Cliente com opt-out de WhatsApp."
+      : null;
+
   const ensurePublished = () => {
     if (dashboard?.status === "PUBLISHED") return true;
     showToast("Publique o dashboard antes de compartilhar ou exportar.", "error");
@@ -539,12 +617,33 @@ export default function ReportsV2Viewer() {
     setExportOpen(true);
   };
 
+  const handleOpenWhatsApp = () => {
+    if (!ensurePublished()) return;
+    if (isHealthBlocked) {
+      setBlockedAction("whatsapp");
+      return;
+    }
+    setWhatsAppOpen(true);
+  };
+
   const handleConfirmExport = () => {
     if (!isExportReady) {
       showToast("Aguarde o carregamento completo dos dados para exportar.", "info");
       return;
     }
     exportMutation.mutate();
+  };
+
+  const handleConfirmWhatsApp = () => {
+    if (!isExportReady) {
+      showToast("Aguarde o carregamento completo dos dados para enviar.", "info");
+      return;
+    }
+    if (whatsappBlockedReason) {
+      showToast(whatsappBlockedReason, "error");
+      return;
+    }
+    sendWhatsAppMutation.mutate();
   };
 
   const handleCopyShare = async () => {
@@ -625,6 +724,16 @@ export default function ReportsV2Viewer() {
               disabled={exportMutation.isPending || isHealthBlocked}
             >
               {exportMutation.isPending ? "Exportando..." : "Exportar PDF"}
+            </Button>
+            <Button
+              variant="secondary"
+              leftIcon={MessageCircle}
+              onClick={handleOpenWhatsApp}
+              disabled={sendWhatsAppMutation.isPending || isHealthBlocked}
+            >
+              {sendWhatsAppMutation.isPending
+                ? "Enviando..."
+                : "Enviar no WhatsApp"}
             </Button>
             <Button
               variant="secondary"
@@ -864,6 +973,101 @@ export default function ReportsV2Viewer() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={whatsAppOpen} onOpenChange={setWhatsAppOpen}>
+        <DialogContent className="max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>Enviar relatório no WhatsApp</DialogTitle>
+            <DialogDescription>
+              Envio automático do PDF para o WhatsApp cadastrado da marca.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="rounded-[12px] border border-[var(--border)] bg-[var(--bg)] px-4 py-3 text-xs text-[var(--muted)]">
+              <p>
+                Cliente:{" "}
+                <span className="font-semibold text-[var(--text)]">
+                  {selectedBrand?.name || "-"}
+                </span>
+              </p>
+              <p className="mt-1">
+                WhatsApp:{" "}
+                <span className="font-semibold text-[var(--text)]">
+                  {whatsappNumber || "-"}
+                </span>
+              </p>
+              {whatsappBlockedReason ? (
+                <p className="mt-2 text-rose-600">{whatsappBlockedReason}</p>
+              ) : null}
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+                  Páginas
+                </label>
+                <Select value={whatsAppPage} onValueChange={setWhatsAppPage}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="current">Página atual</SelectItem>
+                    {canExportAllPages ? (
+                      <SelectItem value="all">Todas as páginas</SelectItem>
+                    ) : null}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+                  Orientação
+                </label>
+                <Select
+                  value={whatsAppOrientation}
+                  onValueChange={setWhatsAppOrientation}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="portrait">Retrato</SelectItem>
+                    <SelectItem value="landscape">Paisagem</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+                Mensagem (opcional)
+              </label>
+              <Textarea
+                rows={3}
+                placeholder="Ex: Segue o relatório da semana com os principais resultados."
+                value={whatsAppMessage}
+                onChange={(event) => setWhatsAppMessage(event.target.value)}
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="flex flex-wrap justify-end gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => setWhatsAppOpen(false)}
+              disabled={sendWhatsAppMutation.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleConfirmWhatsApp}
+              disabled={sendWhatsAppMutation.isPending || Boolean(whatsappBlockedReason)}
+            >
+              {sendWhatsAppMutation.isPending ? "Enviando..." : "Enviar no WhatsApp"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={shareOpen} onOpenChange={setShareOpen}>
         <DialogContent className="max-w-[560px]">
           <DialogHeader>
@@ -983,12 +1187,26 @@ export default function ReportsV2Viewer() {
             <DialogTitle>
               {blockedAction === "share"
                 ? "Compartilhamento bloqueado"
+                : blockedAction === "whatsapp"
+                ? "Envio no WhatsApp bloqueado"
                 : "Exportação bloqueada"}
             </DialogTitle>
             <DialogDescription>
               {missingPlatforms.length
-                ? `Não é possível ${blockedAction === "share" ? "compartilhar" : "exportar"} este relatório enquanto houver conexões pendentes.`
-                : `Não é possível ${blockedAction === "share" ? "compartilhar" : "exportar"} este relatório enquanto houver widgets com configuração inválida.`}
+                ? `Não é possível ${
+                    blockedAction === "share"
+                      ? "compartilhar"
+                      : blockedAction === "whatsapp"
+                      ? "enviar no WhatsApp"
+                      : "exportar"
+                  } este relatório enquanto houver conexões pendentes.`
+                : `Não é possível ${
+                    blockedAction === "share"
+                      ? "compartilhar"
+                      : blockedAction === "whatsapp"
+                      ? "enviar no WhatsApp"
+                      : "exportar"
+                  } este relatório enquanto houver widgets com configuração inválida.`}
             </DialogDescription>
           </DialogHeader>
 

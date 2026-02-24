@@ -19,6 +19,7 @@ const defaultForm = {
   name: "",
   email: "",
   phone: "",
+  whatsappNumberE164: "",
   sector: "",
   briefing: "",
   monthlyFee: "",
@@ -33,9 +34,22 @@ const defaultForm = {
   portalEmail: "",
   billingContactName: "",
   billingContactEmail: "",
-  whatsappOptIn: false,
+  whatsappOptIn: true,
   portalPassword: "",
 };
+
+function normalizeE164Input(value) {
+  if (value === undefined || value === null) return "";
+  const raw = String(value).trim();
+  if (!raw) return "";
+  const digits = raw.replace(/[^\d]/g, "");
+  if (!digits) return "";
+  return `+${digits}`;
+}
+
+function isValidE164(value) {
+  return /^\+\d{8,15}$/.test(String(value || "").trim());
+}
 
 function formatDateInput(value) {
   if (!value) return "";
@@ -64,6 +78,7 @@ export default function ClientFormDialog({
         name: client.name || "",
         email: client.email || "",
         phone: client.phone || "",
+        whatsappNumberE164: client.whatsappNumberE164 || "",
         sector: client.sector || "",
         briefing: client.briefing || "",
         monthlyFee: formatMonthlyFee(client.monthlyFeeCents),
@@ -118,6 +133,8 @@ export default function ClientFormDialog({
       name: formData.name.trim(),
       email: formData.email.trim() || null,
       phone: formData.phone.trim() || null,
+      whatsappNumberE164:
+        normalizeE164Input(formData.whatsappNumberE164) || null,
       sector: formData.sector.trim() || null,
       briefing: formData.briefing.trim() || null,
       monthlyFee: formData.monthlyFee,
@@ -143,6 +160,17 @@ export default function ClientFormDialog({
     if (!onSubmit) return;
     if (!normalizedPayload.name) {
       alert("Informe o nome do cliente.");
+      return;
+    }
+    const normalizedWhatsapp = normalizeE164Input(formData.whatsappNumberE164);
+    if (!client && !normalizedWhatsapp) {
+      alert(
+        "Informe o WhatsApp do cliente em formato internacional (+55...) para concluir o cadastro."
+      );
+      return;
+    }
+    if (normalizedWhatsapp && !isValidE164(normalizedWhatsapp)) {
+      alert("WhatsApp inválido. Use o formato E.164 (+5511999999999).");
       return;
     }
     onSubmit(normalizedPayload);
@@ -198,6 +226,24 @@ export default function ClientFormDialog({
                   onChange={handleChange("phone")}
                   placeholder="+55 (11) 99999-9999"
                 />
+              </div>
+              <div className="space-y-2">
+                <Label>WhatsApp do cliente {!client ? "*" : ""}</Label>
+                <Input
+                  value={formData.whatsappNumberE164}
+                  onChange={handleChange("whatsappNumberE164")}
+                  placeholder="+5511999999999"
+                  required={!client}
+                />
+                <FormHint>
+                  Usado para aprovações de posts e envio de relatórios.
+                </FormHint>
+                {client && !normalizeE164Input(formData.whatsappNumberE164) ? (
+                  <p className="text-xs text-amber-700">
+                    Cliente legado sem WhatsApp cadastrado. Recomendado preencher
+                    para habilitar automações.
+                  </p>
+                ) : null}
               </div>
             </FormGrid>
 

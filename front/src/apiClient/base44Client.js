@@ -889,6 +889,14 @@ const ReportsV2 = {
     });
   },
 
+  async sendWhatsAppPdf(id, payload = {}) {
+    if (!id) throw new Error("dashboardId obrigatorio");
+    return jsonFetch(`/reports/dashboards/${id}/send-whatsapp`, {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    });
+  },
+
   async getPublicShareStatus(id) {
     if (!id) throw new Error("dashboardId obrigatorio");
     return jsonFetch(`/reports/dashboards/${id}/public-share`, { method: "GET" });

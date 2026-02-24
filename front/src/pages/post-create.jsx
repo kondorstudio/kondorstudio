@@ -70,6 +70,21 @@ export default function PostCreate() {
     [createMutation]
   );
 
+  const handleSendToApproval = React.useCallback(
+    (postId) => base44.entities.Post.sendToApproval(postId),
+    []
+  );
+
+  const handleApprovalFeedback = React.useCallback(
+    ({ type, message }) => {
+      if (message) {
+        showToast(message, type || "info");
+      }
+      queryClient.invalidateQueries({ queryKey: ["posts"] });
+    },
+    [queryClient, showToast]
+  );
+
   const handleCancel = React.useCallback(() => {
     navigate("/posts");
   }, [navigate]);
@@ -97,6 +112,8 @@ export default function PostCreate() {
           clients={clients}
           integrations={integrations}
           onSubmit={handleSubmit}
+          onSendToApproval={handleSendToApproval}
+          onApprovalFeedback={handleApprovalFeedback}
           isSaving={createMutation.isPending}
         />
       </div>

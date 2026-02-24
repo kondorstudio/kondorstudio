@@ -34,7 +34,18 @@ const exportPdfSchema = z
   })
   .strict();
 
+const sendWhatsappPdfSchema = z
+  .object({
+    filters: globalFiltersSchema,
+    page: z.enum(['current', 'all']).default('current'),
+    activePageId: z.string().uuid().optional().nullable(),
+    orientation: z.enum(['portrait', 'landscape']).default('portrait'),
+    message: z.string().max(500).optional(),
+  })
+  .strict();
+
 module.exports = {
   exportSchema,
   exportPdfSchema,
+  sendWhatsappPdfSchema,
 };

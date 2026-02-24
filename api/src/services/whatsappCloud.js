@@ -298,6 +298,44 @@ async function sendTextMessage({
   });
 }
 
+async function sendDocumentMessage({
+  phoneNumberId,
+  accessToken,
+  toE164,
+  documentUrl,
+  caption = null,
+  filename = null,
+  tenantId = null,
+  postId = null,
+}) {
+  if (!toE164) throw new Error('Missing destination number (toE164)');
+  if (!documentUrl) throw new Error('Missing document URL');
+
+  const payload = {
+    messaging_product: 'whatsapp',
+    to: toE164,
+    type: 'document',
+    document: {
+      link: String(documentUrl),
+    },
+  };
+  if (caption) {
+    payload.document.caption = truncateText(caption, 1024);
+  }
+  if (filename) {
+    payload.document.filename = truncateText(filename, 240);
+  }
+
+  return sendCloudPayload({
+    phoneNumberId,
+    accessToken,
+    payload,
+    tenantId,
+    toE164,
+    postId,
+  });
+}
+
 async function sendInteractiveApprovalMessage({
   phoneNumberId,
   accessToken,
@@ -615,6 +653,7 @@ module.exports = {
   parseActionId,
   getAgencyWhatsAppIntegration,
   sendTextMessage,
+  sendDocumentMessage,
   sendInteractiveApprovalMessage,
   sendApprovalRequest,
   normalizeE164,

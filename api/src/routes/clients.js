@@ -136,6 +136,12 @@ router.post('/', async (req, res) => {
     return res.status(201).json(client);
   } catch (err) {
     console.error('POST /clients error:', err);
+    if (err?.statusCode || err?.status) {
+      const status = err.statusCode || err.status;
+      const payload = { error: err.message || 'Erro ao criar cliente' };
+      if (err?.code) payload.code = err.code;
+      return res.status(status).json(payload);
+    }
     return res.status(500).json({ error: 'Erro ao criar cliente' });
   }
 });
@@ -151,6 +157,12 @@ router.put('/:id', async (req, res) => {
     return res.json(updated);
   } catch (err) {
     console.error('PUT /clients/:id error:', err);
+    if (err?.statusCode || err?.status) {
+      const status = err.statusCode || err.status;
+      const payload = { error: err.message || 'Erro ao atualizar cliente' };
+      if (err?.code) payload.code = err.code;
+      return res.status(status).json(payload);
+    }
     return res.status(500).json({ error: 'Erro ao atualizar cliente' });
   }
 });

@@ -18,6 +18,10 @@ function resetModule(path) {
 function buildExportServiceHarness(options = {}) {
   const createCalls = [];
   const updateCalls = [];
+  const whatsappCalls = {
+    sendDocument: [],
+    sendText: [],
+  };
   const activeConnections = Array.isArray(options.activeConnections)
     ? options.activeConnections
     : [];
@@ -67,6 +71,12 @@ function buildExportServiceHarness(options = {}) {
       status: 'PUBLISHED',
       publishedVersionId: 'version-1',
       publishedVersion: { id: 'version-1', layoutJson: defaultLayout },
+      brand: {
+        id: 'brand-1',
+        name: 'Marca Teste',
+        whatsappNumberE164: '+5511999999999',
+        whatsappOptIn: true,
+      },
     };
 
   mockModule('../src/prisma', {
@@ -103,13 +113,42 @@ function buildExportServiceHarness(options = {}) {
             .map((item) => ({ platform: item.platform })),
       },
       upload: {
-        create: async () => ({ id: 'upload-1' }),
+        create: async ({ data }) => ({
+          id: 'upload-1',
+          ...(data || {}),
+        }),
+      },
+      auditLog: {
+        create: async () => ({ id: 'audit-1' }),
       },
     },
   });
 
   mockModule('../src/services/uploadsService', {
     uploadBuffer: async () => ({ key: 'key', url: 'https://files.example.com/file.pdf' }),
+  });
+
+  mockModule('../src/services/whatsappCloud', {
+    normalizeE164: (value) => value,
+    getAgencyWhatsAppIntegration: async () => ({
+      phoneNumberId: 'phone-1',
+      accessToken: 'token-1',
+      incomplete: false,
+    }),
+    sendDocumentMessage: async (payload) => {
+      whatsappCalls.sendDocument.push(payload);
+      if (options.failDocumentSend) {
+        throw new Error('document-send-fail');
+      }
+      return { waMessageId: 'wamid-document', raw: { ok: true } };
+    },
+    sendTextMessage: async (payload) => {
+      whatsappCalls.sendText.push(payload);
+      if (options.failTextSend) {
+        throw new Error('text-send-fail');
+      }
+      return { waMessageId: 'wamid-text', raw: { ok: true } };
+    },
   });
 
   const page = {
@@ -148,9 +187,10 @@ function buildExportServiceHarness(options = {}) {
     }
     resetModule('../src/modules/reports/dashboardHealth.service');
     resetModule('../src/modules/reports/exports.service');
+    resetModule('../src/services/whatsappCloud');
   }
 
-  return { service, createCalls, updateCalls, restore };
+  return { service, createCalls, updateCalls, whatsappCalls, restore };
 }
 
 function buildApp(options = {}) {
@@ -165,6 +205,15 @@ function buildApp(options = {}) {
       exportDashboardPdf: async () => ({
         buffer: Buffer.from('pdf-bytes'),
         filename: 'Relatorio-Teste.pdf',
+      }),
+      sendDashboardPdfToWhatsapp: async () => ({
+        ok: true,
+        mode: 'document',
+        fallbackUsed: false,
+        waMessageId: 'wamid-1',
+        to: '+5511999999999',
+        clientId: 'brand-1',
+        dashboardId: 'dashboard-1',
       }),
     };
 
@@ -298,6 +347,92 @@ test('export-pdf returns 422 when dashboard is invalid', async () => {
 
   assert.equal(res.status, 422);
   assert.equal(res.body?.error?.code, 'DASHBOARD_BLOCKED');
+});
+
+test('send-whatsapp returns delivery payload', async () => {
+  let calledWith = null;
+  const { app } = buildApp({
+    serviceMock: {
+      createDashboardExport: async () => ({
+        export: { id: 'export-1', status: 'READY' },
+        url: 'https://files.example.com/export.pdf',
+      }),
+      exportDashboardPdf: async () => ({
+        buffer: Buffer.from('pdf-bytes'),
+        filename: 'Relatorio-Teste.pdf',
+      }),
+      sendDashboardPdfToWhatsapp: async (...args) => {
+        calledWith = args;
+        return {
+          ok: true,
+          mode: 'document',
+          fallbackUsed: false,
+          waMessageId: 'wamid-1',
+          to: '+5511999999999',
+          clientId: 'brand-1',
+          dashboardId: 'dashboard-1',
+        };
+      },
+    },
+  });
+
+  const payload = {
+    page: 'all',
+    orientation: 'portrait',
+    message: 'Segue o relatório da semana.',
+  };
+
+  const res = await request(app)
+    .post('/api/reports/dashboards/dashboard-1/send-whatsapp')
+    .send(payload);
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body?.ok, true);
+  assert.equal(res.body?.mode, 'document');
+  assert.deepEqual(calledWith, [
+    'tenant-1',
+    'user-1',
+    'dashboard-1',
+    payload,
+  ]);
+});
+
+test('send-whatsapp validates payload and returns 400 for invalid body', async () => {
+  const { app } = buildApp();
+  const res = await request(app)
+    .post('/api/reports/dashboards/dashboard-1/send-whatsapp')
+    .send({ page: 'invalid-page' });
+
+  assert.equal(res.status, 400);
+  assert.equal(res.body?.error?.code, 'VALIDATION_ERROR');
+});
+
+test('send-whatsapp returns domain error details from service', async () => {
+  const { app } = buildApp({
+    serviceMock: {
+      createDashboardExport: async () => ({
+        export: { id: 'export-1', status: 'READY' },
+        url: 'https://files.example.com/export.pdf',
+      }),
+      exportDashboardPdf: async () => ({
+        buffer: Buffer.from('pdf-bytes'),
+        filename: 'Relatorio-Teste.pdf',
+      }),
+      sendDashboardPdfToWhatsapp: async () => {
+        const err = new Error('Cliente sem WhatsApp válido');
+        err.code = 'INVALID_CLIENT_WHATSAPP';
+        err.status = 400;
+        throw err;
+      },
+    },
+  });
+
+  const res = await request(app)
+    .post('/api/reports/dashboards/dashboard-1/send-whatsapp')
+    .send({});
+
+  assert.equal(res.status, 400);
+  assert.equal(res.body?.error?.code, 'INVALID_CLIENT_WHATSAPP');
 });
 
 test('exportDashboardPdf persists temporary token expiry and clears token after success', async () => {
@@ -473,6 +608,53 @@ test('exportDashboardPdf blocks when health status is BLOCKED', async () => {
       },
     );
     assert.equal(createCalls.length, 0);
+  } finally {
+    restore();
+  }
+});
+
+test('sendDashboardPdfToWhatsapp sends document by default', async () => {
+  const { service, whatsappCalls, restore } = buildExportServiceHarness();
+  try {
+    const result = await service.sendDashboardPdfToWhatsapp(
+      'tenant-1',
+      'user-1',
+      'dashboard-1',
+      {
+        page: 'current',
+        orientation: 'portrait',
+      },
+    );
+
+    assert.equal(result.ok, true);
+    assert.equal(result.mode, 'document');
+    assert.equal(result.fallbackUsed, false);
+    assert.equal(result.waMessageId, 'wamid-document');
+    assert.equal(whatsappCalls.sendDocument.length, 1);
+    assert.equal(whatsappCalls.sendText.length, 0);
+  } finally {
+    restore();
+  }
+});
+
+test('sendDashboardPdfToWhatsapp falls back to text link when document fails', async () => {
+  const { service, whatsappCalls, restore } = buildExportServiceHarness({
+    failDocumentSend: true,
+  });
+  try {
+    const result = await service.sendDashboardPdfToWhatsapp(
+      'tenant-1',
+      'user-1',
+      'dashboard-1',
+      {},
+    );
+
+    assert.equal(result.ok, true);
+    assert.equal(result.mode, 'text_link');
+    assert.equal(result.fallbackUsed, true);
+    assert.equal(result.waMessageId, 'wamid-text');
+    assert.equal(whatsappCalls.sendDocument.length, 1);
+    assert.equal(whatsappCalls.sendText.length, 1);
   } finally {
     restore();
   }

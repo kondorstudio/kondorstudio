@@ -11,6 +11,7 @@ import Toast from "@/components/ui/toast.jsx";
 import useToast from "@/hooks/useToast.js";
 import { base44 } from "@/apiClient/base44Client";
 import { cn } from "@/utils/classnames.js";
+import { useActiveClient } from "@/hooks/useActiveClient.js";
 
 const FEATURE_CARDS = [
   {
@@ -39,11 +40,19 @@ export default function ReportsV2Home() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast, showToast } = useToast();
+  const [activeClientId] = useActiveClient();
   const [search, setSearch] = React.useState("");
-  const [brandId, setBrandId] = React.useState("");
+  const [brandId, setBrandId] = React.useState(() => activeClientId || "");
   const [createOpen, setCreateOpen] = React.useState(false);
   const [createName, setCreateName] = React.useState("");
   const [createBrand, setCreateBrand] = React.useState("");
+
+  React.useEffect(() => {
+    if (brandId) return;
+    if (activeClientId) {
+      setBrandId(activeClientId);
+    }
+  }, [activeClientId, brandId]);
 
   const { data: clients = [] } = useQuery({
     queryKey: ["reportsV2-clients"],

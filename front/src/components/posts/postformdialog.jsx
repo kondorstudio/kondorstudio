@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog.jsx";
@@ -281,6 +283,26 @@ function parseTags(value) {
     .map((tag) => (tag.startsWith("#") ? tag : `#${tag}`));
 }
 
+function mapApprovalSendError(error) {
+  const code = String(error?.data?.code || error?.code || "").toUpperCase();
+  const apiMessage = error?.data?.error || error?.message || "Falha ao enviar para aprovação.";
+
+  if (code === "INVALID_CLIENT_WHATSAPP") {
+    return "Cliente sem WhatsApp válido (+55...) no cadastro.";
+  }
+  if (code === "CLIENT_OPT_OUT") {
+    return "Cliente não autorizou receber mensagens por WhatsApp.";
+  }
+  if (code === "INTEGRATION_INVALID") {
+    return "Integração WhatsApp da agência inválida ou incompleta.";
+  }
+  if (code === "ALREADY_SENT") {
+    return "Pedido de aprovação já enviado anteriormente para este post.";
+  }
+
+  return apiMessage;
+}
+
 // Define StepCard at module scope to keep a stable component identity and
 // avoid remounts that can reset the main scroll position.
 const StepCard = ({ id, step, title, subtitle, badge, children }) => (
@@ -319,6 +341,8 @@ export function PostForm({
   clients = [],
   integrations = [],
   onSubmit,
+  onSendToApproval,
+  onApprovalFeedback,
   isSaving,
   onDelete,
   onDeleteLocal,
@@ -346,6 +370,7 @@ export function PostForm({
   const [selectedAccountsByNetwork, setSelectedAccountsByNetwork] = useState({});
   const [selectedFormatsByNetwork, setSelectedFormatsByNetwork] = useState({});
   const [networkError, setNetworkError] = useState("");
+  const [approvalConfirmOpen, setApprovalConfirmOpen] = useState(false);
   const fileInputRef = useRef(null);
   const isActive = open !== false;
   const scrollToStep = (stepId) => {
@@ -615,6 +640,20 @@ export function PostForm({
     if (!recurrence.enabled) return [];
     return sortScheduleSlots(buildRecurringScheduleSlots(recurrence));
   }, [recurrence]);
+  const approvalVariationCount = React.useMemo(() => {
+    if (!Array.isArray(selectedNetworks) || selectedNetworks.length === 0) return 0;
+    return selectedNetworks.reduce((total, network) => {
+      const def = networkDefinitionsByKey.get(network);
+      const allowedFormats = def ? def.formats.map((item) => item.value) : [];
+      const selectedFormats = Array.isArray(selectedFormatsByNetwork[network])
+        ? selectedFormatsByNetwork[network].filter((item) =>
+            allowedFormats.includes(item)
+          )
+        : [];
+      const count = selectedFormats.length || allowedFormats.length || 0;
+      return total + count;
+    }, 0);
+  }, [networkDefinitionsByKey, selectedFormatsByNetwork, selectedNetworks]);
 
   const resolveIntegrationLabel = (integration) => {
     if (!integration) return "Selecione uma rede";
@@ -855,7 +894,8 @@ export function PostForm({
     return parts.join("\n\n");
   };
 
-  const submitPost = async (statusOverride) => {
+  const submitPost = async (statusOverride, options = {}) => {
+    const sendApproval = options.sendApproval === true;
     if (!formData.clientId) {
       alert("Selecione um cliente antes de salvar o post.");
       return;
@@ -1011,11 +1051,97 @@ export function PostForm({
         });
       });
 
+      const persistedPosts = [];
       if (onSubmit) {
         for (const payload of payloads.filter(Boolean)) {
-          await onSubmit(payload);
+          const savedPost = await onSubmit(payload);
+          if (savedPost?.id) {
+            persistedPosts.push(savedPost);
+          }
         }
       }
+
+      if (sendApproval) {
+        if (typeof onSendToApproval !== "function") {
+          throw new Error("Envio para aprovação no WhatsApp não está disponível.");
+        }
+
+        const uniquePosts = Array.from(
+          new Map(
+            persistedPosts
+              .filter((item) => item?.id)
+              .map((item) => [item.id, item])
+          ).values()
+        );
+        if (!uniquePosts.length) {
+          throw new Error("Não foi possível identificar os posts para enviar aprovação.");
+        }
+
+        const approvalResults = await Promise.all(
+          uniquePosts.map(async (item) => {
+            try {
+              const response = await onSendToApproval(item.id);
+              return {
+                ok: true,
+                postId: item.id,
+                response,
+              };
+            } catch (err) {
+              return {
+                ok: false,
+                postId: item.id,
+                code: err?.data?.code || err?.code || null,
+                message: mapApprovalSendError(err),
+              };
+            }
+          })
+        );
+
+        const successCount = approvalResults.filter((item) => item.ok).length;
+        const failed = approvalResults.filter((item) => !item.ok);
+        const failedCount = failed.length;
+        const firstError = failed[0]?.message || null;
+
+        let feedbackType = "success";
+        let feedbackMessage = "";
+        if (failedCount === 0) {
+          feedbackMessage = `${successCount} post${
+            successCount === 1 ? "" : "s"
+          } enviado${successCount === 1 ? "" : "s"} para aprovação no WhatsApp.`;
+        } else if (successCount > 0) {
+          feedbackType = "info";
+          feedbackMessage = `${successCount} envio${
+            successCount === 1 ? "" : "s"
+          } concluído${successCount === 1 ? "" : "s"} e ${failedCount} com falha${
+            failedCount === 1 ? "" : "s"
+          }.`;
+        } else {
+          feedbackType = "error";
+          feedbackMessage = `Nenhum envio foi concluído. ${failedCount} tentativa${
+            failedCount === 1 ? "" : "s"
+          } falharam.`;
+        }
+        if (firstError) {
+          feedbackMessage = `${feedbackMessage} Primeiro erro: ${firstError}`;
+        }
+
+        if (typeof onApprovalFeedback === "function") {
+          onApprovalFeedback({
+            type: feedbackType,
+            message: feedbackMessage,
+            summary: {
+              total: approvalResults.length,
+              successCount,
+              failedCount,
+              failed,
+              results: approvalResults,
+            },
+          });
+        } else {
+          alert(feedbackMessage);
+        }
+      }
+
       if (onCancel) {
         onCancel();
       }
@@ -1031,6 +1157,8 @@ export function PostForm({
       let message = "Erro ao salvar post. Tente novamente.";
       if (isSessionError) {
         message = "Sua sessão expirou. Faça login novamente.";
+      } else if (sendApproval) {
+        message = mapApprovalSendError(error);
       } else if (apiError && apiDetail && apiDetail !== apiError) {
         message = `${apiError}. ${apiDetail}`;
       } else if (apiError) {
@@ -1805,7 +1933,9 @@ export function PostForm({
                   type="button"
                   variant="outline"
                   leftIcon={CheckCircle2}
-                  onClick={() => submitPost("CLIENT_APPROVAL")}
+                  onClick={() => {
+                    setApprovalConfirmOpen(true);
+                  }}
                   disabled={isSaving || isUploading || isDeleting}
                 >
                   Enviar para aprovacao
@@ -1838,6 +1968,75 @@ export function PostForm({
           </div>
         </div>
       </form>
+
+      <Dialog open={approvalConfirmOpen} onOpenChange={setApprovalConfirmOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar envio para aprovação</DialogTitle>
+            <DialogDescription>
+              Confira o cliente, o WhatsApp e a quantidade de posts que serão
+              enviados agora.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 text-sm">
+            <div className="rounded-[12px] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
+                Cliente
+              </p>
+              <p className="mt-1 font-semibold text-[var(--text)]">
+                {selectedClient?.name || "Não selecionado"}
+              </p>
+            </div>
+
+            <div className="rounded-[12px] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
+                WhatsApp
+              </p>
+              <p className="mt-1 font-semibold text-[var(--text)]">
+                {selectedClient?.whatsappNumberE164 || "Não cadastrado"}
+              </p>
+              {selectedClient?.whatsappOptIn === false ? (
+                <p className="mt-1 text-xs text-rose-700">
+                  Cliente com opt-out de WhatsApp. O envio vai falhar até
+                  habilitar autorização.
+                </p>
+              ) : null}
+            </div>
+
+            <div className="rounded-[12px] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
+                Variações
+              </p>
+              <p className="mt-1 font-semibold text-[var(--text)]">
+                {approvalVariationCount} post
+                {approvalVariationCount === 1 ? "" : "s"} para aprovação
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="flex flex-wrap justify-end gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setApprovalConfirmOpen(false)}
+              disabled={isSaving || isUploading || isDeleting}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={async () => {
+                setApprovalConfirmOpen(false);
+                await submitPost("CLIENT_APPROVAL", { sendApproval: true });
+              }}
+              disabled={isSaving || isUploading || isDeleting}
+            >
+              {isUploading ? "Enviando..." : "Confirmar e enviar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

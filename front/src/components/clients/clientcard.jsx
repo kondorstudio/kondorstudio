@@ -10,6 +10,7 @@ import {
   Building2,
   CalendarDays,
   Mail,
+  MessageCircle,
   Pencil,
   Tags,
   Trash2,
@@ -104,6 +105,13 @@ export default function ClientCard({ client, onEdit, onDelete }) {
               </span>
             </div>
           )}
+          <div className="flex items-center gap-2 text-[var(--text-muted)]">
+            <MessageCircle className="w-4 h-4 text-[var(--primary)]" />
+            <span className="text-xs break-all text-[var(--text)]">
+              WhatsApp:{" "}
+              <strong>{client.whatsappNumberE164 || "não cadastrado"}</strong>
+            </span>
+          </div>
         </div>
 
         {client.tags && client.tags.length > 0 && (
