@@ -252,9 +252,14 @@ async function rawFetch(path, options = {}) {
   const base = getCurrentApiBaseUrl();
   const url = joinApiUrl(base, normalizedPath);
 
-  const defaultHeaders = {
-    "Content-Type": "application/json",
-  };
+  const isFormDataBody =
+    typeof FormData !== "undefined" && options?.body instanceof FormData;
+
+  const defaultHeaders = isFormDataBody
+    ? {}
+    : {
+        "Content-Type": "application/json",
+      };
 
   const opts = {
     ...options,
@@ -264,8 +269,10 @@ async function rawFetch(path, options = {}) {
     },
     credentials: options.credentials || "include",
   };
-  if (options && options.body && typeof options.body !== "string") {
+  if (options && options.body && typeof options.body !== "string" && !isFormDataBody) {
     opts.body = JSON.stringify(options.body);
+  } else if (options && options.body !== undefined) {
+    opts.body = options.body;
   }
 
   return fetch(url, opts);
@@ -524,15 +531,20 @@ async function uploadFile(file, { folder, isPublic } = {}) {
     formData.append("public", isPublic ? "true" : "false");
   }
 
-  const headers = {};
-  const token = getAccessToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
+  const sendMultipartUpload = () =>
+    authedFetch("/uploads", {
+      method: "POST",
+      body: formData,
+      headers: {},
+    });
 
-  const res = await fetch(buildApiUrl("/uploads"), {
-    method: "POST",
-    body: formData,
-    headers,
-  });
+  let res = await sendMultipartUpload();
+  if (res.status === 401) {
+    const refreshed = await tryRefreshToken();
+    if (refreshed) {
+      res = await sendMultipartUpload();
+    }
+  }
 
   let data = null;
   try {

@@ -1021,10 +1021,23 @@ export function PostForm({
       }
     } catch (error) {
       console.error("Erro ao salvar post:", error);
-      const message =
-        error?.data?.error ||
-        error?.message ||
-        "Erro ao salvar post. Tente novamente.";
+      const apiError = error?.data?.error || null;
+      const apiDetail = error?.data?.detail || null;
+      const isSessionError =
+        Number(error?.status) === 401 ||
+        /token n[aã]o fornecido/i.test(String(apiError || "")) ||
+        /token inv[aá]lido|expirado/i.test(String(apiError || ""));
+
+      let message = "Erro ao salvar post. Tente novamente.";
+      if (isSessionError) {
+        message = "Sua sessão expirou. Faça login novamente.";
+      } else if (apiError && apiDetail && apiDetail !== apiError) {
+        message = `${apiError}. ${apiDetail}`;
+      } else if (apiError) {
+        message = apiError;
+      } else if (error?.message) {
+        message = error.message;
+      }
       alert(message);
     } finally {
       setIsUploading(false);
